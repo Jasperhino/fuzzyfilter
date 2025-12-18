@@ -132,6 +132,18 @@ export interface OperatorInfo {
   label: string;
   /** Alternative names/aliases for fuzzy matching */
   aliases: string[];
+  /**
+   * Type-specific aliases that only apply for certain column types.
+   * For example, "at" and "on" only make sense for date equality.
+   *
+   * @example
+   * ```typescript
+   * typeSpecificAliases: {
+   *   date: ["at", "on"],
+   * }
+   * ```
+   */
+  typeSpecificAliases?: Partial<Record<DataType, string[]>>;
   /** Which data types this operator supports */
   supportedTypes: DataType[];
   /** Does this operator require an argument? */

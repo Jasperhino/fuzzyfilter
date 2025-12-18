@@ -117,8 +117,12 @@ export {
   isValidOperatorForType,
   /** Get the default operator for a data type */
   getDefaultOperatorForType,
-  /** Get all search terms (aliases) for an operator */
+  /** Get all search terms (aliases) for an operator, with optional type-specific aliases */
   getOperatorSearchTerms,
+  /** Get aliases for an operator, with optional type-specific aliases */
+  getOperatorAliases,
+  /** Check if an alias matches an operator for a specific type */
+  isAliasForOperator,
   /** Type guard to check if a string is a valid operator */
   isOperator,
 } from "./operators/registry.ts";
@@ -168,4 +172,48 @@ export { createTrie } from "./trie.ts";
  * Schema utilities for building and querying schemas.
  */
 export { buildSchema, getColumn, getColumns, getColumnIds } from "./schema-builder.ts";
+
+// ============================================================================
+// DATE PARSING
+// ============================================================================
+
+/**
+ * Date parsing utilities for natural language date expressions.
+ *
+ * Uses chrono-node under the hood to parse expressions like:
+ * - "today", "yesterday", "tomorrow"
+ * - "last week", "next month", "this year"
+ * - "two weeks ago", "3 days from now"
+ * - "January 15, 2024", "2024-01-15"
+ *
+ * @example
+ * ```typescript
+ * import { parseDate, COMMON_DATE_SUGGESTIONS } from "fuzzyfilter";
+ *
+ * // Parse a natural language date
+ * const result = parseDate("two weeks ago");
+ * // → { date: Date, isRange: false, text: "two weeks ago", ... }
+ *
+ * // Parse a range expression
+ * const range = parseDate("last month");
+ * // → { date: Date, rangeStart: Date, rangeEnd: Date, isRange: true, ... }
+ *
+ * // Use common suggestions for date fields
+ * COMMON_DATE_SUGGESTIONS.forEach(({ text, label }) => {
+ *   console.log(`${text} → ${label}`);
+ * });
+ * ```
+ */
+export {
+  /** Parse a natural language date expression */
+  parseDate,
+  /** Detect all date expressions in a string with positions */
+  detectDateExpressions,
+  /** Common date phrases for suggestions */
+  COMMON_DATE_SUGGESTIONS,
+  /** Format a date for display */
+  formatDateForDisplay,
+  /** Quick check if text might contain a date expression */
+  mightBeDateExpression,
+} from "./date-parser.ts";
 

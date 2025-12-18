@@ -8,7 +8,7 @@
  */
 
 import { ref, computed, watch, onUnmounted, type Ref, type ComputedRef } from "vue";
-import type { FuzzyFilter, FilterSuggestion } from "fuzzyfilter";
+import type { FuzzyFilter, FilterSuggestion, CompiledFilter } from "fuzzyfilter";
 
 /**
  * Options for the useFuzzyFilter composable
@@ -20,6 +20,8 @@ export interface UseFuzzyFilterOptions {
   initialQuery?: string;
   /** Callback when a suggestion is applied */
   onApply?: (suggestion: FilterSuggestion) => void;
+  /** Reactive filter context (already-applied filters for stacked counts) */
+  filterContext?: Ref<CompiledFilter[]>;
 }
 
 /**
@@ -118,7 +120,7 @@ export function useFuzzyFilter(
   filter: FuzzyFilter,
   options: UseFuzzyFilterOptions = {}
 ): UseFuzzyFilterReturn {
-  const { debounceMs = 150, initialQuery = "", onApply } = options;
+  const { debounceMs = 150, initialQuery = "", onApply, filterContext } = options;
 
   // Reactive state
   const query = ref(initialQuery);
@@ -148,7 +150,9 @@ export function useFuzzyFilter(
     error.value = null;
 
     try {
-      const response = await filter.suggest(q);
+      // Pass filter context for stacked filter counts
+      const context = filterContext?.value ?? undefined;
+      const response = await filter.suggest(q, undefined, context);
       suggestions.value = response.suggestions;
       selectedIndex.value = 0;
     } catch (err) {
@@ -160,19 +164,19 @@ export function useFuzzyFilter(
     }
   }
 
-  // Watch query changes with debounce
+  // Watch query and filterContext changes with debounce
   watch(
-    query,
-    (newQuery) => {
+    [query, filterContext ?? ref([])],
+    ([newQuery]) => {
       if (debounceTimer) {
         clearTimeout(debounceTimer);
       }
 
       debounceTimer = setTimeout(() => {
-        fetchSuggestions(newQuery);
+        fetchSuggestions(newQuery as string);
       }, debounceMs);
     },
-    { immediate: true }
+    { immediate: true, deep: true }
   );
 
   /**

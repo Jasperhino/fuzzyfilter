@@ -8,34 +8,37 @@
  */
 
 import { columnId, type SchemaInput, type ColumnId } from "fuzzyfilter";
+import { generateTasks } from "./generator.ts";
+
+// Re-export generator utilities
+export {
+  generateTasks,
+  generateLargeDataset,
+  createSeededGenerator,
+  type GeneratorOptions,
+} from "./generator.ts";
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+/**
+ * Fixed seed for deterministic sample data generation.
+ * Using this seed ensures the same data is generated every time.
+ */
+export const SAMPLE_DATA_SEED = 42;
+
+/**
+ * Default number of sample tasks to generate.
+ */
+export const SAMPLE_DATA_COUNT = 50;
 
 // ============================================================================
 // SAMPLE DATA
 // ============================================================================
 
 /**
- * Sample task data for demonstration.
- */
-export const SAMPLE_DATA = [
-  { id: 1, status: "Open", assignee: "Alice Chen", priority: 3, department: "Engineering", createdAt: "2024-01-15", isBlocked: false },
-  { id: 2, status: "In Progress", assignee: "Bob Smith", priority: 2, department: "Engineering", createdAt: "2024-02-01", isBlocked: false },
-  { id: 3, status: "Closed", assignee: "Alice Chen", priority: 1, department: "Design", createdAt: "2024-01-20", isBlocked: false },
-  { id: 4, status: "Blocked", assignee: "Charlie Davis", priority: 5, department: "Engineering", createdAt: "2024-03-01", isBlocked: true },
-  { id: 5, status: "Open", assignee: "Diana Evans", priority: 4, department: "Product", createdAt: "2024-02-15", isBlocked: false },
-  { id: 6, status: "In Progress", assignee: "Eve Foster", priority: 2, department: "Design", createdAt: "2024-03-10", isBlocked: false },
-  { id: 7, status: "Open", assignee: "Frank Garcia", priority: 3, department: "Engineering", createdAt: "2024-03-05", isBlocked: false },
-  { id: 8, status: "Closed", assignee: "Grace Hall", priority: 1, department: "Product", createdAt: "2024-02-28", isBlocked: false },
-  { id: 9, status: "In Progress", assignee: "Henry Irving", priority: 4, department: "Engineering", createdAt: "2024-03-12", isBlocked: true },
-  { id: 10, status: "Open", assignee: "Ivy Johnson", priority: 2, department: "Design", createdAt: "2024-03-08", isBlocked: false },
-] as const;
-
-/**
- * Type for a single task row.
- */
-export type TaskRow = typeof SAMPLE_DATA[number];
-
-/**
- * Mutable version of TaskRow for filtering results.
+ * Task type definition for filtering results.
  */
 export interface Task {
   id: number;
@@ -46,6 +49,24 @@ export interface Task {
   createdAt: string;
   isBlocked: boolean;
 }
+
+/**
+ * Deterministic sample task data for demonstration.
+ * Generated with a fixed seed for consistency across runs.
+ */
+export const SAMPLE_DATA: Task[] = generateTasks({
+  count: SAMPLE_DATA_COUNT,
+  seed: SAMPLE_DATA_SEED,
+  dateRange: {
+    from: new Date("2024-01-01"),
+    to: new Date("2024-12-31"),
+  },
+});
+
+/**
+ * Type for a single task row (alias for Task).
+ */
+export type TaskRow = Task;
 
 // ============================================================================
 // COLUMN IDS
@@ -119,10 +140,18 @@ export const TASK_SCHEMA: SchemaInput = {
 // ============================================================================
 
 /**
- * Get sample data as mutable array.
+ * Get sample data as a fresh mutable array.
+ * Each call returns a new array with the same deterministic data.
  */
 export function getSampleData(): Task[] {
-  return SAMPLE_DATA.map((row) => ({ ...row }));
+  return generateTasks({
+    count: SAMPLE_DATA_COUNT,
+    seed: SAMPLE_DATA_SEED,
+    dateRange: {
+      from: new Date("2024-01-01"),
+      to: new Date("2024-12-31"),
+    },
+  });
 }
 
 /**

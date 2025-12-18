@@ -8,7 +8,6 @@
  */
 
 import fuzzysort from "fuzzysort";
-import * as chrono from "chrono-node";
 import type {
   FuzzyFilter,
   FuzzyFilterConfig,
@@ -17,6 +16,7 @@ import type {
   AnyColumnDefinition,
   ColumnId,
   Operator,
+  DataType,
   Trie,
   FilterSuggestion,
   SuggestionResponse,
@@ -25,6 +25,8 @@ import type {
   FilterResult,
   Token,
   HypothesisValueType,
+  ParsedDate,
+  RowId,
 } from "./types/index.ts";
 import { columnId, DEFAULT_CONFIG } from "./types/index.ts";
 import {
@@ -36,6 +38,22 @@ import {
 import { buildSchema, getColumn, getColumns } from "./schema-builder.ts";
 import { createTrie } from "./trie.ts";
 import { tokenize } from "./tokenizer.ts";
+import {
+  parseDate,
+  COMMON_DATE_SUGGESTIONS,
+  formatDateForDisplay,
+  mightBeDateExpression,
+} from "./date-parser.ts";
+
+/**
+ * Operator alias entry with optional type restriction
+ */
+interface OperatorAliasEntry {
+  /** The operator this alias maps to */
+  operator: Operator;
+  /** If set, this alias only applies for this data type */
+  forType?: DataType;
+}
 
 /**
  * Internal state for FuzzyFilter
@@ -43,7 +61,7 @@ import { tokenize } from "./tokenizer.ts";
 interface FuzzyFilterState {
   schema: Schema | null;
   columnTrie: Trie<AnyColumnDefinition>;
-  operatorTrie: Trie<Operator>;
+  operatorTrie: Trie<OperatorAliasEntry>;
   valueTrie: Trie<{ value: string; columnId: ColumnId; rowCount: number }>;
   data: Array<Record<string, unknown>>;
 }
@@ -219,17 +237,32 @@ export function createFuzzyFilter(
   const state: FuzzyFilterState = {
     schema: null,
     columnTrie: createTrie<AnyColumnDefinition>(),
-    operatorTrie: createTrie<Operator>(),
+    operatorTrie: createTrie<OperatorAliasEntry>(),
     valueTrie: createTrie<{ value: string; columnId: ColumnId; rowCount: number }>(),
     data: [],
   };
 
   // Initialize operator trie with all operators and their aliases
   for (const op of Object.values(OPERATOR_REGISTRY)) {
-    state.operatorTrie.insert(op.id, op.id);
-    state.operatorTrie.insert(op.label, op.id);
+    // Insert operator id and label as general (no type restriction)
+    state.operatorTrie.insert(op.id, { operator: op.id });
+    state.operatorTrie.insert(op.label, { operator: op.id });
+    
+    // Insert general aliases (no type restriction)
     for (const alias of op.aliases) {
-      state.operatorTrie.insert(alias, op.id);
+      state.operatorTrie.insert(alias, { operator: op.id });
+    }
+    
+    // Insert type-specific aliases with their type restriction
+    if (op.typeSpecificAliases) {
+      for (const [dataType, aliases] of Object.entries(op.typeSpecificAliases)) {
+        for (const alias of aliases) {
+          state.operatorTrie.insert(alias, { 
+            operator: op.id, 
+            forType: dataType as DataType 
+          });
+        }
+      }
     }
   }
 
@@ -414,9 +447,10 @@ export function createFuzzyFilter(
       const operatorMatches = state.operatorTrie
         .fuzzySearch(token.normalized, 5)
         .map((m) => ({
-          operator: m.value,
+          operator: m.value.operator,
           score: m.score,
           matchedOn: "id" as const,
+          forType: m.value.forType, // Type restriction if any
         }));
 
       const valueMatches = state.valueTrie
@@ -486,14 +520,16 @@ export function createFuzzyFilter(
 
   async function suggest(
     query: string,
-    cursorPosition?: number
+    cursorPosition?: number,
+    filterContext?: CompiledFilter[]
   ): Promise<SuggestionResponse> {
-    return suggestSync(query, cursorPosition);
+    return suggestSync(query, cursorPosition, filterContext);
   }
 
   function suggestSync(
     query: string,
-    cursorPosition?: number
+    cursorPosition?: number,
+    filterContext?: CompiledFilter[]
   ): SuggestionResponse {
     const startTime = performance.now();
     const suggestions: FilterSuggestion[] = [];
@@ -508,6 +544,26 @@ export function createFuzzyFilter(
       };
     }
 
+    // Compute the set of row indices that match all context filters
+    // null means no filter context (use all rows)
+    let contextRowIndices: Set<number> | null = null;
+    if (filterContext && filterContext.length > 0) {
+      contextRowIndices = new Set<number>();
+      for (let i = 0; i < state.data.length; i++) {
+        const row = state.data[i]!;
+        let matchesAll = true;
+        for (const filter of filterContext) {
+          if (!filter.predicate(row)) {
+            matchesAll = false;
+            break;
+          }
+        }
+        if (matchesAll) {
+          contextRowIndices.add(i);
+        }
+      }
+    }
+
     const parsed = parse(query);
     const { tokens } = parsed;
 
@@ -519,7 +575,7 @@ export function createFuzzyFilter(
       for (const col of getColumns(state.schema)) {
         const defaultOp = getOperatorsForType(col.type)[0];
         if (defaultOp) {
-          suggestions.push(createSuggestion(col, defaultOp.id, undefined, 0));
+          suggestions.push(createSuggestion(col, defaultOp.id, undefined, 0, undefined, undefined, contextRowIndices));
         }
       }
     }
@@ -527,7 +583,8 @@ export function createFuzzyFilter(
     else {
       // Track best matches to avoid duplicates (keep best score)
       const columnScores = new Map<string, ScoreBreakdown>();
-      const operatorScores = new Map<string, ScoreBreakdown>();
+      type OpScoreEntry = { breakdown: ScoreBreakdown; operator: Operator; forType?: DataType; matchedAlias?: string };
+      const operatorScores = new Map<string, OpScoreEntry>();
       type ValMatch = { value: { value: string; columnId: ColumnId; rowCount: number }; score: number };
       const valueScores = new Map<string, { breakdown: ScoreBreakdown; match: ValMatch }>();
       const seenValues = new Set<string>(); // For the second pass
@@ -552,7 +609,8 @@ export function createFuzzyFilter(
         // Operator matches
         const opMatches = state.operatorTrie.fuzzySearch(ngram.text, 5);
         for (const match of opMatches) {
-          const opInfo = getOperator(match.value);
+          const opEntry = match.value;
+          const opInfo = getOperator(opEntry.operator);
           if (!opInfo) continue;
           
           // Use the longer of id or label for target length
@@ -562,9 +620,19 @@ export function createFuzzyFilter(
             ngram,
             targetLength
           );
-          const existing = operatorScores.get(match.value);
-          if (!existing || breakdown.adjustedScore > existing.adjustedScore) {
-            operatorScores.set(match.value, breakdown);
+          
+          // Store with type restriction info and matched alias
+          const key = opEntry.forType 
+            ? `${opEntry.operator}:${opEntry.forType}` 
+            : opEntry.operator;
+          const existing = operatorScores.get(key);
+          if (!existing || breakdown.adjustedScore > existing.breakdown.adjustedScore) {
+            operatorScores.set(key, { 
+              breakdown, 
+              operator: opEntry.operator,
+              matchedAlias: ngram.text, // Track what the user typed that matched
+              forType: opEntry.forType 
+            });
           }
         }
 
@@ -584,6 +652,37 @@ export function createFuzzyFilter(
         }
       }
 
+      // Check if the full query might be a date expression
+      const fullQuery = tokens.map((t) => t.text).join(" ");
+      if (mightBeDateExpression(fullQuery)) {
+        const parsedDate = parseDate(fullQuery);
+        if (parsedDate) {
+          // Add suggestions for all date columns
+          for (const col of getColumns(state.schema!)) {
+            if (col.type === "date") {
+              const dateOps = getOperatorsForType("date");
+              for (const op of dateOps.slice(0, 3)) {
+                const key = `${col.id}:${op.id}:date:${parsedDate.date.toISOString()}`;
+                if (!seenValues.has(key)) {
+                  seenValues.add(key);
+                  suggestions.push(
+                    createDateSuggestion(
+                      col,
+                      op.id,
+                      parsedDate,
+                      1500, // High score for parsed date
+                      countForDateFilter(col.id, op.id, parsedDate, contextRowIndices),
+                      undefined,
+                      contextRowIndices
+                    )
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+
       // Now create suggestions from the best scores
       
       // Column suggestions
@@ -592,18 +691,21 @@ export function createFuzzyFilter(
         if (col) {
           const ops = getOperatorsForType(col.type);
           for (const op of ops.slice(0, 3)) {
-            suggestions.push(createSuggestion(col, op.id, undefined, breakdown));
+            suggestions.push(createSuggestion(col, op.id, undefined, breakdown, undefined, undefined, contextRowIndices));
           }
         }
       }
 
       // Operator suggestions
-      for (const [opId, breakdown] of operatorScores) {
-        const opInfo = getOperator(opId as Operator);
+      for (const [_key, { breakdown, operator, forType, matchedAlias }] of operatorScores) {
+        const opInfo = getOperator(operator);
         if (!opInfo) continue;
         for (const col of getColumns(state.schema!)) {
+          // Skip if this is a type-specific alias that doesn't match the column type
+          if (forType && forType !== col.type) continue;
+          
           if (opInfo.supportedTypes.includes(col.type)) {
-            suggestions.push(createSuggestion(col, opId as Operator, undefined, breakdown));
+            suggestions.push(createSuggestion(col, operator, undefined, breakdown.adjustedScore, undefined, matchedAlias, contextRowIndices));
           }
         }
       }
@@ -612,13 +714,19 @@ export function createFuzzyFilter(
       for (const [_key, { breakdown, match }] of valueScores) {
         const col = getColumnById(match.value.columnId);
         if (col) {
+          // When there's a filter context, don't use pre-indexed rowCount - compute dynamically
+          const rowCount = contextRowIndices !== null 
+            ? undefined  // Will be computed by createSuggestion using context
+            : match.value.rowCount;
           suggestions.push(
             createSuggestion(
               col,
               "eq",
               { kind: "string", value: match.value.value },
               breakdown,
-              match.value.rowCount
+              rowCount,
+              undefined,
+              contextRowIndices
             )
           );
         }
@@ -638,48 +746,133 @@ export function createFuzzyFilter(
             (_, i) => i !== colTokenIdx && i !== opTokenIdx
           );
 
-          if (valueTokens.length > 0) {
-            // Search for values matching the remaining tokens
-            const valueQuery = valueTokens.map((t) => t.normalized).join(" ");
-            const valMatches = state.valueTrie.fuzzySearch(valueQuery, 10);
-
-            for (const match of valMatches) {
-              if (match.value.columnId === col.id) {
-                const key = `${col.id}:${op}:${match.value.value}`;
+          // Handle date columns specially
+          if (col.type === "date") {
+            if (valueTokens.length > 0) {
+              // Try to parse as a date expression
+              const valueQuery = valueTokens.map((t) => t.text).join(" ");
+              const parsedDate = parseDate(valueQuery);
+              
+              if (parsedDate) {
+                // Add date suggestion with parsed date value
+                const dateLabel = formatDateForDisplay(parsedDate.date);
+                const key = `${col.id}:${op}:date:${parsedDate.date.toISOString()}`;
                 if (!seenValues.has(key)) {
                   seenValues.add(key);
                   suggestions.push(
-                    createSuggestion(
+                    createDateSuggestion(
                       col,
                       op,
-                      { kind: "string", value: match.value.value },
-                      match.score + parsed.column.match.score,
-                      match.value.rowCount
+                      parsedDate,
+                      parsed.column.match.score + 1000, // Boost for successful date parse
+                      countForDateFilter(col.id, op, parsedDate, contextRowIndices),
+                      undefined,
+                      contextRowIndices
                     )
                   );
                 }
               }
+              
+              // Also search indexed date values as strings
+              const valueQueryNorm = valueTokens.map((t) => t.normalized).join(" ");
+              const valMatches = state.valueTrie.fuzzySearch(valueQueryNorm, 5);
+              for (const match of valMatches) {
+                if (match.value.columnId === col.id) {
+                  const key = `${col.id}:${op}:${match.value.value}`;
+                  if (!seenValues.has(key)) {
+                    seenValues.add(key);
+                    // When there's a filter context, compute count dynamically
+                    const rowCount = contextRowIndices !== null ? undefined : match.value.rowCount;
+                    suggestions.push(
+                      createSuggestion(
+                        col,
+                        op,
+                        { kind: "string", value: match.value.value },
+                        match.score + parsed.column.match.score,
+                        rowCount,
+                        undefined,
+                        contextRowIndices
+                      )
+                    );
+                  }
+                }
+              }
+            } else {
+              // No value tokens yet - suggest common date phrases
+              for (const dateSuggestion of COMMON_DATE_SUGGESTIONS) {
+                const parsedDate = parseDate(dateSuggestion.text);
+                if (parsedDate) {
+                  const key = `${col.id}:${op}:date:${dateSuggestion.text}`;
+                  if (!seenValues.has(key)) {
+                    seenValues.add(key);
+                    suggestions.push(
+                      createDateSuggestion(
+                        col,
+                        op,
+                        parsedDate,
+                        parsed.column.match.score,
+                        countForDateFilter(col.id, op, parsedDate, contextRowIndices),
+                        dateSuggestion.label,
+                        contextRowIndices
+                      )
+                    );
+                  }
+                }
+              }
             }
           } else {
-            // No value tokens yet, suggest all values for this column
-            const allValues = state.valueTrie
-              .entries()
-              .filter((e) => e.value.columnId === col.id)
-              .slice(0, 10);
+            // Non-date columns - original logic
+            if (valueTokens.length > 0) {
+              // Search for values matching the remaining tokens
+              const valueQuery = valueTokens.map((t) => t.normalized).join(" ");
+              const valMatches = state.valueTrie.fuzzySearch(valueQuery, 10);
 
-            for (const entry of allValues) {
-              const key = `${col.id}:${op}:${entry.value.value}`;
-              if (!seenValues.has(key)) {
-                seenValues.add(key);
-                suggestions.push(
-                  createSuggestion(
-                    col,
-                    op,
-                    { kind: "string", value: entry.value.value },
-                    parsed.column.match.score,
-                    entry.value.rowCount
-                  )
-                );
+              for (const match of valMatches) {
+                if (match.value.columnId === col.id) {
+                  const key = `${col.id}:${op}:${match.value.value}`;
+                  if (!seenValues.has(key)) {
+                    seenValues.add(key);
+                    // When there's a filter context, compute count dynamically
+                    const rowCount = contextRowIndices !== null ? undefined : match.value.rowCount;
+                    suggestions.push(
+                      createSuggestion(
+                        col,
+                        op,
+                        { kind: "string", value: match.value.value },
+                        match.score + parsed.column.match.score,
+                        rowCount,
+                        undefined,
+                        contextRowIndices
+                      )
+                    );
+                  }
+                }
+              }
+            } else {
+              // No value tokens yet, suggest all values for this column
+              const allValues = state.valueTrie
+                .entries()
+                .filter((e) => e.value.columnId === col.id)
+                .slice(0, 10);
+
+              for (const entry of allValues) {
+                const key = `${col.id}:${op}:${entry.value.value}`;
+                if (!seenValues.has(key)) {
+                  seenValues.add(key);
+                  // When there's a filter context, compute count dynamically
+                  const rowCount = contextRowIndices !== null ? undefined : entry.value.rowCount;
+                  suggestions.push(
+                    createSuggestion(
+                      col,
+                      op,
+                      { kind: "string", value: entry.value.value },
+                      parsed.column.match.score,
+                      rowCount,
+                      undefined,
+                      contextRowIndices
+                    )
+                  );
+                }
               }
             }
           }
@@ -690,7 +883,10 @@ export function createFuzzyFilter(
               col,
               op,
               undefined,
-              parsed.column.match.score + parsed.operator.match.score
+              parsed.column.match.score + parsed.operator.match.score,
+              undefined,
+              undefined,
+              contextRowIndices
             )
           );
         }
@@ -737,13 +933,18 @@ export function createFuzzyFilter(
     operator: Operator,
     value: HypothesisValueType | undefined,
     scoreOrBreakdown: number | ScoreBreakdown,
-    resultCount?: number
+    resultCount?: number,
+    matchedAlias?: string,
+    contextRowIndices: Set<number> | null = null
   ): FilterSuggestion {
     const opInfo = getOperator(operator);
     const valueText = value?.kind === "string" ? value.value : "";
+    
+    // Use matched alias in label if provided, otherwise use operator label
+    const operatorDisplay = matchedAlias ?? opInfo?.label ?? operator;
     const label = valueText
-      ? `${column.name} ${opInfo?.label ?? operator} ${valueText}`
-      : `${column.name} ${opInfo?.label ?? operator}`;
+      ? `${column.name} ${operatorDisplay} ${valueText}`
+      : `${column.name} ${operatorDisplay}`;
 
     const completionText = valueText
       ? `${column.name} ${operator} "${valueText}"`
@@ -768,13 +969,17 @@ export function createFuzzyFilter(
       label,
       parts: {
         column: { text: column.name },
-        operator: { text: opInfo?.label ?? operator, symbol: opInfo?.symbol },
+        operator: { 
+          text: opInfo?.label ?? operator, 
+          symbol: opInfo?.symbol,
+          matchedAlias: matchedAlias,
+        },
         argument: valueText ? { text: valueText } : undefined,
       },
       column,
       operator,
       value,
-      resultCount: resultCount ?? countForFilter(column.id, operator, value),
+      resultCount: resultCount ?? countForFilter(column.id, operator, value, contextRowIndices),
       score,
       scoreBreakdown,
       isComplete: !opInfo?.requiresArgument || value !== undefined,
@@ -787,16 +992,22 @@ export function createFuzzyFilter(
   function countForFilter(
     columnId: ColumnId,
     operator: Operator,
-    value: HypothesisValueType | undefined
+    value: HypothesisValueType | undefined,
+    contextRowIndices: Set<number> | null = null
   ): number {
+    // Determine which rows to iterate over
+    const rowsToCheck = contextRowIndices !== null 
+      ? Array.from(contextRowIndices).map(i => state.data[i]!)
+      : state.data;
+    
     if (!value || value.kind === "empty") {
-      return state.data.length;
+      return rowsToCheck.length;
     }
 
     if (value.kind === "string") {
       // Count matching rows
       let count = 0;
-      for (const row of state.data) {
+      for (const row of rowsToCheck) {
         const cellValue = row[columnId as string];
         if (cellValue == null) continue;
 
@@ -828,7 +1039,135 @@ export function createFuzzyFilter(
       return count;
     }
 
-    return state.data.length;
+    return rowsToCheck.length;
+  }
+
+  /**
+   * Create a suggestion for a date value
+   */
+  function createDateSuggestion(
+    column: AnyColumnDefinition,
+    operator: Operator,
+    parsedDate: ParsedDate,
+    score: number,
+    resultCount?: number,
+    customLabel?: string,
+    contextRowIndices: Set<number> | null = null
+  ): FilterSuggestion {
+    const opInfo = getOperator(operator);
+    const displayDate = customLabel ?? formatDateForDisplay(parsedDate.date);
+    const label = `${column.name} ${opInfo?.label ?? operator} ${displayDate}`;
+
+    // Use the original text for completion to preserve natural language
+    const completionText = `${column.name} ${operator} "${parsedDate.text}"`;
+
+    const value: HypothesisValueType = parsedDate.isRange
+      ? {
+          kind: "dateRange",
+          start: parsedDate.rangeStart!,
+          end: parsedDate.rangeEnd!,
+          parsed: parsedDate,
+        }
+      : {
+          kind: "date",
+          value: parsedDate.date,
+          parsed: parsedDate,
+        };
+
+    return {
+      id: `${column.id}:${operator}:date:${parsedDate.date.toISOString()}`,
+      label,
+      parts: {
+        column: { text: column.name },
+        operator: { text: opInfo?.label ?? operator, symbol: opInfo?.symbol },
+        argument: { text: displayDate },
+      },
+      column,
+      operator,
+      value,
+      resultCount: resultCount ?? countForDateFilter(column.id, operator, parsedDate, contextRowIndices),
+      score,
+      isComplete: true,
+      completionText,
+      cursorPositionAfter: completionText.length,
+      category: "fuzzy",
+    };
+  }
+
+  /**
+   * Count rows matching a date filter
+   */
+  function countForDateFilter(
+    colId: ColumnId,
+    operator: Operator,
+    parsedDate: ParsedDate,
+    contextRowIndices: Set<number> | null = null
+  ): number {
+    let count = 0;
+    const targetDate = parsedDate.date;
+    const rangeStart = parsedDate.rangeStart;
+    const rangeEnd = parsedDate.rangeEnd;
+
+    // Determine which rows to iterate over
+    const rowsToCheck = contextRowIndices !== null 
+      ? Array.from(contextRowIndices).map(i => state.data[i]!)
+      : state.data;
+
+    for (const row of rowsToCheck) {
+      const cellValue = row[colId as string];
+      if (cellValue == null) continue;
+
+      // Parse the cell value as a date
+      const cellDate = cellValue instanceof Date
+        ? cellValue
+        : new Date(String(cellValue));
+
+      if (isNaN(cellDate.getTime())) continue;
+
+      switch (operator) {
+        case "eq":
+          // For date equality, compare just the date part (same day)
+          if (isSameDay(cellDate, targetDate)) count++;
+          break;
+        case "neq":
+          if (!isSameDay(cellDate, targetDate)) count++;
+          break;
+        case "lt":
+        case "before":
+          if (cellDate < targetDate) count++;
+          break;
+        case "lte":
+          if (cellDate <= targetDate) count++;
+          break;
+        case "gt":
+        case "after":
+          if (cellDate > targetDate) count++;
+          break;
+        case "gte":
+          if (cellDate >= targetDate) count++;
+          break;
+        case "between":
+          if (rangeStart && rangeEnd) {
+            if (cellDate >= rangeStart && cellDate <= rangeEnd) count++;
+          }
+          break;
+        default:
+          count++;
+      }
+    }
+
+    return count;
+  }
+
+  /**
+   * Check if two dates are the same calendar day
+   */
+  function isSameDay(date1: Date, date2: Date): boolean {
+    return (
+      date1.getFullYear() === date2.getFullYear() &&
+      date1.getMonth() === date2.getMonth() &&
+      date1.getDate() === date2.getDate()
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -856,9 +1195,73 @@ export function createFuzzyFilter(
 
     const columnId = typeof colId === "string" ? (colId as ColumnId) : colId;
 
+    // For date columns, try to parse the value as a date expression
+    let dateValue: Date | null = null;
+    let dateRangeStart: Date | null = null;
+    let dateRangeEnd: Date | null = null;
+    
+    if (col.type === "date" && value !== undefined) {
+      if (value instanceof Date) {
+        dateValue = value;
+      } else if (typeof value === "string") {
+        // Try to parse as natural language date
+        const parsed = parseDate(value);
+        if (parsed) {
+          dateValue = parsed.date;
+          if (parsed.isRange && parsed.rangeStart && parsed.rangeEnd) {
+            dateRangeStart = parsed.rangeStart;
+            dateRangeEnd = parsed.rangeEnd;
+          }
+        } else {
+          // Fallback: try direct Date parsing
+          const directParse = new Date(value);
+          if (!isNaN(directParse.getTime())) {
+            dateValue = directParse;
+          }
+        }
+      }
+    }
+
     const predicate = (row: Record<string, unknown>): boolean => {
       const cellValue = row[columnId as string];
 
+      // Handle date-specific operators
+      if (col.type === "date" && dateValue) {
+        if (cellValue == null) return false;
+        
+        const cellDate = cellValue instanceof Date
+          ? cellValue
+          : new Date(String(cellValue));
+        
+        if (isNaN(cellDate.getTime())) return false;
+
+        switch (operator) {
+          case "eq":
+            return isSameDay(cellDate, dateValue);
+          case "neq":
+            return !isSameDay(cellDate, dateValue);
+          case "lt":
+          case "before":
+            return cellDate < dateValue;
+          case "lte":
+            return cellDate <= dateValue;
+          case "gt":
+          case "after":
+            return cellDate > dateValue;
+          case "gte":
+            return cellDate >= dateValue;
+          case "between":
+            if (dateRangeStart && dateRangeEnd) {
+              return cellDate >= dateRangeStart && cellDate <= dateRangeEnd;
+            }
+            return false;
+          default:
+            // Fall through to standard operators
+            break;
+        }
+      }
+
+      // Standard operators
       switch (operator) {
         case "eq":
           return cellValue === value;
@@ -900,6 +1303,19 @@ export function createFuzzyFilter(
           return Array.isArray(value) && value.includes(cellValue);
         case "nin":
           return Array.isArray(value) && !value.includes(cellValue);
+        case "before":
+          // Non-date fallback for before operator
+          return String(cellValue) < String(value);
+        case "after":
+          // Non-date fallback for after operator
+          return String(cellValue) > String(value);
+        case "between":
+          // For between with array value [start, end]
+          if (Array.isArray(value) && value.length === 2) {
+            const numValue = cellValue as number;
+            return numValue >= (value[0] as number) && numValue <= (value[1] as number);
+          }
+          return false;
         default:
           return true;
       }

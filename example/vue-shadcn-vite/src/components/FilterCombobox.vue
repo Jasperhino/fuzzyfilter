@@ -3,12 +3,13 @@
  * FilterCombobox - Vue Component for FuzzyFilter
  * 
  * Demonstrates the vue-fuzzy-filter composable with a combobox interface.
- * Styled to match the React example.
+ * Uses virtual scrolling to handle large datasets (10,000+ rows).
  */
-import { ref, onMounted, computed } from "vue"
+import { ref, onMounted, computed, watch, nextTick } from "vue"
+import { useVirtualizer } from "@tanstack/vue-virtual"
 import { useFuzzyFilter } from "vue-fuzzy-filter"
 import { createFuzzyFilter, type CompiledFilter, type FilterSuggestion, type AnyColumnDefinition } from "fuzzyfilter"
-import { SAMPLE_DATA, TASK_SCHEMA, getSampleData, type Task } from "@fuzzyfilter/sample-data"
+import { TASK_SCHEMA, generateLargeDataset, type Task } from "@fuzzyfilter/sample-data"
 import {
   FilterIcon,
   HashIcon,
@@ -23,16 +24,40 @@ import {
 } from "lucide-vue-next"
 import { cn } from "@/lib/utils"
 
+// Generate 10,000 rows with a fixed seed for consistency
+const LARGE_DATASET = generateLargeDataset(10000, 42)
+
+// Row height for virtual scroll
+const ROW_HEIGHT = 48
+
 // Create filter instance
 const filter = createFuzzyFilter({ maxSuggestions: 12 })
 
 // Initialize schema and data
 onMounted(() => {
   filter.setSchema(TASK_SCHEMA)
-  filter.indexData(getSampleData())
+  filter.indexData(LARGE_DATASET)
 })
 
-// Use the composable
+// Compile applied filters for context (reactive) - defined before composable
+const appliedFiltersForContext = ref<FilterSuggestion[]>([])
+
+const compiledFiltersForContext = computed(() => {
+  const compiled: CompiledFilter[] = []
+  for (const f of appliedFiltersForContext.value) {
+    let value: unknown = undefined
+    if (f.value) {
+      if (f.value.kind === "string") value = f.value.value
+      else if (f.value.kind === "number") value = f.value.value
+      else if (f.value.kind === "boolean") value = f.value.value
+    }
+    const c = filter.compileFilter(f.column.id, f.operator, value)
+    if (c) compiled.push(c)
+  }
+  return compiled
+})
+
+// Use the composable with filter context for stacked counts
 const {
   query,
   suggestions,
@@ -42,15 +67,19 @@ const {
   selectSuggestion,
 } = useFuzzyFilter(filter, {
   debounceMs: 150,
+  filterContext: compiledFiltersForContext,
 })
 
-// Applied filters state
-const appliedFilters = ref<FilterSuggestion[]>([])
+// Applied filters state - use the same ref for both display and context
+const appliedFilters = appliedFiltersForContext
 const isOpen = ref(false)
+
+// Virtual scroll container ref
+const scrollContainerRef = ref<HTMLDivElement | null>(null)
 
 // Filtered data
 const filteredData = computed(() => {
-  if (appliedFilters.value.length === 0) return SAMPLE_DATA as Task[]
+  if (appliedFilters.value.length === 0) return LARGE_DATASET
   
   const compiledFilters: CompiledFilter[] = []
   for (const f of appliedFilters.value) {
@@ -66,9 +95,19 @@ const filteredData = computed(() => {
     }
   }
   
-  return (SAMPLE_DATA as Task[]).filter((row) =>
+  return LARGE_DATASET.filter((row) =>
     compiledFilters.every((cf) => cf.predicate(row))
   )
+})
+
+// Set up virtualizer
+const virtualizer = useVirtualizer({
+  get count() {
+    return filteredData.value.length
+  },
+  getScrollElement: () => scrollContainerRef.value,
+  estimateSize: () => ROW_HEIGHT,
+  overscan: 10,
 })
 
 // Handle selection
@@ -212,6 +251,11 @@ const priorityColors = [
   "bg-orange-500",
   "bg-rose-500",
 ]
+
+// Format number with locale
+function formatNumber(num: number): string {
+  return num.toLocaleString()
+}
 </script>
 
 <template>
@@ -276,6 +320,7 @@ const priorityColors = [
             <div
               v-for="(suggestion, index) in suggestions"
               :key="suggestion.id"
+              :data-testid="`suggestion-${suggestion.column.id}-${suggestion.operator}`"
               :class="cn(
                 'flex items-center justify-between px-2 py-2 cursor-pointer rounded-md transition-colors',
                 index === selectedIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
@@ -301,7 +346,7 @@ const priorityColors = [
                 >
                   {{ Math.round(suggestion.score) }}
                 </span>
-                <span class="text-xs text-muted-foreground tabular-nums">
+                <span class="text-xs text-muted-foreground tabular-nums" data-testid="result-count">
                   {{ suggestion.resultCount }} {{ suggestion.resultCount === 1 ? 'result' : 'results' }}
                 </span>
                 <span v-if="!suggestion.isComplete" class="text-[10px] text-muted-foreground/60">...</span>
@@ -325,7 +370,7 @@ const priorityColors = [
       <h3 class="text-sm font-medium">
         Tasks
         <span class="text-muted-foreground font-normal">
-          ({{ filteredData.length }} of {{ SAMPLE_DATA.length }})
+          ({{ formatNumber(filteredData.length) }} of {{ formatNumber(LARGE_DATASET.length) }})
         </span>
       </h3>
       <span v-if="appliedFilters.length > 0" class="text-xs text-muted-foreground">
@@ -333,7 +378,7 @@ const priorityColors = [
       </span>
     </div>
 
-    <!-- Data table -->
+    <!-- Virtual data table -->
     <div v-if="filteredData.length === 0" class="flex flex-col items-center justify-center py-12 text-muted-foreground">
       <AlertCircleIcon class="size-8 mb-2 opacity-50" />
       <p class="text-sm font-medium">No results found</p>
@@ -341,52 +386,70 @@ const priorityColors = [
     </div>
 
     <div v-else class="overflow-hidden rounded-lg border border-border">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b bg-muted/50">
-            <th class="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-            <th class="px-4 py-3 text-left font-medium text-muted-foreground">Assignee</th>
-            <th class="px-4 py-3 text-left font-medium text-muted-foreground">Priority</th>
-            <th class="px-4 py-3 text-left font-medium text-muted-foreground">Department</th>
-            <th class="px-4 py-3 text-left font-medium text-muted-foreground">Created</th>
-            <th class="px-4 py-3 text-center font-medium text-muted-foreground">Blocked</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="(row, idx) in filteredData"
-            :key="row.id"
+      <!-- Fixed header -->
+      <div class="flex items-center border-b bg-muted/50 sticky top-0 z-10">
+        <div class="px-4 py-3 w-[140px] shrink-0 text-left font-medium text-muted-foreground text-sm">Status</div>
+        <div class="px-4 py-3 w-[180px] shrink-0 text-left font-medium text-muted-foreground text-sm">Assignee</div>
+        <div class="px-4 py-3 w-[100px] shrink-0 text-left font-medium text-muted-foreground text-sm">Priority</div>
+        <div class="px-4 py-3 w-[140px] shrink-0 text-left font-medium text-muted-foreground text-sm">Department</div>
+        <div class="px-4 py-3 w-[120px] shrink-0 text-left font-medium text-muted-foreground text-sm">Created</div>
+        <div class="px-4 py-3 w-[80px] shrink-0 text-center font-medium text-muted-foreground text-sm">Blocked</div>
+      </div>
+
+      <!-- Virtualized body -->
+      <div
+        ref="scrollContainerRef"
+        class="h-[500px] overflow-auto"
+      >
+        <div
+          :style="{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }"
+        >
+          <div
+            v-for="virtualRow in virtualizer.getVirtualItems()"
+            :key="filteredData[virtualRow.index].id"
+            :style="{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: `${virtualRow.size}px`,
+              transform: `translateY(${virtualRow.start}px)`,
+            }"
             :class="cn(
-              'border-b last:border-b-0 transition-colors',
+              'flex items-center border-b transition-colors',
               appliedFilters.length > 0 ? 'bg-primary/5' : '',
-              idx % 2 !== 0 ? 'bg-muted/30' : ''
+              filteredData[virtualRow.index].id % 2 !== 0 ? 'bg-muted/30' : ''
             )"
           >
-            <td class="px-4 py-3">
+            <div class="px-4 py-3 w-[140px] shrink-0">
               <span :class="cn(
                 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
-                statusVariants[row.status]?.bg ?? 'bg-muted',
-                statusVariants[row.status]?.text ?? 'text-muted-foreground'
+                statusVariants[filteredData[virtualRow.index].status]?.bg ?? 'bg-muted',
+                statusVariants[filteredData[virtualRow.index].status]?.text ?? 'text-muted-foreground'
               )">
-                {{ row.status }}
+                {{ filteredData[virtualRow.index].status }}
               </span>
-            </td>
-            <td class="px-4 py-3 font-medium">{{ row.assignee }}</td>
-            <td class="px-4 py-3">
+            </div>
+            <div class="px-4 py-3 w-[180px] shrink-0 font-medium truncate">{{ filteredData[virtualRow.index].assignee }}</div>
+            <div class="px-4 py-3 w-[100px] shrink-0">
               <div class="flex items-center gap-1">
-                <div :class="cn('size-2 rounded-full', priorityColors[row.priority - 1] ?? priorityColors[0])" />
-                <span class="text-sm tabular-nums">{{ row.priority }}</span>
+                <div :class="cn('size-2 rounded-full', priorityColors[filteredData[virtualRow.index].priority - 1] ?? priorityColors[0])" />
+                <span class="text-sm tabular-nums">{{ filteredData[virtualRow.index].priority }}</span>
               </div>
-            </td>
-            <td class="px-4 py-3 text-muted-foreground">{{ row.department }}</td>
-            <td class="px-4 py-3 text-muted-foreground tabular-nums">{{ row.createdAt }}</td>
-            <td class="px-4 py-3 text-center">
-              <XIcon v-if="row.isBlocked" class="size-4 text-rose-500 mx-auto" />
+            </div>
+            <div class="px-4 py-3 w-[140px] shrink-0 text-muted-foreground">{{ filteredData[virtualRow.index].department }}</div>
+            <div class="px-4 py-3 w-[120px] shrink-0 text-muted-foreground tabular-nums">{{ filteredData[virtualRow.index].createdAt }}</div>
+            <div class="px-4 py-3 w-[80px] shrink-0 text-center">
+              <XIcon v-if="filteredData[virtualRow.index].isBlocked" class="size-4 text-rose-500 mx-auto" />
               <CheckIcon v-else class="size-4 text-emerald-500 mx-auto" />
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>

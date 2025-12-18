@@ -266,6 +266,9 @@ export interface FuzzyFilter {
    *
    * @param query - The user's input text
    * @param cursorPosition - Optional cursor position for context-aware suggestions
+   * @param filterContext - Optional array of already-applied filters. Result counts
+   *                       will be computed against the subset of data matching all
+   *                       context filters (AND semantics).
    * @returns Promise resolving to suggestion response
    *
    * @example
@@ -277,8 +280,15 @@ export interface FuzzyFilter {
    * //     { label: "Status = Closed", resultCount: 3 },
    * //   ]
    * ```
+   *
+   * @example With filter context
+   * ```typescript
+   * const statusFilter = filter.compileFilter("status", "eq", "Open");
+   * const response = await filter.suggest("assignee", undefined, [statusFilter]);
+   * // Result counts reflect only rows where status = "Open"
+   * ```
    */
-  suggest(query: string, cursorPosition?: number): Promise<SuggestionResponse>;
+  suggest(query: string, cursorPosition?: number, filterContext?: CompiledFilter[]): Promise<SuggestionResponse>;
 
   /**
    * Gets filter suggestions synchronously.
@@ -287,9 +297,10 @@ export interface FuzzyFilter {
    *
    * @param query - The user's input text
    * @param cursorPosition - Optional cursor position
+   * @param filterContext - Optional array of already-applied filters for stacked counting
    * @returns Suggestion response
    */
-  suggestSync(query: string, cursorPosition?: number): SuggestionResponse;
+  suggestSync(query: string, cursorPosition?: number, filterContext?: CompiledFilter[]): SuggestionResponse;
 
   // -------------------------------------------------------------------------
   // Parsing

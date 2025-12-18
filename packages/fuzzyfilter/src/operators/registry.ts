@@ -18,6 +18,9 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "eq",
     label: "equals",
     aliases: ["equal", "equals", "is", "=", "==", "==="],
+    typeSpecificAliases: {
+      date: ["at", "on"],
+    },
     supportedTypes: ["string", "number", "boolean", "date", "enum"],
     requiresArgument: true,
     symbol: "=",
@@ -187,7 +190,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
   before: {
     id: "before",
     label: "before",
-    aliases: ["earlier", "prior to", "priorTo"],
+    aliases: ["earlier", "prior to", "priorTo", "earlier than", "preceding", "until", "up to"],
     supportedTypes: ["date"],
     requiresArgument: true,
     symbol: "←",
@@ -195,7 +198,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
   after: {
     id: "after",
     label: "after",
-    aliases: ["later", "since"],
+    aliases: ["later", "since", "later than", "following", "from", "starting"],
     supportedTypes: ["date"],
     requiresArgument: true,
     symbol: "→",
@@ -264,17 +267,72 @@ export function getDefaultOperatorForType(type: DataType): Operator {
 
 /**
  * Get all searchable terms for an operator (for fuzzy matching)
+ * 
+ * @param operator - The operator to get search terms for
+ * @param forType - Optional: include type-specific aliases for this data type
  */
-export function getOperatorSearchTerms(operator: Operator): string[] {
+export function getOperatorSearchTerms(operator: Operator, forType?: DataType): string[] {
   const info = getOperator(operator);
   if (!info) return [];
   
-  return [
+  const terms = [
     info.id,
     info.label,
     ...info.aliases,
     ...(info.symbol ? [info.symbol] : []),
   ];
+
+  // Add type-specific aliases if a type is specified
+  if (forType && info.typeSpecificAliases?.[forType]) {
+    terms.push(...info.typeSpecificAliases[forType]!);
+  }
+
+  return terms;
+}
+
+/**
+ * Get all aliases for an operator, optionally filtered by type
+ * 
+ * @param operator - The operator to get aliases for
+ * @param forType - Optional: include type-specific aliases for this data type
+ */
+export function getOperatorAliases(operator: Operator, forType?: DataType): string[] {
+  const info = getOperator(operator);
+  if (!info) return [];
+  
+  const aliases = [...info.aliases];
+
+  // Add type-specific aliases if a type is specified
+  if (forType && info.typeSpecificAliases?.[forType]) {
+    aliases.push(...info.typeSpecificAliases[forType]!);
+  }
+
+  return aliases;
+}
+
+/**
+ * Check if a given alias matches an operator for a specific type
+ * Returns true if the alias is a general alias OR a type-specific alias for the given type
+ */
+export function isAliasForOperator(alias: string, operator: Operator, forType?: DataType): boolean {
+  const info = getOperator(operator);
+  if (!info) return false;
+  
+  const normalizedAlias = alias.toLowerCase();
+  
+  // Check general aliases
+  if (info.aliases.some(a => a.toLowerCase() === normalizedAlias)) {
+    return true;
+  }
+  
+  // Check type-specific aliases
+  if (forType && info.typeSpecificAliases?.[forType]) {
+    if (info.typeSpecificAliases[forType]!.some(a => a.toLowerCase() === normalizedAlias)) {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 /**

@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "bun --filter '*' dev",
     "test": "bun --filter fuzzyfilter test",
-    "test:all": "bun test"
+    "test:all": "bun test",
+    "test:e2e": "cd packages/e2e-tests && bun x playwright test",
+    "test:e2e:ui": "cd packages/e2e-tests && bun x playwright test --ui"
   },
   "workspaces": [
     "packages/*",
