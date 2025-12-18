@@ -4,11 +4,11 @@
  * Provides reactive state management for FuzzyFilter in Vue 3 applications
  * using the Composition API.
  *
- * @module fuzzyfilter/vue
+ * @module vue-fuzzy-filter
  */
 
 import { ref, computed, watch, onUnmounted, type Ref, type ComputedRef } from "vue";
-import type { FuzzyFilter, FilterSuggestion } from "../types/index.ts";
+import type { FuzzyFilter, FilterSuggestion } from "fuzzyfilter";
 
 /**
  * Options for the useFuzzyFilter composable
@@ -63,7 +63,7 @@ export interface UseFuzzyFilterReturn {
  * @example Basic usage
  * ```vue
  * <script setup lang="ts">
- * import { useFuzzyFilter } from "fuzzyfilter/vue";
+ * import { useFuzzyFilter } from "vue-fuzzy-filter";
  * import { createFuzzyFilter, columnId } from "fuzzyfilter";
  *
  * const filter = createFuzzyFilter();
@@ -144,12 +144,6 @@ export function useFuzzyFilter(
     abortController?.abort();
     abortController = new AbortController();
 
-    if (!q.trim()) {
-      suggestions.value = [];
-      selectedIndex.value = 0;
-      return;
-    }
-
     isLoading.value = true;
     error.value = null;
 
@@ -178,7 +172,7 @@ export function useFuzzyFilter(
         fetchSuggestions(newQuery);
       }, debounceMs);
     },
-    { immediate: false }
+    { immediate: true }
   );
 
   /**

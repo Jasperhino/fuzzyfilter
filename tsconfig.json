@@ -24,6 +24,15 @@
     // Some stricter flags (disabled by default)
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false
-  }
+    "noPropertyAccessFromIndexSignature": false,
+
+    // Path mapping for monorepo
+    "baseUrl": ".",
+    "paths": {
+      "fuzzyfilter": ["./packages/fuzzyfilter/src/index.ts"],
+      "vue-fuzzy-filter": ["./packages/vue-fuzzy-filter/src/index.ts"],
+      "@fuzzyfilter/sample-data": ["./packages/sample-data/src/index.ts"]
+    }
+  },
+  "include": ["packages/**/*.ts", "packages/**/*.tsx"]
 }

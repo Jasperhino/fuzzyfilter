@@ -1,15 +1,15 @@
 /**
- * Vue integration for FuzzyFilter
+ * Vue FuzzyFilter Composable
  *
- * Provides a Vue 3 composable for building filter interfaces with
- * automatic state management using the Composition API.
+ * A Vue 3 composable for building filter interfaces with FuzzyFilter.
+ * Provides reactive state management using the Composition API.
  *
- * @module fuzzyfilter/vue
+ * @module vue-fuzzy-filter
  *
  * @example
  * ```vue
  * <script setup lang="ts">
- * import { useFuzzyFilter } from "fuzzyfilter/vue";
+ * import { useFuzzyFilter } from "vue-fuzzy-filter";
  * import { createFuzzyFilter, columnId } from "fuzzyfilter";
  *
  * const filter = createFuzzyFilter();
@@ -37,4 +37,7 @@ export {
   type UseFuzzyFilterOptions,
   type UseFuzzyFilterReturn,
 } from "./use-fuzzy-filter.ts";
+
+// Re-export commonly used types from fuzzyfilter for convenience
+export type { FuzzyFilter, FilterSuggestion } from "fuzzyfilter";
 

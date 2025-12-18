@@ -1,0 +1,19 @@
+{
+  "name": "@fuzzyfilter/sample-data",
+  "version": "0.1.0",
+  "description": "Sample data for FuzzyFilter examples",
+  "type": "module",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "peerDependencies": {
+    "fuzzyfilter": "workspace:*"
+  }
+}
+

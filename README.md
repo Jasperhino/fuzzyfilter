@@ -271,71 +271,29 @@ function FilterCombobox({ data, schema }) {
 
 ### Vue Integration
 
-Use the optional Vue composable for Vue 3 applications:
+For Vue 3 applications, use the separate [vue-fuzzy-filter](./packages/vue-fuzzy-filter) package:
+
+```bash
+bun add vue-fuzzy-filter fuzzyfilter
+```
 
 ```vue
 <script setup lang="ts">
-import { useFuzzyFilter } from "fuzzyfilter/vue";
+import { useFuzzyFilter } from "vue-fuzzy-filter";
 import { createFuzzyFilter, columnId } from "fuzzyfilter";
-import { onMounted } from "vue";
-
-const props = defineProps<{ data: Array<Record<string, unknown>> }>();
-const emit = defineEmits<{ "filter-applied": [FilterSuggestion] }>();
 
 const filter = createFuzzyFilter();
+// ... setup schema and data
 
-onMounted(() => {
-  filter.setSchema({
-    columns: [
-      { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
-      { id: columnId("assignee"), name: "Assignee", type: "string" },
-    ],
-  });
-  filter.indexData(props.data);
-});
-
-const {
-  query,
-  suggestions,
-  isLoading,
-  selectedIndex,
-  navigateSuggestions,
-  applySuggestion,
-  reset,
-} = useFuzzyFilter(filter, {
-  debounceMs: 200,
-  onApply: (suggestion) => emit("filter-applied", suggestion),
-});
+const { query, suggestions, applySuggestion } = useFuzzyFilter(filter);
 </script>
 
 <template>
-  <div class="filter-combobox">
-    <input
-      v-model="query"
-      placeholder="Filter..."
-      @keydown.down.prevent="navigateSuggestions('down')"
-      @keydown.up.prevent="navigateSuggestions('up')"
-      @keydown.enter.prevent="applySuggestion"
-      @keydown.escape="reset"
-    />
-    
-    <div v-if="isLoading">Loading...</div>
-    
-    <ul v-else-if="suggestions.length">
-      <li
-        v-for="(suggestion, index) in suggestions"
-        :key="suggestion.id"
-        :class="{ selected: index === selectedIndex }"
-        @click="() => { selectSuggestion(index); applySuggestion(); }"
-      >
-        {{ suggestion.label }} ({{ suggestion.resultCount }} results)
-      </li>
-    </ul>
-  </div>
+  <input v-model="query" @keydown.enter="applySuggestion" />
 </template>
 ```
 
-The Vue composable returns reactive refs that work seamlessly with `v-model` and Vue's reactivity system.
+See the [vue-fuzzy-filter README](./packages/vue-fuzzy-filter/README.md) for full documentation.
 
 ## Advanced Usage
 
