@@ -1038,5 +1038,107 @@ describe("Date Filter Compilation", () => {
     // Tomorrow should not match
     expect(compiled?.predicate({ createdAt: tomorrow.toISOString() })).toBe(false);
   });
+
+  test("between operator works with date array for date ranges", async () => {
+    const filter = createFuzzyFilter();
+    filter.setSchema({
+      columns: [
+        { id: columnId("createdAt"), name: "Created At", type: "date" },
+      ],
+    });
+    
+    const today = new Date();
+    today.setHours(12, 0, 0, 0); // Noon today
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const twoDaysAgo = new Date(today);
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    filter.indexData([
+      { createdAt: today.toISOString() },
+      { createdAt: yesterday.toISOString() },
+      { createdAt: twoDaysAgo.toISOString() },
+      { createdAt: tomorrow.toISOString() },
+    ]);
+
+    // Create date range: yesterday start of day to today end of day
+    const rangeStart = new Date(yesterday);
+    rangeStart.setHours(0, 0, 0, 0);
+    
+    const rangeEnd = new Date(today);
+    rangeEnd.setHours(23, 59, 59, 999);
+
+    // Test with Date array (how dateRange values are passed)
+    const compiled = filter.compileFilter("createdAt", "between", [rangeStart, rangeEnd]);
+    expect(compiled).not.toBeNull();
+    
+    // Yesterday should match (within range)
+    expect(compiled?.predicate({ createdAt: yesterday.toISOString() })).toBe(true);
+    // Today should match (within range)
+    expect(compiled?.predicate({ createdAt: today.toISOString() })).toBe(true);
+    // Two days ago should NOT match (before range)
+    expect(compiled?.predicate({ createdAt: twoDaysAgo.toISOString() })).toBe(false);
+    // Tomorrow should NOT match (after range)
+    expect(compiled?.predicate({ createdAt: tomorrow.toISOString() })).toBe(false);
+    
+    // Match count should be 2 (yesterday and today)
+    expect(compiled?.matchCount).toBe(2);
+  });
+
+  test("between operator preview count matches actual filter execution for date range", async () => {
+    const filter = createFuzzyFilter();
+    filter.setSchema({
+      columns: [
+        { id: columnId("createdAt"), name: "Created At", type: "date", aliases: ["created"] },
+      ],
+    });
+    
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const twoDaysAgo = new Date(today);
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    
+    filter.indexData([
+      { createdAt: today.toISOString() },
+      { createdAt: yesterday.toISOString() },
+      { createdAt: twoDaysAgo.toISOString() },
+    ]);
+
+    // Search for "from yesterday to today" which should create a between filter
+    const response = await filter.suggest("from yesterday to today");
+    
+    // Find the between suggestion for Created At
+    const betweenSuggestion = response.suggestions.find(
+      (s) => s.operator === "between" && s.column.id === "createdAt" && s.value?.kind === "dateRange"
+    );
+    
+    expect(betweenSuggestion).toBeDefined();
+    expect(betweenSuggestion?.isComplete).toBe(true);
+    
+    // Get the preview count
+    const previewCount = betweenSuggestion!.resultCount;
+    
+    // Now compile the filter using the value from the suggestion
+    const value = betweenSuggestion!.value!;
+    expect(value.kind).toBe("dateRange");
+    
+    if (value.kind === "dateRange") {
+      const compiled = filter.compileFilter("createdAt", "between", [value.start, value.end]);
+      expect(compiled).not.toBeNull();
+      
+      // CRITICAL: The preview count should match the compiled filter matchCount
+      // This was the bug: preview showed 2 but actual was 0
+      expect(compiled?.matchCount).toBe(previewCount);
+    }
+  });
 });
 

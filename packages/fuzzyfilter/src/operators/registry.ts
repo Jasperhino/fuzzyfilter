@@ -3,14 +3,18 @@
  * 
  * Defines all supported operators with their metadata,
  * aliases for fuzzy matching, and type compatibility.
+ * 
+ * The Operator type is derived from this registry's keys.
  */
 
-import type { Operator, OperatorInfo, DataType } from "../types/index.ts";
+import type { OperatorInfoBase } from "../types/index.ts";
+import { DataType } from "../types/index.ts";
 
 /**
- * Complete registry of all operators
+ * Complete registry of all operators.
+ * This is the single source of truth - the Operator type is derived from its keys.
  */
-export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
+export const OPERATOR_REGISTRY = {
   // ---------------------------------------------------------------------------
   // Equality Operators
   // ---------------------------------------------------------------------------
@@ -19,9 +23,9 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     label: "equals",
     aliases: ["equal", "equals", "is", "=", "==", "==="],
     typeSpecificAliases: {
-      date: ["at", "on"],
+      [DataType.DATE]: ["at", "on"],
     },
-    supportedTypes: ["string", "number", "boolean", "date", "enum"],
+    supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM],
     requiresArgument: true,
     symbol: "=",
   },
@@ -29,7 +33,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "neq",
     label: "not equals",
     aliases: ["notEquals", "not equal", "isNot", "is not", "!=", "!==", "<>"],
-    supportedTypes: ["string", "number", "boolean", "date", "enum"],
+    supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM],
     requiresArgument: true,
     symbol: "≠",
   },
@@ -37,7 +41,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "eqIgnoreCase",
     label: "equals (ignore case)",
     aliases: ["equalsIgnoreCase", "eqic", "equals ignore case", "~="],
-    supportedTypes: ["string"],
+    supportedTypes: [DataType.STRING],
     requiresArgument: true,
     symbol: "≈",
   },
@@ -45,7 +49,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "neqIgnoreCase",
     label: "not equals (ignore case)",
     aliases: ["notEqualsIgnoreCase", "neqic", "not equals ignore case"],
-    supportedTypes: ["string"],
+    supportedTypes: [DataType.STRING],
     requiresArgument: true,
     symbol: "≉",
   },
@@ -57,7 +61,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "lt",
     label: "less than",
     aliases: ["lessThan", "less", "<", "before", "under"],
-    supportedTypes: ["number", "date"],
+    supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
     symbol: "<",
   },
@@ -65,7 +69,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "lte",
     label: "less than or equal",
     aliases: ["lessThanOrEqual", "lessOrEqual", "<=", "max", "at most"],
-    supportedTypes: ["number", "date"],
+    supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
     symbol: "≤",
   },
@@ -73,7 +77,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "gt",
     label: "greater than",
     aliases: ["greaterThan", "greater", ">", "after", "over", "above"],
-    supportedTypes: ["number", "date"],
+    supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
     symbol: ">",
   },
@@ -81,7 +85,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "gte",
     label: "greater than or equal",
     aliases: ["greaterThanOrEqual", "greaterOrEqual", ">=", "min", "at least"],
-    supportedTypes: ["number", "date"],
+    supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
     symbol: "≥",
   },
@@ -93,7 +97,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "in",
     label: "in",
     aliases: ["oneOf", "one of", "any of", "anyOf", "includes"],
-    supportedTypes: ["string", "number", "enum"],
+    supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.ENUM],
     requiresArgument: true,
     isVariadic: true,
     symbol: "∈",
@@ -102,7 +106,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "nin",
     label: "not in",
     aliases: ["notIn", "not one of", "none of", "noneOf", "excludes"],
-    supportedTypes: ["string", "number", "enum"],
+    supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.ENUM],
     requiresArgument: true,
     isVariadic: true,
     symbol: "∉",
@@ -115,7 +119,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "contains",
     label: "contains",
     aliases: ["has", "includes", "like", "~"],
-    supportedTypes: ["string", "array"],
+    supportedTypes: [DataType.STRING, DataType.ARRAY],
     requiresArgument: true,
     symbol: "⊃",
   },
@@ -123,7 +127,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "notContains",
     label: "does not contain",
     aliases: ["doesNotContain", "notIncludes", "excludes", "!~"],
-    supportedTypes: ["string", "array"],
+    supportedTypes: [DataType.STRING, DataType.ARRAY],
     requiresArgument: true,
     symbol: "⊅",
   },
@@ -131,7 +135,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "startsWith",
     label: "starts with",
     aliases: ["beginsWith", "prefix", "^"],
-    supportedTypes: ["string"],
+    supportedTypes: [DataType.STRING],
     requiresArgument: true,
     symbol: "^…",
   },
@@ -139,7 +143,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "endsWith",
     label: "ends with",
     aliases: ["suffix", "$"],
-    supportedTypes: ["string"],
+    supportedTypes: [DataType.STRING],
     requiresArgument: true,
     symbol: "…$",
   },
@@ -151,7 +155,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "isEmpty",
     label: "is empty",
     aliases: ["isNull", "null", "empty", "blank", "missing"],
-    supportedTypes: ["string", "number", "boolean", "date", "enum", "array"],
+    supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM, DataType.ARRAY],
     requiresArgument: false,
     symbol: "∅",
   },
@@ -159,7 +163,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "isNotEmpty",
     label: "is not empty",
     aliases: ["isNotNull", "notNull", "hasValue", "exists", "present"],
-    supportedTypes: ["string", "number", "boolean", "date", "enum", "array"],
+    supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM, DataType.ARRAY],
     requiresArgument: false,
     symbol: "≠∅",
   },
@@ -171,7 +175,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "isTrue",
     label: "is true",
     aliases: ["true", "yes", "on", "enabled", "active"],
-    supportedTypes: ["boolean"],
+    supportedTypes: [DataType.BOOLEAN],
     requiresArgument: false,
     symbol: "✓",
   },
@@ -179,7 +183,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "isFalse",
     label: "is false",
     aliases: ["false", "no", "off", "disabled", "inactive"],
-    supportedTypes: ["boolean"],
+    supportedTypes: [DataType.BOOLEAN],
     requiresArgument: false,
     symbol: "✗",
   },
@@ -191,7 +195,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "before",
     label: "before",
     aliases: ["earlier", "prior to", "priorTo", "earlier than", "preceding", "until", "up to"],
-    supportedTypes: ["date"],
+    supportedTypes: [DataType.DATE],
     requiresArgument: true,
     symbol: "←",
   },
@@ -199,7 +203,7 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "after",
     label: "after",
     aliases: ["later", "since", "later than", "following", "from", "starting"],
-    supportedTypes: ["date"],
+    supportedTypes: [DataType.DATE],
     requiresArgument: true,
     symbol: "→",
   },
@@ -207,25 +211,40 @@ export const OPERATOR_REGISTRY: Record<Operator, OperatorInfo> = {
     id: "between",
     label: "between",
     aliases: ["range", "from to", "within"],
-    supportedTypes: ["number", "date"],
+    supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
     isVariadic: true,
     symbol: "↔",
   },
-};
+} as const satisfies Record<string, OperatorInfoBase & { id: string }>;
+
+/**
+ * All supported filter operators.
+ * Derived from OPERATOR_REGISTRY keys - single source of truth.
+ */
+export type Operator = keyof typeof OPERATOR_REGISTRY;
+
+/**
+ * Full operator info including the id field.
+ * The id matches the registry key.
+ */
+export interface OperatorInfo extends OperatorInfoBase {
+  /** The operator identifier (matches the registry key) */
+  readonly id: Operator;
+}
 
 /**
  * Get all operators
  */
 export function getAllOperators(): OperatorInfo[] {
-  return Object.values(OPERATOR_REGISTRY);
+  return Object.values(OPERATOR_REGISTRY) as OperatorInfo[];
 }
 
 /**
  * Get operator by ID
  */
-export function getOperator(id: Operator): OperatorInfo | undefined {
-  return OPERATOR_REGISTRY[id];
+export function getOperator(id: Operator): OperatorInfo {
+  return OPERATOR_REGISTRY[id] as OperatorInfo;
 }
 
 /**
@@ -248,17 +267,17 @@ export function isValidOperatorForType(operator: Operator, type: DataType): bool
  */
 export function getDefaultOperatorForType(type: DataType): Operator {
   switch (type) {
-    case "string":
+    case DataType.STRING:
       return "contains";
-    case "number":
+    case DataType.NUMBER:
       return "eq";
-    case "boolean":
+    case DataType.BOOLEAN:
       return "isTrue";
-    case "date":
+    case DataType.DATE:
       return "eq";
-    case "enum":
+    case DataType.ENUM:
       return "eq";
-    case "array":
+    case DataType.ARRAY:
       return "contains";
     default:
       return "eq";
@@ -273,9 +292,8 @@ export function getDefaultOperatorForType(type: DataType): Operator {
  */
 export function getOperatorSearchTerms(operator: Operator, forType?: DataType): string[] {
   const info = getOperator(operator);
-  if (!info) return [];
   
-  const terms = [
+  const terms: string[] = [
     info.id,
     info.label,
     ...info.aliases,
@@ -298,7 +316,6 @@ export function getOperatorSearchTerms(operator: Operator, forType?: DataType): 
  */
 export function getOperatorAliases(operator: Operator, forType?: DataType): string[] {
   const info = getOperator(operator);
-  if (!info) return [];
   
   const aliases = [...info.aliases];
 
@@ -316,7 +333,6 @@ export function getOperatorAliases(operator: Operator, forType?: DataType): stri
  */
 export function isAliasForOperator(alias: string, operator: Operator, forType?: DataType): boolean {
   const info = getOperator(operator);
-  if (!info) return false;
   
   const normalizedAlias = alias.toLowerCase();
   

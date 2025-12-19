@@ -16,7 +16,6 @@ import type {
   AnyColumnDefinition,
   ColumnId,
   Operator,
-  DataType,
   Trie,
   FilterSuggestion,
   SuggestionResponse,
@@ -28,9 +27,10 @@ import type {
   ParsedDate,
   RowId,
 } from "./types/index.ts";
-import { columnId, DEFAULT_CONFIG } from "./types/index.ts";
+import { columnId, DataType, DEFAULT_CONFIG } from "./types/index.ts";
 import {
   OPERATOR_REGISTRY,
+  getAllOperators,
   getOperatorsForType,
   getOperator,
   isOperator,
@@ -243,7 +243,7 @@ export function createFuzzyFilter(
   };
 
   // Initialize operator trie with all operators and their aliases
-  for (const op of Object.values(OPERATOR_REGISTRY)) {
+  for (const op of getAllOperators()) {
     // Insert operator id and label as general (no type restriction)
     state.operatorTrie.insert(op.id, { operator: op.id });
     state.operatorTrie.insert(op.label, { operator: op.id });
@@ -502,7 +502,7 @@ export function createFuzzyFilter(
       errors.push("No operator specified");
     } else {
       const opInfo = getOperator(parsed.operator.match.operator);
-      if (opInfo?.requiresArgument && !parsed.value) {
+      if (opInfo.requiresArgument && !parsed.value) {
         errors.push(`Operator '${opInfo.label}' requires a value`);
       }
     }
@@ -611,7 +611,6 @@ export function createFuzzyFilter(
         for (const match of opMatches) {
           const opEntry = match.value;
           const opInfo = getOperator(opEntry.operator);
-          if (!opInfo) continue;
           
           // Use the longer of id or label for target length
           const targetLength = Math.max(opInfo.id.length, opInfo.label.length);
@@ -659,8 +658,35 @@ export function createFuzzyFilter(
         if (parsedDate) {
           // Add suggestions for all date columns
           for (const col of getColumns(state.schema!)) {
-            if (col.type === "date") {
-              const dateOps = getOperatorsForType("date");
+            if (col.type === DataType.DATE) {
+              // Check if this is a date range (has both start and end)
+              if (parsedDate.rangeStart && parsedDate.rangeEnd) {
+                // Find operators that accept date ranges (variadic + supports date)
+                const rangeOperators = getAllOperators().filter(
+                  op => op.isVariadic && op.supportedTypes.includes(DataType.DATE)
+                );
+                
+                for (const op of rangeOperators) {
+                  const key = `${col.id}:${op.id}:date:${parsedDate.rangeStart.toISOString()}-${parsedDate.rangeEnd.toISOString()}`;
+                  if (!seenValues.has(key)) {
+                    seenValues.add(key);
+                    suggestions.push(
+                      createDateSuggestion(
+                        col,
+                        op.id,
+                        parsedDate,
+                        5000, // Highest score - both arguments provided naturally
+                        countForDateFilter(col.id, op.id, parsedDate, contextRowIndices),
+                        undefined,
+                        contextRowIndices
+                      )
+                    );
+                  }
+                }
+              }
+              
+              // Also add single-date operators
+              const dateOps = getOperatorsForType(DataType.DATE);
               for (const op of dateOps.slice(0, 3)) {
                 const key = `${col.id}:${op.id}:date:${parsedDate.date.toISOString()}`;
                 if (!seenValues.has(key)) {
@@ -699,7 +725,6 @@ export function createFuzzyFilter(
       // Operator suggestions
       for (const [_key, { breakdown, operator, forType, matchedAlias }] of operatorScores) {
         const opInfo = getOperator(operator);
-        if (!opInfo) continue;
         for (const col of getColumns(state.schema!)) {
           // Skip if this is a type-specific alias that doesn't match the column type
           if (forType && forType !== col.type) continue;
@@ -738,7 +763,7 @@ export function createFuzzyFilter(
         const op = parsed.operator.match.operator;
         const opInfo = getOperator(op);
 
-        if (opInfo?.requiresArgument) {
+        if (opInfo.requiresArgument) {
           // Get remaining tokens after column and operator as potential value
           const colTokenIdx = tokens.indexOf(parsed.column.token);
           const opTokenIdx = tokens.indexOf(parsed.operator.token);
@@ -747,7 +772,7 @@ export function createFuzzyFilter(
           );
 
           // Handle date columns specially
-          if (col.type === "date") {
+          if (col.type === DataType.DATE) {
             if (valueTokens.length > 0) {
               // Try to parse as a date expression
               const valueQuery = valueTokens.map((t) => t.text).join(" ");
@@ -941,7 +966,7 @@ export function createFuzzyFilter(
     const valueText = value?.kind === "string" ? value.value : "";
     
     // Use matched alias in label if provided, otherwise use operator label
-    const operatorDisplay = matchedAlias ?? opInfo?.label ?? operator;
+    const operatorDisplay = matchedAlias ?? opInfo.label;
     const label = valueText
       ? `${column.name} ${operatorDisplay} ${valueText}`
       : `${column.name} ${operatorDisplay}`;
@@ -970,8 +995,8 @@ export function createFuzzyFilter(
       parts: {
         column: { text: column.name },
         operator: { 
-          text: opInfo?.label ?? operator, 
-          symbol: opInfo?.symbol,
+          text: opInfo.label, 
+          symbol: opInfo.symbol,
           matchedAlias: matchedAlias,
         },
         argument: valueText ? { text: valueText } : undefined,
@@ -982,7 +1007,7 @@ export function createFuzzyFilter(
       resultCount: resultCount ?? countForFilter(column.id, operator, value, contextRowIndices),
       score,
       scoreBreakdown,
-      isComplete: !opInfo?.requiresArgument || value !== undefined,
+      isComplete: !opInfo.requiresArgument || value !== undefined,
       completionText,
       cursorPositionAfter: completionText.length,
       category: score === 0 ? "exact" : scoreBreakdown?.rawScore === 0 ? "exact" : "fuzzy",
@@ -1055,17 +1080,24 @@ export function createFuzzyFilter(
     contextRowIndices: Set<number> | null = null
   ): FilterSuggestion {
     const opInfo = getOperator(operator);
-    const displayDate = customLabel ?? formatDateForDisplay(parsedDate.date);
-    const label = `${column.name} ${opInfo?.label ?? operator} ${displayDate}`;
+    
+    // For date ranges with variadic operators, show both dates
+    const isRangeOperator = opInfo.isVariadic && parsedDate.rangeStart && parsedDate.rangeEnd;
+    const displayDate = customLabel ?? (
+      isRangeOperator
+        ? `${formatDateForDisplay(parsedDate.rangeStart!)} - ${formatDateForDisplay(parsedDate.rangeEnd!)}`
+        : formatDateForDisplay(parsedDate.date)
+    );
+    const label = `${column.name} ${opInfo.label} ${displayDate}`;
 
     // Use the original text for completion to preserve natural language
     const completionText = `${column.name} ${operator} "${parsedDate.text}"`;
 
-    const value: HypothesisValueType = parsedDate.isRange
+    const value: HypothesisValueType = parsedDate.rangeStart && parsedDate.rangeEnd
       ? {
           kind: "dateRange",
-          start: parsedDate.rangeStart!,
-          end: parsedDate.rangeEnd!,
+          start: parsedDate.rangeStart,
+          end: parsedDate.rangeEnd,
           parsed: parsedDate,
         }
       : {
@@ -1074,12 +1106,17 @@ export function createFuzzyFilter(
           parsed: parsedDate,
         };
 
+    // Use range-specific ID if this is a range
+    const suggestionId = isRangeOperator
+      ? `${column.id}:${operator}:date:${parsedDate.rangeStart!.toISOString()}-${parsedDate.rangeEnd!.toISOString()}`
+      : `${column.id}:${operator}:date:${parsedDate.date.toISOString()}`;
+
     return {
-      id: `${column.id}:${operator}:date:${parsedDate.date.toISOString()}`,
+      id: suggestionId,
       label,
       parts: {
         column: { text: column.name },
-        operator: { text: opInfo?.label ?? operator, symbol: opInfo?.symbol },
+        operator: { text: opInfo.label, symbol: opInfo.symbol },
         argument: { text: displayDate },
       },
       column,
@@ -1200,9 +1237,26 @@ export function createFuzzyFilter(
     let dateRangeStart: Date | null = null;
     let dateRangeEnd: Date | null = null;
     
-    if (col.type === "date" && value !== undefined) {
+    if (col.type === DataType.DATE && value !== undefined) {
       if (value instanceof Date) {
         dateValue = value;
+      } else if (Array.isArray(value) && value.length === 2) {
+        // Handle date range as [start, end] array (used by dateRange values)
+        const [start, end] = value;
+        if (start instanceof Date && end instanceof Date) {
+          dateValue = start; // Use start as the primary date value
+          dateRangeStart = start;
+          dateRangeEnd = end;
+        } else {
+          // Try to parse array elements as dates
+          const startDate = start instanceof Date ? start : new Date(String(start));
+          const endDate = end instanceof Date ? end : new Date(String(end));
+          if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+            dateValue = startDate;
+            dateRangeStart = startDate;
+            dateRangeEnd = endDate;
+          }
+        }
       } else if (typeof value === "string") {
         // Try to parse as natural language date
         const parsed = parseDate(value);
@@ -1226,7 +1280,7 @@ export function createFuzzyFilter(
       const cellValue = row[columnId as string];
 
       // Handle date-specific operators
-      if (col.type === "date" && dateValue) {
+      if (col.type === DataType.DATE && dateValue) {
         if (cellValue == null) return false;
         
         const cellDate = cellValue instanceof Date

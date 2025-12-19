@@ -12,6 +12,20 @@
 // ============================================================================
 
 /**
+ * Supported column data types as a const object.
+ * Allows enum-style access: DataType.STRING, DataType.DATE, etc.
+ * The DataType type is derived from the values.
+ */
+export const DataType = {
+  STRING: "string",
+  NUMBER: "number",
+  BOOLEAN: "boolean",
+  DATE: "date",
+  ENUM: "enum",
+  ARRAY: "array",
+} as const;
+
+/**
  * Supported column data types.
  *
  * These determine which operators are valid for a given column and how
@@ -28,110 +42,31 @@
  *
  * @example
  * ```typescript
+ * import { DataType } from "fuzzyfilter";
+ * 
  * const column: ColumnDefinition = {
  *   id: columnId("status"),
  *   name: "Status",
- *   type: "enum", // DataType
+ *   type: DataType.ENUM,
  *   values: ["Open", "Closed"],
  * };
  * ```
  */
-export type DataType =
-  | "string"
-  | "number"
-  | "boolean"
-  | "date"
-  | "enum"
-  | "array";
+export type DataType = (typeof DataType)[keyof typeof DataType];
+
+// Note: Operator type is derived from OPERATOR_REGISTRY in operators/registry.ts
+// and re-exported from types/index.ts
 
 /**
- * All supported filter operators.
- *
- * Operators are grouped by category:
- *
- * **Equality**
- * - `eq` - Equals (exact match)
- * - `neq` - Not equals
- * - `eqIgnoreCase` - Equals (case-insensitive)
- * - `neqIgnoreCase` - Not equals (case-insensitive)
- *
- * **Comparison** (for number/date)
- * - `lt` - Less than
- * - `lte` - Less than or equal
- * - `gt` - Greater than
- * - `gte` - Greater than or equal
- *
- * **Set Membership**
- * - `in` - Value is in the set
- * - `nin` - Value is not in the set
- *
- * **Pattern Matching** (for string)
- * - `contains` - Contains substring
- * - `notContains` - Does not contain substring
- * - `startsWith` - Starts with prefix
- * - `endsWith` - Ends with suffix
- *
- * **Nullability**
- * - `isEmpty` - Value is null/undefined/empty
- * - `isNotEmpty` - Value is not null/undefined/empty
- *
- * **Boolean Specific**
- * - `isTrue` - Value is true
- * - `isFalse` - Value is false
- *
- * **Date Specific**
- * - `before` - Before a date
- * - `after` - After a date
- * - `between` - Between two dates
- *
- * @example
- * ```typescript
- * // Use with compileFilter
- * const filter = fuzzyFilter.compileFilter("status", "eq", "Open");
- * const filter = fuzzyFilter.compileFilter("priority", "gte", 3);
- * const filter = fuzzyFilter.compileFilter("name", "contains", "john");
- * ```
+ * Base operator metadata for display and validation.
+ * Used as the constraint type for OPERATOR_REGISTRY.
+ * The full OperatorInfo type is derived in registry.ts.
  */
-export type Operator =
-  // Equality
-  | "eq"
-  | "neq"
-  | "eqIgnoreCase"
-  | "neqIgnoreCase"
-  // Comparison (numeric/date)
-  | "lt"
-  | "lte"
-  | "gt"
-  | "gte"
-  // Set membership
-  | "in"
-  | "nin"
-  // Pattern matching (string)
-  | "contains"
-  | "notContains"
-  | "startsWith"
-  | "endsWith"
-  // Nullability
-  | "isEmpty"
-  | "isNotEmpty"
-  // Boolean specific
-  | "isTrue"
-  | "isFalse"
-  // Date specific
-  | "before"
-  | "after"
-  | "between";
-
-/**
- * Operator metadata for display and validation
- */
-export interface OperatorInfo {
-  /** The operator identifier */
-  id: Operator;
+export interface OperatorInfoBase {
   /** Human-readable label */
   label: string;
   /** Alternative names/aliases for fuzzy matching */
-  aliases: string[];
+  aliases: readonly string[];
   /**
    * Type-specific aliases that only apply for certain column types.
    * For example, "at" and "on" only make sense for date equality.
@@ -143,9 +78,9 @@ export interface OperatorInfo {
    * }
    * ```
    */
-  typeSpecificAliases?: Partial<Record<DataType, string[]>>;
+  typeSpecificAliases?: Partial<Record<DataType, readonly string[]>>;
   /** Which data types this operator supports */
-  supportedTypes: DataType[];
+  supportedTypes: readonly DataType[];
   /** Does this operator require an argument? */
   requiresArgument: boolean;
   /** For binary operators, can accept multiple values */

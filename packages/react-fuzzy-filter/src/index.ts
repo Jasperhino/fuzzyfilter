@@ -1,0 +1,47 @@
+/**
+ * React FuzzyFilter Hook
+ *
+ * A React hook for building filter interfaces with FuzzyFilter.
+ * Provides state management and actions for fuzzy filter suggestions.
+ *
+ * @module react-fuzzy-filter
+ *
+ * @example
+ * ```tsx
+ * import { useFuzzyFilter } from "react-fuzzy-filter";
+ * import { createFuzzyFilter, columnId } from "fuzzyfilter";
+ *
+ * const filter = createFuzzyFilter();
+ * filter.setSchema({
+ *   columns: [
+ *     { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
+ *   ],
+ * });
+ * filter.indexData(myData);
+ *
+ * function App() {
+ *   const { query, setQuery, suggestions, applySuggestion } = useFuzzyFilter(filter);
+ *
+ *   return (
+ *     <div>
+ *       <input value={query} onChange={(e) => setQuery(e.target.value)} />
+ *       <ul>
+ *         {suggestions.map((s) => (
+ *           <li key={s.id}>{s.label}</li>
+ *         ))}
+ *       </ul>
+ *     </div>
+ *   );
+ * }
+ * ```
+ */
+
+export {
+  useFuzzyFilter,
+  type UseFuzzyFilterOptions,
+  type UseFuzzyFilterReturn,
+} from "./use-fuzzy-filter.ts";
+
+// Re-export commonly used types from fuzzyfilter for convenience
+export type { FuzzyFilter, FilterSuggestion, CompiledFilter } from "fuzzyfilter";
+

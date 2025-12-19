@@ -2,17 +2,19 @@
  * FuzzyFilter Type Definitions
  */
 
-// Core types
+// Core types (type-only exports)
 export type {
-  DataType,
-  Operator,
-  OperatorInfo,
+  OperatorInfoBase,
   ColumnId,
   RowId,
   Match,
 } from "./core.ts";
 
-export { columnId } from "./core.ts";
+// Core values (DataType is both a value and type with same name)
+export { DataType, columnId } from "./core.ts";
+
+// Operator types (derived from registry)
+export type { Operator, OperatorInfo } from "../operators/registry.ts";
 
 // Schema types
 export type {
