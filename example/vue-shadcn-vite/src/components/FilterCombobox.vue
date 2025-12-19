@@ -50,6 +50,8 @@ const compiledFiltersForContext = computed(() => {
       if (f.value.kind === "string") value = f.value.value
       else if (f.value.kind === "number") value = f.value.value
       else if (f.value.kind === "boolean") value = f.value.value
+      else if (f.value.kind === "date") value = f.value.value
+      else if (f.value.kind === "dateRange") value = [f.value.start, f.value.end]
     }
     const c = filter.compileFilter(f.column.id, f.operator, value)
     if (c) compiled.push(c)
@@ -61,7 +63,6 @@ const compiledFiltersForContext = computed(() => {
 const {
   query,
   suggestions,
-  isLoading,
   selectedIndex,
   navigateSuggestions,
   selectSuggestion,
@@ -88,6 +89,8 @@ const filteredData = computed(() => {
       if (f.value.kind === "string") value = f.value.value
       else if (f.value.kind === "number") value = f.value.value
       else if (f.value.kind === "boolean") value = f.value.value
+      else if (f.value.kind === "date") value = f.value.value
+      else if (f.value.kind === "dateRange") value = [f.value.start, f.value.end]
     }
     const compiled = filter.compileFilter(f.column.id, f.operator, value)
     if (compiled) {

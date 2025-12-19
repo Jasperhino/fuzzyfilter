@@ -670,7 +670,7 @@ export function createFuzzyFilter(
                       col,
                       op.id,
                       parsedDate,
-                      1500, // High score for parsed date
+                      4000, // High score for complete date filter (above incomplete operator matches)
                       countForDateFilter(col.id, op.id, parsedDate, contextRowIndices),
                       undefined,
                       contextRowIndices
@@ -764,7 +764,7 @@ export function createFuzzyFilter(
                       col,
                       op,
                       parsedDate,
-                      parsed.column.match.score + 1000, // Boost for successful date parse
+                      4500, // High score for complete date filter with explicit column/operator
                       countForDateFilter(col.id, op, parsedDate, contextRowIndices),
                       undefined,
                       contextRowIndices

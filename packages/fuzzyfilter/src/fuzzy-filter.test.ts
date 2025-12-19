@@ -830,6 +830,123 @@ describe("Filter Context Stacking", () => {
   });
 });
 
+// =============================================================================
+// Date Filter Bug Regression Tests
+// =============================================================================
+
+describe("Date Filter Bug - 'created today' ranking and count", () => {
+  test("complete date suggestions rank higher than incomplete operator suggestions", async () => {
+    const filter = createFuzzyFilter();
+    filter.setSchema({
+      columns: [
+        { id: columnId("createdAt"), name: "Created At", type: "date", aliases: ["created"] },
+      ],
+    });
+    
+    // Create data with today's date
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0];
+    
+    filter.indexData([
+      { createdAt: todayStr },
+      { createdAt: "2024-01-15" },
+    ]);
+
+    const response = await filter.suggest("created today");
+    
+    // Find complete suggestion (with date value)
+    const completeSuggestion = response.suggestions.find(
+      (s) => s.isComplete && (s.value?.kind === "date" || s.value?.kind === "dateRange")
+    );
+    
+    // Find incomplete suggestion (without value, like "Created At = ...")
+    const incompleteSuggestion = response.suggestions.find(
+      (s) => !s.isComplete && s.column.type === "date"
+    );
+    
+    expect(completeSuggestion).toBeDefined();
+    
+    // The complete suggestion MUST rank higher (have higher score)
+    if (completeSuggestion && incompleteSuggestion) {
+      expect(completeSuggestion.score).toBeGreaterThan(incompleteSuggestion.score);
+    }
+    
+    // The first suggestion should be complete
+    expect(response.suggestions[0]?.isComplete).toBe(true);
+  });
+
+  test("preview result count matches actual filter execution for date filter", async () => {
+    const filter = createFuzzyFilter();
+    filter.setSchema({
+      columns: [
+        { id: columnId("createdAt"), name: "Created At", type: "date", aliases: ["created"] },
+      ],
+    });
+    
+    // Create data with today's date
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0];
+    
+    filter.indexData([
+      { createdAt: todayStr },
+      { createdAt: todayStr },
+      { createdAt: "2024-01-15" },
+      { createdAt: "2024-02-20" },
+    ]);
+
+    const response = await filter.suggest("created today");
+    
+    // Find the "Created At = today" suggestion
+    const todaySuggestion = response.suggestions.find(
+      (s) => s.value?.kind === "date" && s.column.id === "createdAt"
+    );
+    
+    expect(todaySuggestion).toBeDefined();
+    
+    // Now compile and execute the same filter
+    const compiled = filter.compileFilter("createdAt", "eq", today);
+    expect(compiled).not.toBeNull();
+    
+    // The preview count should match the compiled filter matchCount
+    expect(todaySuggestion?.resultCount).toBe(compiled?.matchCount);
+    expect(todaySuggestion?.resultCount).toBe(2); // Two rows with today's date
+  });
+
+  test("date filter with Date object works correctly", async () => {
+    const filter = createFuzzyFilter();
+    filter.setSchema({
+      columns: [
+        { id: columnId("createdAt"), name: "Created At", type: "date" },
+      ],
+    });
+    
+    // Create data with today's date in different formats
+    const today = new Date();
+    today.setHours(12, 0, 0, 0); // Set to noon for consistency
+    const todayStr = today.toISOString().split("T")[0]!;
+    
+    filter.indexData([
+      { createdAt: todayStr }, // String format: "2024-12-19"
+      { createdAt: today.toISOString() }, // ISO format: "2024-12-19T12:00:00.000Z"
+      { createdAt: "2024-01-15" },
+    ]);
+
+    // Compile with a Date object directly
+    const compiled = filter.compileFilter("createdAt", "eq", today);
+    expect(compiled).not.toBeNull();
+    
+    // Should match both today entries
+    expect(compiled?.matchCount).toBe(2);
+    
+    // Test predicate with string date
+    expect(compiled?.predicate({ createdAt: todayStr })).toBe(true);
+    // Test predicate with ISO date
+    expect(compiled?.predicate({ createdAt: today.toISOString() })).toBe(true);
+    // Test predicate with past date
+    expect(compiled?.predicate({ createdAt: "2024-01-15" })).toBe(false);
+  });
+});
+
 describe("Date Filter Compilation", () => {
   test("compiles date filter with natural language date", async () => {
     const filter = createFuzzyFilter();
