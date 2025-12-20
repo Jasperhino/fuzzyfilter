@@ -129,7 +129,7 @@ export {
   isAliasForOperator,
   /** Type guard to check if a string is a valid operator */
   isOperator,
-} from "./operators/registry.ts";
+} from "./operators.ts";
 
 // ============================================================================
 // MAIN FACTORY

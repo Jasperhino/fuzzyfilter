@@ -4,7 +4,7 @@
  */
 
 import type { ColumnId, RowId } from "./core.ts";
-import type { Operator } from "../operators/registry.ts";
+import type { Operator } from "../operators.ts";
 import type { AnyColumnDefinition } from "./schema.ts";
 import type { HypothesisValueType } from "./hypothesis.ts";
 import type { RoaringBitmap } from "./index-layer.ts";

@@ -50,12 +50,12 @@ export interface GeneratorOptions {
   seed?: number;
 
   /**
-   * Date range for createdAt field
+   * Date range for created field
    */
   dateRange?: {
-    /** Start date for createdAt range */
+    /** Start date for created range */
     from?: Date;
-    /** End date for createdAt range */
+    /** End date for created range */
     to?: Date;
   };
 
@@ -88,7 +88,7 @@ function generateTask(id: number, options: GeneratorOptions = {}): Task {
   const fromDate = dateRange?.from ?? new Date("2024-01-01");
   const toDate = dateRange?.to ?? new Date();
 
-  const createdAt = faker.date
+  const created = faker.date
     .between({ from: fromDate, to: toDate })
     .toISOString()
     .split("T")[0];
@@ -114,7 +114,7 @@ function generateTask(id: number, options: GeneratorOptions = {}): Task {
     assignee: faker.person.fullName(),
     priority: faker.number.int({ min: PRIORITY_MIN, max: PRIORITY_MAX }),
     department: faker.helpers.arrayElement(DEPARTMENTS as unknown as string[]),
-    createdAt,
+    created,
     isBlocked,
     comments,
   };

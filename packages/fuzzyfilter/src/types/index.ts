@@ -14,7 +14,7 @@ export type {
 export { DataType, OperatorCategory, columnId } from "./core.ts";
 
 // Operator types (derived from registry)
-export type { Operator, OperatorInfo } from "../operators/registry.ts";
+export type { Operator, OperatorInfo } from "../operators.ts";
 
 // Schema types
 export type {

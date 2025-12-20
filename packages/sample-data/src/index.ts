@@ -46,7 +46,7 @@ export interface Task {
   assignee: string;
   priority: number;
   department: string;
-  createdAt: string;
+  created: string;
   isBlocked: boolean;
   comments: string;
 }
@@ -81,7 +81,7 @@ export const COLUMN_IDS = {
   assignee: columnId("assignee"),
   priority: columnId("priority"),
   department: columnId("department"),
-  createdAt: columnId("createdAt"),
+  created: columnId("created"),
   isBlocked: columnId("isBlocked"),
   comments: columnId("comments"),
 } as const;
@@ -122,10 +122,10 @@ export const TASK_SCHEMA: SchemaInput = {
       values: ["Engineering", "Design", "Product"],
     },
     {
-      id: COLUMN_IDS.createdAt,
-      name: "Created At",
+      id: COLUMN_IDS.created,
+      name: "Created",
       type: "date",
-      aliases: ["created", "date"],
+      aliases: ["date"],
     },
     {
       id: COLUMN_IDS.isBlocked,

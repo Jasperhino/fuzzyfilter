@@ -14,12 +14,20 @@
   },
   "dependencies": {
     "lucide-operators": "workspace:*",
-    "lucide-vue-next": "^0.453.0"
+    "lucide-vue-next": "0.562.0"
   },
   "peerDependencies": {
     "vue": ">=3.0.0"
   },
-  "keywords": ["fuzzyfilter", "icons", "lucide", "operators", "vue"],
+  "keywords": [
+    "fuzzyfilter",
+    "icons",
+    "lucide",
+    "operators",
+    "vue",
+    "filter",
+    "datatable"
+  ],
   "license": "MIT"
 }
 

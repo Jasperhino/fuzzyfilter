@@ -98,3 +98,5 @@ export function hasOperatorIcon(value: string): value is Operator {
   return value in OPERATOR_ICON_MAP;
 }
 
+
+

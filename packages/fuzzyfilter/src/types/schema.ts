@@ -9,7 +9,7 @@
  */
 
 import type { ColumnId, DataType } from "./core.ts";
-import type { Operator } from "../operators/registry.ts";
+import type { Operator } from "../operators.ts";
 
 // ============================================================================
 // COLUMN DEFINITION

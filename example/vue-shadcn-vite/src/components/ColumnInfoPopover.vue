@@ -2,8 +2,8 @@
 /**
  * ColumnInfoPopover - Vue component for displaying column operator info
  *
- * Shows a tooltip on hover with available operators and argument types.
- * Uses radix-vue's TooltipRoot for hover behavior.
+ * Shows a popover on hover with available operators and argument types.
+ * Uses the same arg notation and rendering style as the API reference.
  */
 import { computed } from "vue"
 import {
@@ -13,7 +13,6 @@ import {
   TooltipContent,
   TooltipProvider,
 } from "radix-vue"
-import { InfoIcon } from "lucide-operators-vue"
 import DataTypeIcon from "./DataTypeIcon.vue"
 import {
   getOperatorsForType,
@@ -32,43 +31,13 @@ const props = defineProps<{
 const operators = computed(() => getOperatorsForType(props.column.type as DataType))
 
 /**
- * Gets a human-readable description of the argument type for an operator
+ * Get the number of arguments for an operator (matching API reference)
  */
-function getArgumentTypeLabel(operator: OperatorInfo, columnType: DataType): string {
-  if (!operator.requiresArgument) {
-    return "No argument"
-  }
-
-  if (operator.isVariadic) {
-    switch (columnType) {
-      case DataType.NUMBER:
-        return "number, number, ..."
-      case DataType.DATE:
-        return "date, date, ..."
-      case DataType.STRING:
-      case DataType.ENUM:
-        return "value, value, ..."
-      default:
-        return "value, value, ..."
-    }
-  }
-
-  switch (columnType) {
-    case DataType.STRING:
-      return "text"
-    case DataType.NUMBER:
-      return "number"
-    case DataType.DATE:
-      return "date / natural language"
-    case DataType.BOOLEAN:
-      return "true / false"
-    case DataType.ENUM:
-      return "enum value"
-    case DataType.ARRAY:
-      return "value"
-    default:
-      return "value"
-  }
+function getArgCount(operator: OperatorInfo): number {
+  if (!operator.requiresArgument) return 0
+  if (operator.id === "between") return 2
+  if (operator.isVariadic) return -1 // Unlimited (in, nin)
+  return 1
 }
 </script>
 
@@ -76,19 +45,19 @@ function getArgumentTypeLabel(operator: OperatorInfo, columnType: DataType): str
   <TooltipProvider :delay-duration="0">
     <TooltipRoot>
       <TooltipTrigger
-        class="ml-1 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-help inline-flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded-sm"
+        class="cursor-help inline-flex items-center outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded-sm"
         :aria-label="`Info about ${column.name} column`"
       >
-        <InfoIcon class="size-3" />
+        <slot />
       </TooltipTrigger>
       
       <TooltipPortal>
         <TooltipContent
-          side="top"
+          side="bottom"
           align="start"
           :side-offset="8"
           :class="cn(
-            'z-50 w-[280px] bg-popover text-popover-foreground border border-border rounded-lg shadow-lg p-3',
+            'z-50 w-[300px] bg-popover text-popover-foreground border border-border rounded-lg shadow-lg p-3',
             'animate-in fade-in-0 zoom-in-95',
             'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2',
             'data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2'
@@ -109,24 +78,59 @@ function getArgumentTypeLabel(operator: OperatorInfo, columnType: DataType): str
               <h4 class="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
                 Available Operators
               </h4>
-              <div class="space-y-1 max-h-[200px] overflow-y-auto">
+              <div class="space-y-0.5 max-h-[200px] overflow-y-auto">
                 <div
                   v-for="op in operators"
                   :key="op.id"
-                  class="flex items-center justify-between gap-2 text-xs py-1 px-1.5 rounded hover:bg-muted/50"
+                  class="flex items-center gap-1.5 text-xs py-1 px-1.5 rounded hover:bg-muted/50"
                 >
-                  <div class="flex items-center gap-2 min-w-0">
-                    <code
-                      v-if="op.symbol"
-                      class="font-mono text-[11px] text-primary w-5 shrink-0 text-center"
-                    >
-                      {{ op.symbol }}
-                    </code>
-                    <span class="font-medium truncate">{{ op.id }}</span>
+                  <!-- Operator label -->
+                  <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                    <span class="shrink-0 text-[10px] h-4 px-1 rounded inline-flex items-center font-medium bg-muted text-muted-foreground">
+                      {{ op.symbol || op.id }}
+                    </span>
+                    <span class="text-muted-foreground truncate">{{ op.label }}</span>
                   </div>
-                  <span class="text-[10px] text-muted-foreground shrink-0">
-                    {{ getArgumentTypeLabel(op, column.type as DataType) }}
-                  </span>
+
+                  <!-- Argument placeholders -->
+                  <div class="flex items-center gap-1 shrink-0">
+                    <!-- No args -->
+                    <span 
+                      v-if="getArgCount(op) === 0" 
+                      class="text-[10px] text-muted-foreground/60"
+                    >
+                      no args
+                    </span>
+                    
+                    <!-- Single arg -->
+                    <span 
+                      v-else-if="getArgCount(op) === 1"
+                      class="shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground"
+                    >
+                      arg 1
+                    </span>
+                    
+                    <!-- Two args (between) -->
+                    <template v-else-if="getArgCount(op) === 2">
+                      <span class="shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground">
+                        arg 1
+                      </span>
+                      <span class="shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground">
+                        arg 2
+                      </span>
+                    </template>
+                    
+                    <!-- Variadic (in, nin) -->
+                    <template v-else>
+                      <span class="shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground">
+                        arg 1
+                      </span>
+                      <span class="text-[10px] text-muted-foreground/60">…</span>
+                      <span class="shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground">
+                        arg n
+                      </span>
+                    </template>
+                  </div>
                 </div>
               </div>
             </div>

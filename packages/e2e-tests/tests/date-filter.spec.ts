@@ -243,6 +243,67 @@ for (const { name, url } of apps) {
       console.log(`${name}: 'yesterday today' filter works correctly - preview (${previewCount}) matches actual (${actualCount})`);
     });
 
+    test("'created last week' displays two separate date argument badges", async ({ page }) => {
+      // Navigate to the app
+      await page.goto(url);
+      
+      // Wait for the app to load and data to be indexed
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(1000);
+      
+      // Get the filter input
+      const filterInput = page.getByPlaceholder("Filter by column, operator, or value...");
+      
+      // =========================================================
+      // STEP 1: Type "created last week" to search for date range filter
+      // =========================================================
+      await filterInput.click();
+      await filterInput.fill("created last week");
+      
+      // Wait for suggestions to appear
+      await page.waitForTimeout(500);
+      
+      // =========================================================
+      // STEP 2: Find the between suggestion for Created At (or alias "Created")
+      // =========================================================
+      const betweenSuggestion = page.locator('[data-testid^="suggestion-"]').filter({
+        hasText: /Created.*between/,
+      }).first();
+      
+      await expect(betweenSuggestion).toBeVisible({ timeout: 5000 });
+      
+      const suggestionText = await betweenSuggestion.textContent();
+      console.log(`${name}: Between suggestion: "${suggestionText}"`);
+      
+      // =========================================================
+      // STEP 3: Verify there are TWO separate argument badges 
+      // not one badge containing "date - date"
+      // =========================================================
+      
+      // Look for argument badges (text-[10px] with border classes)
+      // There should be exactly 2 date argument badges for a between operator
+      const argBadges = betweenSuggestion.locator('span.border');
+      const argCount = await argBadges.count();
+      
+      console.log(`${name}: Found ${argCount} argument badges`);
+      
+      // Should have 2 separate argument badges for the date range
+      expect(argCount).toBe(2);
+      
+      // Each badge should NOT contain " - " (they should be separate dates)
+      const firstArg = await argBadges.nth(0).textContent();
+      const secondArg = await argBadges.nth(1).textContent();
+      
+      console.log(`${name}: First arg: "${firstArg}", Second arg: "${secondArg}"`);
+      
+      expect(firstArg).not.toContain(" - ");
+      expect(secondArg).not.toContain(" - ");
+      
+      // Both should contain date text (Dec, Jan, etc.)
+      expect(firstArg).toMatch(/Dec|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov/);
+      expect(secondArg).toMatch(/Dec|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov/);
+    });
+
     test("'from yesterday to today' date range filter shows correct results", async ({ page }) => {
       // Navigate to the app
       await page.goto(url);

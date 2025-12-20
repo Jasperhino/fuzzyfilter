@@ -7,8 +7,8 @@
  * The Operator type is derived from this registry's keys.
  */
 
-import type { OperatorInfoBase } from "../types/index.ts";
-import { DataType, OperatorCategory } from "../types/index.ts";
+import type { OperatorInfoBase } from "./types/index.ts";
+import { DataType, OperatorCategory } from "./types/index.ts";
 
 /**
  * Complete registry of all operators.
@@ -101,6 +101,7 @@ export const OPERATOR_REGISTRY = {
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.ENUM],
     requiresArgument: true,
     isVariadic: true,
+    minArguments: 1,
   },
   nin: {
     id: "nin",
@@ -110,6 +111,7 @@ export const OPERATOR_REGISTRY = {
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.ENUM],
     requiresArgument: true,
     isVariadic: true,
+    minArguments: 1,
   },
 
   // ---------------------------------------------------------------------------
@@ -215,6 +217,7 @@ export const OPERATOR_REGISTRY = {
     supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
     isVariadic: true,
+    minArguments: 2,
   },
 } as const satisfies Record<string, OperatorInfoBase & { id: string; category: OperatorCategory }>;
 
@@ -386,4 +389,6 @@ export function isAliasForOperator(alias: string, operator: Operator, forType?: 
 export function isOperator(value: string): value is Operator {
   return value in OPERATOR_REGISTRY;
 }
+
+
 

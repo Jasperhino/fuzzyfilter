@@ -8,7 +8,7 @@
  */
 
 import type { ColumnId } from "./core.ts";
-import type { Operator } from "../operators/registry.ts";
+import type { Operator } from "../operators.ts";
 import type { Schema, SchemaInput, AnyColumnDefinition } from "./schema.ts";
 import type { ParsedInput } from "./parsing.ts";
 import type { ScoringWeights, HypothesisGenerationOptions } from "./hypothesis.ts";

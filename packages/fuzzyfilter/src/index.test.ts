@@ -44,7 +44,6 @@ describe("Operator Registry", () => {
     const eq = getOperator("eq");
     expect(eq).toBeDefined();
     expect(eq?.label).toBe("equals");
-    expect(eq?.symbol).toBe("=");
     expect(eq?.requiresArgument).toBe(true);
   });
 

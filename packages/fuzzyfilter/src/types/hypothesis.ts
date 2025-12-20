@@ -3,7 +3,7 @@
  * Generating and ranking possible filter interpretations.
  */
 
-import type { Operator } from "../operators/registry.ts";
+import type { Operator } from "../operators.ts";
 import type { AnyColumnDefinition } from "./schema.ts";
 import type { Token, ParsedDate } from "./parsing.ts";
 import type { RoaringBitmap } from "./index-layer.ts";

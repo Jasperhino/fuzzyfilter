@@ -73,7 +73,7 @@ export const OperatorCategory = {
  */
 export type OperatorCategory = (typeof OperatorCategory)[keyof typeof OperatorCategory];
 
-// Note: Operator type is derived from OPERATOR_REGISTRY in operators/registry.ts
+// Note: Operator type is derived from OPERATOR_REGISTRY in operators.ts
 // and re-exported from types/index.ts
 
 /**
@@ -106,6 +106,13 @@ export interface OperatorInfoBase {
   requiresArgument: boolean;
   /** For binary operators, can accept multiple values */
   isVariadic?: boolean;
+  /** 
+   * Minimum number of arguments required for variadic operators.
+   * For example, "between" requires exactly 2, while "in" requires at least 1.
+   * Only meaningful when isVariadic is true.
+   * @default 1
+   */
+  minArguments?: number;
   /** Display symbol (e.g., "=" for eq, "!=" for neq) */
   symbol?: string;
 }

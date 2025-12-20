@@ -22,7 +22,6 @@ import {
   LayersIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  getOperatorIcon,
 } from "lucide-operators-vue"
 import { cn } from "@/lib/utils"
 import DataTypeIcon from "./DataTypeIcon.vue"
@@ -220,20 +219,10 @@ const options = [
                       <ChevronRightIcon v-else class="size-3.5" />
                     </span>
 
-                    <!-- Operator icon and label -->
-                    <div class="flex items-center gap-1.5 flex-1 min-w-0">
-                      <!-- Icon badge -->
-                      <span class="shrink-0 text-[10px] h-4 px-1 rounded inline-flex items-center font-medium bg-muted text-muted-foreground">
-                        <component 
-                          :is="getOperatorIcon(operator.id)" 
-                          v-if="getOperatorIcon(operator.id)"
-                          class="size-3"
-                        />
-                      </span>
-                      <span class="text-xs text-muted-foreground truncate">
-                        {{ operator.label }}
-                      </span>
-                    </div>
+                    <!-- Operator label -->
+                    <span class="text-xs text-foreground truncate flex-1 min-w-0">
+                      {{ operator.label }}
+                    </span>
 
                     <!-- Argument placeholders -->
                     <div class="flex items-center gap-1 shrink-0">
@@ -356,14 +345,8 @@ const options = [
                   :key="op.id"
                   class="flex items-center gap-1 px-2 py-1 rounded-md bg-muted/50 text-xs"
                 >
-                  <!-- Icon badge -->
                   <span class="shrink-0 text-[10px] h-4 px-1 rounded inline-flex items-center font-medium bg-muted text-muted-foreground">
-                    <component 
-                      :is="getOperatorIcon(op.id)" 
-                      v-if="getOperatorIcon(op.id)"
-                      class="size-3"
-                    />
-                    <span v-else>{{ op.symbol || op.id }}</span>
+                    {{ op.symbol || op.id }}
                   </span>
                   <span class="text-muted-foreground">
                     {{ op.label }}

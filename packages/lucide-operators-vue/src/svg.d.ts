@@ -22,3 +22,5 @@ declare module "lucide-operators/assets/*.svg?component" {
   export default component;
 }
 
+
+

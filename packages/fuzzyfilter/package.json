@@ -24,6 +24,9 @@
     "chrono-node": "^2.7.7",
     "roaring": "^2.6.0"
   },
+  "devDependencies": {
+    "@fuzzyfilter/sample-data": "workspace:*"
+  },
   "peerDependencies": {
     "typescript": "^5",
     "react": "^18 || ^19"

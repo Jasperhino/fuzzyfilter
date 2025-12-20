@@ -27,7 +27,6 @@ import EqualApproximatelyNotSvg from "lucide-operators/assets/equals-approximate
 import {
   Equal,
   EqualNot,
-  EqualApproximately,
   ChevronLeft,
   ChevronRight,
   CircleDot,
@@ -39,6 +38,7 @@ import {
   ArrowLeftFromLine,
   ArrowRightFromLine,
   type LucideIcon,
+  EqualApproximately,
 } from "lucide-react";
 
 // Re-export everything from lucide-react for convenience
@@ -142,4 +142,6 @@ export {
   LessThanEqualsSvg as LessThanEquals,
   EqualApproximatelyNotSvg as EqualApproximatelyNot,
 };
+
+
 

@@ -13,6 +13,19 @@ export default defineConfig({
     tailwindcss(),
     svgLoader({
       defaultImport: "component",
+      svgoConfig: {
+        plugins: [
+          {
+            name: "preset-default",
+            params: {
+              overrides: {
+                // Preserve viewBox for proper CSS scaling
+                removeViewBox: false,
+              },
+            },
+          },
+        ],
+      },
     }),
   ],
   resolve: {
