@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+# TSDoc
+Always use TSDoc comments for all functions, classes, and interfaces.

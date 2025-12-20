@@ -8,7 +8,7 @@
  */
 
 import type { OperatorInfoBase } from "../types/index.ts";
-import { DataType } from "../types/index.ts";
+import { DataType, OperatorCategory } from "../types/index.ts";
 
 /**
  * Complete registry of all operators.
@@ -20,6 +20,7 @@ export const OPERATOR_REGISTRY = {
   // ---------------------------------------------------------------------------
   eq: {
     id: "eq",
+    category: OperatorCategory.EQUALITY,
     label: "equals",
     aliases: ["equal", "equals", "is", "=", "==", "==="],
     typeSpecificAliases: {
@@ -27,31 +28,30 @@ export const OPERATOR_REGISTRY = {
     },
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM],
     requiresArgument: true,
-    symbol: "=",
   },
   neq: {
     id: "neq",
+    category: OperatorCategory.EQUALITY,
     label: "not equals",
-    aliases: ["notEquals", "not equal", "isNot", "is not", "!=", "!==", "<>"],
+    aliases: ["notEquals", "not equal", "isNot", "is not", "!=", "!==", "<>", "≠"],
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM],
     requiresArgument: true,
-    symbol: "≠",
   },
   eqIgnoreCase: {
     id: "eqIgnoreCase",
+    category: OperatorCategory.EQUALITY,
     label: "equals (ignore case)",
-    aliases: ["equalsIgnoreCase", "eqic", "equals ignore case", "~="],
+    aliases: ["equalsIgnoreCase", "eqic", "equals ignore case", "~=", "≈"],
     supportedTypes: [DataType.STRING],
     requiresArgument: true,
-    symbol: "≈",
   },
   neqIgnoreCase: {
     id: "neqIgnoreCase",
+    category: OperatorCategory.EQUALITY,
     label: "not equals (ignore case)",
-    aliases: ["notEqualsIgnoreCase", "neqic", "not equals ignore case"],
+    aliases: ["notEqualsIgnoreCase", "neqic", "not equals ignore case", "≉"],
     supportedTypes: [DataType.STRING],
     requiresArgument: true,
-    symbol: "≉",
   },
 
   // ---------------------------------------------------------------------------
@@ -59,35 +59,35 @@ export const OPERATOR_REGISTRY = {
   // ---------------------------------------------------------------------------
   lt: {
     id: "lt",
+    category: OperatorCategory.COMPARISON,
     label: "less than",
     aliases: ["lessThan", "less", "<", "before", "under"],
     supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
-    symbol: "<",
   },
   lte: {
     id: "lte",
+    category: OperatorCategory.COMPARISON,
     label: "less than or equal",
-    aliases: ["lessThanOrEqual", "lessOrEqual", "<=", "max", "at most"],
+    aliases: ["lessThanOrEqual", "lessOrEqual", "<=", "max", "at most", "≤"],
     supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
-    symbol: "≤",
   },
   gt: {
     id: "gt",
+    category: OperatorCategory.COMPARISON,
     label: "greater than",
     aliases: ["greaterThan", "greater", ">", "after", "over", "above"],
     supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
-    symbol: ">",
   },
   gte: {
     id: "gte",
+    category: OperatorCategory.COMPARISON,
     label: "greater than or equal",
-    aliases: ["greaterThanOrEqual", "greaterOrEqual", ">=", "min", "at least"],
+    aliases: ["greaterThanOrEqual", "greaterOrEqual", ">=", "min", "at least", "≥"],
     supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
-    symbol: "≥",
   },
 
   // ---------------------------------------------------------------------------
@@ -95,21 +95,21 @@ export const OPERATOR_REGISTRY = {
   // ---------------------------------------------------------------------------
   in: {
     id: "in",
+    category: OperatorCategory.SET_MEMBERSHIP,
     label: "in",
-    aliases: ["oneOf", "one of", "any of", "anyOf", "includes"],
+    aliases: ["oneOf", "one of", "any of", "anyOf", "includes", "∈"],
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.ENUM],
     requiresArgument: true,
     isVariadic: true,
-    symbol: "∈",
   },
   nin: {
     id: "nin",
+    category: OperatorCategory.SET_MEMBERSHIP,
     label: "not in",
-    aliases: ["notIn", "not one of", "none of", "noneOf", "excludes"],
+    aliases: ["notIn", "not one of", "none of", "noneOf", "excludes", "∉"],
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.ENUM],
     requiresArgument: true,
     isVariadic: true,
-    symbol: "∉",
   },
 
   // ---------------------------------------------------------------------------
@@ -117,35 +117,35 @@ export const OPERATOR_REGISTRY = {
   // ---------------------------------------------------------------------------
   contains: {
     id: "contains",
+    category: OperatorCategory.PATTERN_MATCHING,
     label: "contains",
-    aliases: ["has", "includes", "like", "~"],
+    aliases: ["has", "includes", "like", "~", "⊃"],
     supportedTypes: [DataType.STRING, DataType.ARRAY],
     requiresArgument: true,
-    symbol: "⊃",
   },
   notContains: {
     id: "notContains",
+    category: OperatorCategory.PATTERN_MATCHING,
     label: "does not contain",
-    aliases: ["doesNotContain", "notIncludes", "excludes", "!~"],
+    aliases: ["doesNotContain", "notIncludes", "excludes", "!~", "⊅"],
     supportedTypes: [DataType.STRING, DataType.ARRAY],
     requiresArgument: true,
-    symbol: "⊅",
   },
   startsWith: {
     id: "startsWith",
+    category: OperatorCategory.PATTERN_MATCHING,
     label: "starts with",
-    aliases: ["beginsWith", "prefix", "^"],
+    aliases: ["beginsWith", "prefix", "^", "^…"],
     supportedTypes: [DataType.STRING],
     requiresArgument: true,
-    symbol: "^…",
   },
   endsWith: {
     id: "endsWith",
+    category: OperatorCategory.PATTERN_MATCHING,
     label: "ends with",
-    aliases: ["suffix", "$"],
+    aliases: ["suffix", "$", "…$"],
     supportedTypes: [DataType.STRING],
     requiresArgument: true,
-    symbol: "…$",
   },
 
   // ---------------------------------------------------------------------------
@@ -153,19 +153,19 @@ export const OPERATOR_REGISTRY = {
   // ---------------------------------------------------------------------------
   isEmpty: {
     id: "isEmpty",
+    category: OperatorCategory.NULLABILITY,
     label: "is empty",
-    aliases: ["isNull", "null", "empty", "blank", "missing"],
+    aliases: ["isNull", "null", "empty", "blank", "missing", "∅"],
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM, DataType.ARRAY],
     requiresArgument: false,
-    symbol: "∅",
   },
   isNotEmpty: {
     id: "isNotEmpty",
+    category: OperatorCategory.NULLABILITY,
     label: "is not empty",
-    aliases: ["isNotNull", "notNull", "hasValue", "exists", "present"],
+    aliases: ["isNotNull", "notNull", "hasValue", "exists", "present", "≠∅"],
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM, DataType.ARRAY],
     requiresArgument: false,
-    symbol: "≠∅",
   },
 
   // ---------------------------------------------------------------------------
@@ -173,19 +173,19 @@ export const OPERATOR_REGISTRY = {
   // ---------------------------------------------------------------------------
   isTrue: {
     id: "isTrue",
+    category: OperatorCategory.BOOLEAN,
     label: "is true",
-    aliases: ["true", "yes", "on", "enabled", "active"],
+    aliases: ["true", "yes", "on", "enabled", "active", "✓"],
     supportedTypes: [DataType.BOOLEAN],
     requiresArgument: false,
-    symbol: "✓",
   },
   isFalse: {
     id: "isFalse",
+    category: OperatorCategory.BOOLEAN,
     label: "is false",
-    aliases: ["false", "no", "off", "disabled", "inactive"],
+    aliases: ["false", "no", "off", "disabled", "inactive", "✗"],
     supportedTypes: [DataType.BOOLEAN],
     requiresArgument: false,
-    symbol: "✗",
   },
 
   // ---------------------------------------------------------------------------
@@ -193,30 +193,30 @@ export const OPERATOR_REGISTRY = {
   // ---------------------------------------------------------------------------
   before: {
     id: "before",
+    category: OperatorCategory.DATE,
     label: "before",
-    aliases: ["earlier", "prior to", "priorTo", "earlier than", "preceding", "until", "up to"],
+    aliases: ["earlier", "prior to", "priorTo", "earlier than", "preceding", "until", "up to", "←"],
     supportedTypes: [DataType.DATE],
     requiresArgument: true,
-    symbol: "←",
   },
   after: {
     id: "after",
+    category: OperatorCategory.DATE,
     label: "after",
-    aliases: ["later", "since", "later than", "following", "from", "starting"],
+    aliases: ["later", "since", "later than", "following", "from", "starting", "→"],
     supportedTypes: [DataType.DATE],
     requiresArgument: true,
-    symbol: "→",
   },
   between: {
     id: "between",
+    category: OperatorCategory.DATE,
     label: "between",
-    aliases: ["range", "from to", "within"],
+    aliases: ["range", "from to", "within", "↔"],
     supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
     isVariadic: true,
-    symbol: "↔",
   },
-} as const satisfies Record<string, OperatorInfoBase & { id: string }>;
+} as const satisfies Record<string, OperatorInfoBase & { id: string; category: OperatorCategory }>;
 
 /**
  * All supported filter operators.
@@ -252,6 +252,36 @@ export function getOperator(id: Operator): OperatorInfo {
  */
 export function getOperatorsForType(type: DataType): OperatorInfo[] {
   return getAllOperators().filter(op => op.supportedTypes.includes(type));
+}
+
+/**
+ * Get operators grouped by category.
+ * Returns an object with category names as keys and arrays of operators as values.
+ * Categories are returned in their natural definition order.
+ */
+export function getOperatorsByCategory(): Record<OperatorCategory, OperatorInfo[]> {
+  const groups: Record<OperatorCategory, OperatorInfo[]> = {
+    [OperatorCategory.EQUALITY]: [],
+    [OperatorCategory.COMPARISON]: [],
+    [OperatorCategory.SET_MEMBERSHIP]: [],
+    [OperatorCategory.PATTERN_MATCHING]: [],
+    [OperatorCategory.NULLABILITY]: [],
+    [OperatorCategory.BOOLEAN]: [],
+    [OperatorCategory.DATE]: [],
+  };
+
+  getAllOperators().forEach(op => {
+    groups[op.category].push(op);
+  });
+
+  return groups;
+}
+
+/**
+ * Get all operator categories in display order.
+ */
+export function getAllCategories(): OperatorCategory[] {
+  return Object.values(OperatorCategory) as OperatorCategory[];
 }
 
 /**
@@ -297,7 +327,6 @@ export function getOperatorSearchTerms(operator: Operator, forType?: DataType): 
     info.id,
     info.label,
     ...info.aliases,
-    ...(info.symbol ? [info.symbol] : []),
   ];
 
   // Add type-specific aliases if a type is specified

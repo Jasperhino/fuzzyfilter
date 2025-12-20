@@ -93,6 +93,21 @@ function generateTask(id: number, options: GeneratorOptions = {}): Task {
     .toISOString()
     .split("T")[0];
 
+  // Generate a task-related comment
+  const verb = faker.word.verb();
+  const capitalizedVerb = verb.charAt(0).toUpperCase() + verb.slice(1);
+  const commentOptions = [
+    faker.lorem.sentence(),
+    faker.lorem.sentences(2),
+    `${capitalizedVerb} ${faker.word.noun()} before deadline`,
+    `Waiting on ${faker.person.firstName()} for review`,
+    `Need to ${faker.word.verb()} the ${faker.word.noun()}`,
+    `Blocked by ${faker.company.name()} integration`,
+    `High priority - ${faker.lorem.sentence()}`,
+    `Follow up with ${faker.person.fullName()}`,
+  ];
+  const comments = faker.helpers.arrayElement(commentOptions) as string;
+
   return {
     id,
     status,
@@ -101,6 +116,7 @@ function generateTask(id: number, options: GeneratorOptions = {}): Task {
     department: faker.helpers.arrayElement(DEPARTMENTS as unknown as string[]),
     createdAt,
     isBlocked,
+    comments,
   };
 }
 

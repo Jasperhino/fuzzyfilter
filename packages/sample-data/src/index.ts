@@ -7,7 +7,7 @@
  * @module @fuzzyfilter/sample-data
  */
 
-import { columnId, type SchemaInput, type ColumnId } from "fuzzyfilter";
+import { columnId, type SchemaInput } from "fuzzyfilter";
 import { generateTasks } from "./generator.ts";
 
 // Re-export generator utilities
@@ -48,6 +48,7 @@ export interface Task {
   department: string;
   createdAt: string;
   isBlocked: boolean;
+  comments: string;
 }
 
 /**
@@ -82,6 +83,7 @@ export const COLUMN_IDS = {
   department: columnId("department"),
   createdAt: columnId("createdAt"),
   isBlocked: columnId("isBlocked"),
+  comments: columnId("comments"),
 } as const;
 
 // ============================================================================
@@ -131,6 +133,12 @@ export const TASK_SCHEMA: SchemaInput = {
       type: "boolean",
       trueLabel: "Blocked",
       falseLabel: "Not Blocked",
+    },
+    {
+      id: COLUMN_IDS.comments,
+      name: "Comments",
+      type: "string",
+      aliases: ["notes", "description", "text"],
     },
   ],
 };

@@ -4,9 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "build": "bun --filter '*' build",
     "dev": "bun --filter '*' dev",
-    "test": "bun --filter fuzzyfilter test",
-    "test:all": "bun test",
+    "test": "bun run test:unit && bun run test:e2e",
+    "test:unit": "bun --filter fuzzyfilter test",
     "test:e2e": "cd packages/e2e-tests && bun x playwright test",
     "test:e2e:ui": "cd packages/e2e-tests && bun x playwright test --ui"
   },

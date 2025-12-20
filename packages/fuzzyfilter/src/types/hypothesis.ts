@@ -3,7 +3,7 @@
  * Generating and ranking possible filter interpretations.
  */
 
-import type { Operator, RowId } from "./core.ts";
+import type { Operator } from "../operators/registry.ts";
 import type { AnyColumnDefinition } from "./schema.ts";
 import type { Token, ParsedDate } from "./parsing.ts";
 import type { RoaringBitmap } from "./index-layer.ts";
@@ -13,15 +13,14 @@ import type { RoaringBitmap } from "./index-layer.ts";
 // ============================================================================
 
 /**
- * The type of value in a hypothesis
+ * The type of a single argument value in a hypothesis.
+ * For variadic operators (between, in), multiple values are stored as separate items in the arguments array.
  */
 export type HypothesisValueType =
   | { kind: "string"; value: string }
   | { kind: "number"; value: number }
   | { kind: "boolean"; value: boolean }
   | { kind: "date"; value: Date; parsed: ParsedDate }
-  | { kind: "dateRange"; start: Date; end: Date; parsed: ParsedDate }
-  | { kind: "array"; values: Array<string | number | Date> }
   | { kind: "null" }
   | { kind: "empty" }; // No value yet (for suggestions)
 
@@ -39,28 +38,28 @@ export interface Hypothesis {
   /** The operator to apply */
   operator: Operator;
 
-  /** The argument/value (may be undefined for suggestions) */
-  argument?: HypothesisValueType;
+  /** The argument values (array to support variadic operators like between, in) */
+  arguments?: HypothesisValueType[];
 
   /** Match scores for each component (from fuzzysort, higher = better) */
   scores: {
     column: number;
     operator: number;
-    argument: number;
+    arguments: number;
   };
 
   /** Which tokens contributed to each component */
   sourceTokens: {
     column?: Token;
     operator?: Token;
-    argument?: Token;
+    arguments?: Token[];
   };
 
   /** Is this hypothesis complete (has all required parts)? */
   isComplete: boolean;
 
   /** What's missing to complete this hypothesis? */
-  missing: Array<"column" | "operator" | "argument">;
+  missing: Array<"column" | "operator" | "arguments">;
 
   /** Did components appear in natural order (col → op → val)? */
   inOrder: boolean;
@@ -81,8 +80,8 @@ export interface ScoringWeights {
   column: number;
   /** Weight for operator match score */
   operator: number;
-  /** Weight for argument match score */
-  argument: number;
+  /** Weight for arguments match score */
+  arguments: number;
   /** Bonus for natural order (col → op → val) */
   orderBonus: number;
   /** Penalty for inferred operator */
@@ -97,7 +96,7 @@ export interface ScoringWeights {
 export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {
   column: 0.4,
   operator: 0.35,
-  argument: 0.25,
+  arguments: 0.25,
   orderBonus: 0.1,
   inferredPenalty: 0.15,
   completenessBonus: 0.2,

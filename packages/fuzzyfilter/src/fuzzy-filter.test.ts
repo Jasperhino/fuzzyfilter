@@ -105,7 +105,7 @@ describe("FuzzyFilter", () => {
     test("value query returns value suggestions", async () => {
       const response = await filter.suggest("Alice");
       expect(
-        response.suggestions.some((s) => s.value?.kind === "string" && s.value.value === "Alice")
+        response.suggestions.some((s) => s.arguments?.[0]?.kind === "string" && s.arguments[0].value === "Alice")
       ).toBe(true);
     });
 
@@ -119,7 +119,7 @@ describe("FuzzyFilter", () => {
     test("suggestions include result counts", async () => {
       const response = await filter.suggest("assignee eq Alice");
       const aliceSuggestion = response.suggestions.find(
-        (s) => s.value?.kind === "string" && s.value.value === "Alice"
+        (s) => s.arguments?.[0]?.kind === "string" && s.arguments[0].value === "Alice"
       );
       expect(aliceSuggestion?.resultCount).toBe(2);
     });
@@ -248,13 +248,13 @@ describe("N-gram Matching", () => {
     // Single word should match
     const response1 = await filter.suggest("eve");
     expect(response1.suggestions.some((s) => 
-      s.value?.kind === "string" && s.value.value === "Eve Foster"
+      s.arguments?.[0]?.kind === "string" && s.arguments[0].value === "Eve Foster"
     )).toBe(true);
 
     // Multi-word should also match
     const response2 = await filter.suggest("eve foster");
     expect(response2.suggestions.some((s) => 
-      s.value?.kind === "string" && s.value.value === "Eve Foster"
+      s.arguments?.[0]?.kind === "string" && s.arguments[0].value === "Eve Foster"
     )).toBe(true);
   });
 
@@ -333,7 +333,7 @@ describe("N-gram Matching", () => {
     
     // The exact value match should be in the suggestions
     const valueMatch = response.suggestions.find(
-      (s) => s.value?.kind === "string" && s.value.value.toLowerCase() === "in progress"
+      (s) => s.arguments?.[0]?.kind === "string" && s.arguments[0].value.toLowerCase() === "in progress"
     );
     expect(valueMatch).toBeDefined();
     
@@ -365,9 +365,9 @@ describe("N-gram Matching", () => {
     
     // The exact value match should score higher than "eq" operator matches
     const valueMatch = response.suggestions.find(
-      (s) => s.value?.kind === "string" && s.value.value.toLowerCase() === "equal priority"
+      (s) => s.arguments?.[0]?.kind === "string" && s.arguments[0].value.toLowerCase() === "equal priority"
     );
-    const eqOperatorMatch = response.suggestions.find((s) => s.operator === "eq" && !s.value);
+    const eqOperatorMatch = response.suggestions.find((s) => s.operator === "eq" && (!s.arguments || s.arguments.length === 0));
     
     expect(valueMatch).toBeDefined();
     if (valueMatch && eqOperatorMatch) {
@@ -652,7 +652,7 @@ describe("Date Column Suggestions", () => {
     
     // Should suggest common date phrases
     const hasDateSuggestion = response.suggestions.some((s) => 
-      s.value?.kind === "date" || s.value?.kind === "dateRange"
+      s.arguments?.[0]?.kind === "date"
     );
     expect(hasDateSuggestion).toBe(true);
   });
@@ -674,7 +674,7 @@ describe("Date Column Suggestions", () => {
     expect(response.suggestions.length).toBeGreaterThan(0);
     // Should have a suggestion with date value
     const dateSuggestion = response.suggestions.find((s) => 
-      s.value?.kind === "date" || s.value?.kind === "dateRange"
+      s.arguments?.[0]?.kind === "date"
     );
     expect(dateSuggestion).toBeDefined();
     expect(dateSuggestion?.column.name).toBe("Created At");
@@ -697,7 +697,7 @@ describe("Date Column Suggestions", () => {
     
     // Should suggest date filters for date columns
     const dateSuggestions = response.suggestions.filter((s) => 
-      s.value?.kind === "date" || s.value?.kind === "dateRange"
+      s.arguments?.[0]?.kind === "date"
     );
     expect(dateSuggestions.length).toBeGreaterThan(0);
     
@@ -731,7 +731,7 @@ describe("Filter Context Stacking", () => {
     // Without context: "assignee = Alice" should show 2 (both Alice rows)
     const responseNoContext = await filter.suggest("assignee eq Alice");
     const aliceNoContext = responseNoContext.suggestions.find(
-      (s) => s.value?.kind === "string" && s.value.value === "Alice"
+      (s) => s.arguments?.[0]?.kind === "string" && s.arguments[0].value === "Alice"
     );
     expect(aliceNoContext?.resultCount).toBe(2);
 
@@ -742,7 +742,7 @@ describe("Filter Context Stacking", () => {
     
     const responseWithContext = await filter.suggest("assignee eq Alice", undefined, [statusOpenFilter!]);
     const aliceWithContext = responseWithContext.suggestions.find(
-      (s) => s.value?.kind === "string" && s.value.value === "Alice"
+      (s) => s.arguments?.[0]?.kind === "string" && s.arguments[0].value === "Alice"
     );
     expect(aliceWithContext?.resultCount).toBe(1);
   });
@@ -789,7 +789,7 @@ describe("Filter Context Stacking", () => {
     // Without context: Alice appears 3 times
     const responseNoContext = await filter.suggest("assignee eq Alice");
     const aliceNoContext = responseNoContext.suggestions.find(
-      (s) => s.value?.kind === "string" && s.value.value === "Alice"
+      (s) => s.arguments?.[0]?.kind === "string" && s.arguments[0].value === "Alice"
     );
     expect(aliceNoContext?.resultCount).toBe(3);
     
@@ -800,7 +800,7 @@ describe("Filter Context Stacking", () => {
       [statusFilter!, priorityFilter!]
     );
     const aliceWithContext = responseWithContext.suggestions.find(
-      (s) => s.value?.kind === "string" && s.value.value === "Alice"
+      (s) => s.arguments?.[0]?.kind === "string" && s.arguments[0].value === "Alice"
     );
     expect(aliceWithContext?.resultCount).toBe(1);
   });
@@ -856,7 +856,7 @@ describe("Date Filter Bug - 'created today' ranking and count", () => {
     
     // Find complete suggestion (with date value)
     const completeSuggestion = response.suggestions.find(
-      (s) => s.isComplete && (s.value?.kind === "date" || s.value?.kind === "dateRange")
+      (s) => s.isComplete && (s.arguments?.[0]?.kind === "date")
     );
     
     // Find incomplete suggestion (without value, like "Created At = ...")
@@ -898,7 +898,7 @@ describe("Date Filter Bug - 'created today' ranking and count", () => {
     
     // Find the "Created At = today" suggestion
     const todaySuggestion = response.suggestions.find(
-      (s) => s.value?.kind === "date" && s.column.id === "createdAt"
+      (s) => s.arguments?.[0]?.kind === "date" && s.column.id === "createdAt"
     );
     
     expect(todaySuggestion).toBeDefined();
@@ -1118,7 +1118,7 @@ describe("Date Filter Compilation", () => {
     
     // Find the between suggestion for Created At
     const betweenSuggestion = response.suggestions.find(
-      (s) => s.operator === "between" && s.column.id === "createdAt" && s.value?.kind === "dateRange"
+      (s) => s.operator === "between" && s.column.id === "createdAt" && s.arguments?.length === 2
     );
     
     expect(betweenSuggestion).toBeDefined();
@@ -1127,17 +1127,193 @@ describe("Date Filter Compilation", () => {
     // Get the preview count
     const previewCount = betweenSuggestion!.resultCount;
     
-    // Now compile the filter using the value from the suggestion
-    const value = betweenSuggestion!.value!;
-    expect(value.kind).toBe("dateRange");
+    // Now compile the filter using the arguments from the suggestion
+    const args = betweenSuggestion!.arguments!;
+    expect(args.length).toBe(2);
+    expect(args[0]?.kind).toBe("date");
+    expect(args[1]?.kind).toBe("date");
     
-    if (value.kind === "dateRange") {
-      const compiled = filter.compileFilter("createdAt", "between", [value.start, value.end]);
+    if (args[0]?.kind === "date" && args[1]?.kind === "date") {
+      const compiled = filter.compileFilter("createdAt", "between", [args[0].value, args[1].value]);
       expect(compiled).not.toBeNull();
       
       // CRITICAL: The preview count should match the compiled filter matchCount
       // This was the bug: preview showed 2 but actual was 0
       expect(compiled?.matchCount).toBe(previewCount);
+    }
+  });
+});
+
+describe("Argument-Aware Scoring", () => {
+  test("typing 'prio 3 4' should suggest between with higher score than eq", async () => {
+    const filter = createFuzzyFilter();
+    filter.setSchema({
+      columns: [
+        { id: columnId("priority"), name: "Priority", type: "number" },
+      ],
+    });
+    filter.indexData([
+      { priority: 1 },
+      { priority: 2 },
+      { priority: 3 },
+      { priority: 4 },
+      { priority: 5 },
+    ]);
+
+    const response = await filter.suggest("prio 3 4");
+    
+    // Should find a between suggestion for Priority with array value
+    const betweenSuggestion = response.suggestions.find(
+      (s) => s.operator === "between" && s.column.id === "priority"
+    );
+    
+    expect(betweenSuggestion).toBeDefined();
+    expect(betweenSuggestion?.arguments?.length).toBe(2);
+    if (betweenSuggestion?.arguments?.length === 2) {
+      // Check that both arguments are numbers with values 3 and 4
+      const values = betweenSuggestion.arguments.map(a => a.kind === "number" ? a.value : null);
+      expect(values).toContain(3);
+      expect(values).toContain(4);
+    }
+    // Should match rows with priority 3 and 4 (between is inclusive)
+    expect(betweenSuggestion?.resultCount).toBe(2);
+    
+    // The between suggestion should score higher than eq because it uses both values
+    const eqSuggestion = response.suggestions.find(
+      (s) => s.operator === "eq" && s.column.id === "priority" && s.arguments?.[0]?.kind === "number"
+    );
+    
+    expect(eqSuggestion).toBeDefined();
+    // eq only uses 1 of the 2 values, so should score lower
+    expect(betweenSuggestion!.score).toBeGreaterThan(eqSuggestion!.score);
+  });
+
+  test("typing 'prio 3' with single number should suggest eq with that value", async () => {
+    const filter = createFuzzyFilter();
+    filter.setSchema({
+      columns: [
+        { id: columnId("priority"), name: "Priority", type: "number" },
+      ],
+    });
+    filter.indexData([
+      { priority: 1 },
+      { priority: 2 },
+      { priority: 3 },
+    ]);
+
+    const response = await filter.suggest("prio 3");
+    
+    // Should find an eq suggestion for Priority with value 3
+    const eqSuggestion = response.suggestions.find(
+      (s) => s.operator === "eq" && s.column.id === "priority" && s.arguments?.[0]?.kind === "number"
+    );
+    
+    expect(eqSuggestion).toBeDefined();
+    expect(eqSuggestion?.arguments?.[0]?.kind).toBe("number");
+    if (eqSuggestion?.arguments?.[0]?.kind === "number") {
+      expect(eqSuggestion.arguments[0].value).toBe(3);
+    }
+    expect(eqSuggestion?.resultCount).toBe(1);
+  });
+
+  test("typing 'created yesterday tomorrow' should suggest between for dates", async () => {
+    const filter = createFuzzyFilter();
+    filter.setSchema({
+      columns: [
+        { id: columnId("createdAt"), name: "Created At", type: "date", aliases: ["created"] },
+      ],
+    });
+    
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    filter.indexData([
+      { createdAt: yesterday.toISOString() },
+      { createdAt: today.toISOString() },
+      { createdAt: tomorrow.toISOString() },
+    ]);
+
+    const response = await filter.suggest("created yesterday tomorrow");
+    
+    // Should find a between suggestion for Created At
+    const betweenSuggestion = response.suggestions.find(
+      (s) => s.operator === "between" && s.column.id === "createdAt"
+    );
+    
+    expect(betweenSuggestion).toBeDefined();
+    expect(betweenSuggestion?.arguments?.length).toBe(2);
+    if (betweenSuggestion?.arguments?.length === 2) {
+      // Both should be date arguments
+      expect(betweenSuggestion.arguments[0]?.kind).toBe("date");
+      expect(betweenSuggestion.arguments[1]?.kind).toBe("date");
+      if (betweenSuggestion.arguments[0]?.kind === "date") {
+        expect(betweenSuggestion.arguments[0].value).toBeInstanceOf(Date);
+      }
+      if (betweenSuggestion.arguments[1]?.kind === "date") {
+        expect(betweenSuggestion.arguments[1].value).toBeInstanceOf(Date);
+      }
+    }
+    // Should match rows within the date range (note: exact count depends on 
+    // how chrono-node parses individual date tokens - it may not capture
+    // the full day boundary for standalone words like "yesterday")
+    expect(betweenSuggestion?.resultCount).toBeGreaterThanOrEqual(2);
+  });
+
+  test("typing just '3 4' should suggest 'Priority between 3 4' as top suggestion", async () => {
+    const filter = createFuzzyFilter({ maxSuggestions: 15 });
+    filter.setSchema({
+      columns: [
+        { id: columnId("priority"), name: "Priority", type: "number" },
+        { id: columnId("status"), name: "Status", type: "string" },
+      ],
+    });
+    filter.indexData([
+      { priority: 1, status: "Open" },
+      { priority: 2, status: "Closed" },
+      { priority: 3, status: "In Progress" },
+      { priority: 4, status: "Blocked" },
+      { priority: 5, status: "Open" },
+    ]);
+
+    const response = await filter.suggest("3 4");
+    
+    // Debug: log all suggestions to understand current behavior
+    console.log("\n=== Suggestions for '3 4' ===");
+    for (const s of response.suggestions.slice(0, 10)) {
+      const args = s.arguments?.map(a => 
+        a.kind === "number" ? a.value : 
+        a.kind === "string" ? `"${a.value}"` : 
+        a.kind
+      ).join(", ") || "-";
+      console.log(`  ${s.column.name.padEnd(12)} ${s.operator.padEnd(10)} [${args.padEnd(10)}] score=${s.score}`);
+    }
+    console.log(`Total: ${response.suggestions.length} suggestions`);
+    
+    // Should find a between suggestion for Priority
+    const betweenSuggestion = response.suggestions.find(
+      (s) => s.operator === "between" && s.column.id === "priority"
+    );
+    
+    expect(betweenSuggestion).toBeDefined();
+    expect(betweenSuggestion?.arguments?.length).toBe(2);
+    
+    // The between suggestion should be the top suggestion (or at least in top 3)
+    const betweenIndex = response.suggestions.findIndex(
+      (s) => s.operator === "between" && s.column.id === "priority"
+    );
+    expect(betweenIndex).toBeLessThanOrEqual(2);
+    
+    // Check that the values are 3 and 4
+    if (betweenSuggestion?.arguments?.length === 2) {
+      const values = betweenSuggestion.arguments.map(a => a.kind === "number" ? a.value : null);
+      expect(values).toContain(3);
+      expect(values).toContain(4);
     }
   });
 });

@@ -113,6 +113,10 @@ export {
   getOperator,
   /** Get operators valid for a data type */
   getOperatorsForType,
+  /** Get operators grouped by category */
+  getOperatorsByCategory,
+  /** Get all operator categories in display order */
+  getAllCategories,
   /** Check if an operator is valid for a data type */
   isValidOperatorForType,
   /** Get the default operator for a data type */

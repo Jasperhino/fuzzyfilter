@@ -54,6 +54,25 @@ export const DataType = {
  */
 export type DataType = (typeof DataType)[keyof typeof DataType];
 
+/**
+ * Operator categories for grouping in documentation and UI.
+ * Each category groups related operators by their semantic purpose.
+ */
+export const OperatorCategory = {
+  EQUALITY: "Equality",
+  COMPARISON: "Comparison",
+  SET_MEMBERSHIP: "Set Membership",
+  PATTERN_MATCHING: "Pattern Matching",
+  NULLABILITY: "Nullability",
+  BOOLEAN: "Boolean",
+  DATE: "Date",
+} as const;
+
+/**
+ * Operator category type - used for grouping operators in UI components.
+ */
+export type OperatorCategory = (typeof OperatorCategory)[keyof typeof OperatorCategory];
+
 // Note: Operator type is derived from OPERATOR_REGISTRY in operators/registry.ts
 // and re-exported from types/index.ts
 
@@ -63,6 +82,8 @@ export type DataType = (typeof DataType)[keyof typeof DataType];
  * The full OperatorInfo type is derived in registry.ts.
  */
 export interface OperatorInfoBase {
+  /** Category for grouping operators in UI */
+  category: OperatorCategory;
   /** Human-readable label */
   label: string;
   /** Alternative names/aliases for fuzzy matching */

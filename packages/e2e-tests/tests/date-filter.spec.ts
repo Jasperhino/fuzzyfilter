@@ -184,6 +184,65 @@ for (const { name, url } of apps) {
       expect(suggestionsData[0]?.hasValue).toBe(true);
     });
 
+    test("'yesterday today' (without separator) shows between operator as top suggestion", async ({ page }) => {
+      // Navigate to the app
+      await page.goto(url);
+      
+      // Wait for the app to load and data to be indexed
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(1000);
+      
+      // Get the filter input
+      const filterInput = page.getByPlaceholder("Filter by column, operator, or value...");
+      
+      // =========================================================
+      // STEP 1: Type "yesterday today" WITHOUT a separator (-)
+      // This tests the custom chrono refiner that merges consecutive dates
+      // =========================================================
+      await filterInput.click();
+      await filterInput.fill("yesterday today");
+      
+      // Wait for suggestions to appear
+      await page.waitForTimeout(500);
+      
+      // =========================================================
+      // STEP 2: First suggestion should be a between operator with both dates
+      // =========================================================
+      const firstSuggestion = page.locator('[data-testid^="suggestion-"]').first();
+      await expect(firstSuggestion).toBeVisible({ timeout: 5000 });
+      
+      const suggestionText = await firstSuggestion.textContent();
+      console.log(`${name}: First suggestion for 'yesterday today': "${suggestionText}"`);
+      
+      // Should be a between (↔) operator with two dates (Dec ... - Dec ...)
+      expect(suggestionText).toMatch(/↔.*Dec.*-.*Dec/);
+      
+      // =========================================================
+      // STEP 3: Get the preview result count and apply filter
+      // =========================================================
+      const resultCountElement = firstSuggestion.getByTestId("result-count");
+      const resultCountText = await resultCountElement.textContent();
+      const previewCount = parseResultCount(resultCountText || "");
+      
+      console.log(`${name}: Preview shows ${previewCount} results for 'yesterday today'`);
+      
+      await firstSuggestion.click();
+      await page.waitForTimeout(500);
+      
+      // =========================================================
+      // STEP 4: Verify the actual count matches preview
+      // =========================================================
+      const tasksHeader = page.locator("h3").filter({ hasText: /of\s+10,000/ }).first();
+      const headerText = await tasksHeader.textContent();
+      const actualCount = parseTaskCount(headerText || "");
+      
+      console.log(`${name}: Actual filtered count: ${actualCount}`);
+      
+      // The preview count should match the actual count
+      expect(actualCount).toBe(previewCount);
+      console.log(`${name}: 'yesterday today' filter works correctly - preview (${previewCount}) matches actual (${actualCount})`);
+    });
+
     test("'from yesterday to today' date range filter shows correct results", async ({ page }) => {
       // Navigate to the app
       await page.goto(url);

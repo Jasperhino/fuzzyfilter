@@ -10,8 +10,8 @@ export type {
   Match,
 } from "./core.ts";
 
-// Core values (DataType is both a value and type with same name)
-export { DataType, columnId } from "./core.ts";
+// Core values (DataType and OperatorCategory are both a value and type with same name)
+export { DataType, OperatorCategory, columnId } from "./core.ts";
 
 // Operator types (derived from registry)
 export type { Operator, OperatorInfo } from "../operators/registry.ts";

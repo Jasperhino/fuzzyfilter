@@ -1,0 +1,25 @@
+{
+  "name": "lucide-operators-vue",
+  "version": "0.1.0",
+  "description": "Vue icon components for fuzzyfilter operators - wraps lucide-vue-next",
+  "module": "src/index.ts",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "lucide-operators": "workspace:*",
+    "lucide-vue-next": "^0.453.0"
+  },
+  "peerDependencies": {
+    "vue": ">=3.0.0"
+  },
+  "keywords": ["fuzzyfilter", "icons", "lucide", "operators", "vue"],
+  "license": "MIT"
+}
+

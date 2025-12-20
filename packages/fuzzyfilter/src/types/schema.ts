@@ -8,7 +8,8 @@
  * @module fuzzyfilter/types/schema
  */
 
-import type { ColumnId, DataType, Operator } from "./core.ts";
+import type { ColumnId, DataType } from "./core.ts";
+import type { Operator } from "../operators/registry.ts";
 
 // ============================================================================
 // COLUMN DEFINITION

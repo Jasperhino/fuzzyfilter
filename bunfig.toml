@@ -1,0 +1,7 @@
+# Bun configuration for fuzzyfilter monorepo
+
+[test]
+# Only discover tests in packages/fuzzyfilter (excludes Playwright e2e tests)
+# E2E tests should be run via `bun test:e2e` which uses playwright directly
+root = "./packages/fuzzyfilter"
+

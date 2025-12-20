@@ -2,12 +2,19 @@ import path from "node:path"
 import { defineConfig } from "vite"
 import vue from "@vitejs/plugin-vue"
 import tailwindcss from "@tailwindcss/vite"
+import svgLoader from "vite-svg-loader"
 
 const packagesPath = path.resolve(__dirname, "../../packages")
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue(), tailwindcss()],
+  plugins: [
+    vue(),
+    tailwindcss(),
+    svgLoader({
+      defaultImport: "component",
+    }),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -15,6 +22,10 @@ export default defineConfig({
       "fuzzyfilter": path.resolve(packagesPath, "fuzzyfilter/src/index.ts"),
       "vue-fuzzy-filter": path.resolve(packagesPath, "vue-fuzzy-filter/src/index.ts"),
       "@fuzzyfilter/sample-data": path.resolve(packagesPath, "sample-data/src/index.ts"),
+      // Resolve lucide-operators packages
+      "lucide-operators/assets": path.resolve(packagesPath, "lucide-operators/assets"),
+      "lucide-operators": path.resolve(packagesPath, "lucide-operators/src/index.ts"),
+      "lucide-operators-vue": path.resolve(packagesPath, "lucide-operators-vue/src/index.ts"),
     },
   },
   server: {
@@ -27,6 +38,6 @@ export default defineConfig({
   // Pre-bundle fuzzyfilter dependencies
   optimizeDeps: {
     include: ["fuzzysort", "chrono-node"],
-    exclude: ["fuzzyfilter", "vue-fuzzy-filter", "@fuzzyfilter/sample-data"],
+    exclude: ["fuzzyfilter", "vue-fuzzy-filter", "@fuzzyfilter/sample-data", "lucide-operators", "lucide-operators-vue"],
   },
 })

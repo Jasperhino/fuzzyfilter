@@ -5,11 +5,13 @@
  * Demonstrates the vue-fuzzy-filter composable with a combobox interface.
  * Uses virtual scrolling to handle large datasets (10,000+ rows).
  */
-import { ref, onMounted, computed, watch, nextTick } from "vue"
+import { ref, onMounted, computed } from "vue"
 import { useVirtualizer } from "@tanstack/vue-virtual"
 import { useFuzzyFilter } from "vue-fuzzy-filter"
-import { createFuzzyFilter, type CompiledFilter, type FilterSuggestion, type AnyColumnDefinition } from "fuzzyfilter"
-import { TASK_SCHEMA, generateLargeDataset, type Task } from "@fuzzyfilter/sample-data"
+import { createFuzzyFilter, type CompiledFilter, type FilterSuggestion, type AnyColumnDefinition, type HypothesisValueType } from "fuzzyfilter"
+import { TASK_SCHEMA, COLUMN_IDS, generateLargeDataset, type Task } from "@fuzzyfilter/sample-data"
+import DataTypeIcon from "./DataTypeIcon.vue"
+import ColumnInfoPopover from "./ColumnInfoPopover.vue"
 import {
   FilterIcon,
   HashIcon,
@@ -21,7 +23,8 @@ import {
   XIcon,
   AlertCircleIcon,
   SearchIcon,
-} from "lucide-vue-next"
+  getOperatorIcon,
+} from "lucide-operators-vue"
 import { cn } from "@/lib/utils"
 
 // Generate 10,000 rows with a fixed seed for consistency
@@ -45,15 +48,18 @@ const appliedFiltersForContext = ref<FilterSuggestion[]>([])
 const compiledFiltersForContext = computed(() => {
   const compiled: CompiledFilter[] = []
   for (const f of appliedFiltersForContext.value) {
-    let value: unknown = undefined
-    if (f.value) {
-      if (f.value.kind === "string") value = f.value.value
-      else if (f.value.kind === "number") value = f.value.value
-      else if (f.value.kind === "boolean") value = f.value.value
-      else if (f.value.kind === "date") value = f.value.value
-      else if (f.value.kind === "dateRange") value = [f.value.start, f.value.end]
-    }
-    const c = filter.compileFilter(f.column.id, f.operator, value)
+    // Extract raw values from arguments array for compileFilter
+    const value = f.arguments?.map((arg: HypothesisValueType) => {
+      if (arg.kind === "string") return arg.value
+      if (arg.kind === "number") return arg.value
+      if (arg.kind === "boolean") return arg.value
+      if (arg.kind === "date") return arg.value
+      return undefined
+    }).filter((v: unknown) => v !== undefined)
+    
+    // Pass array for variadic operators, single value for others
+    const compileValue = value && value.length === 1 ? value[0] : value
+    const c = filter.compileFilter(f.column.id, f.operator, compileValue)
     if (c) compiled.push(c)
   }
   return compiled
@@ -84,15 +90,18 @@ const filteredData = computed(() => {
   
   const compiledFilters: CompiledFilter[] = []
   for (const f of appliedFilters.value) {
-    let value: unknown = undefined
-    if (f.value) {
-      if (f.value.kind === "string") value = f.value.value
-      else if (f.value.kind === "number") value = f.value.value
-      else if (f.value.kind === "boolean") value = f.value.value
-      else if (f.value.kind === "date") value = f.value.value
-      else if (f.value.kind === "dateRange") value = [f.value.start, f.value.end]
-    }
-    const compiled = filter.compileFilter(f.column.id, f.operator, value)
+    // Extract raw values from arguments array for compileFilter
+    const value = f.arguments?.map((arg: HypothesisValueType) => {
+      if (arg.kind === "string") return arg.value
+      if (arg.kind === "number") return arg.value
+      if (arg.kind === "boolean") return arg.value
+      if (arg.kind === "date") return arg.value
+      return undefined
+    }).filter((v: unknown) => v !== undefined)
+    
+    // Pass array for variadic operators, single value for others
+    const compileValue = value && value.length === 1 ? value[0] : value
+    const compiled = filter.compileFilter(f.column.id, f.operator, compileValue)
     if (compiled) {
       compiledFilters.push(compiled)
     }
@@ -196,13 +205,15 @@ function getOperatorVariant(operator: string): string {
   return "bg-muted text-muted-foreground border border-border"
 }
 
-// Get score color
+/**
+ * Get score text color based on score value
+ */
 function getScoreColor(score: number): string {
-  if (score >= 3000) return "bg-emerald-500/20 text-emerald-600"
-  if (score >= 1500) return "bg-lime-500/20 text-lime-600"
-  if (score >= 500) return "bg-amber-500/20 text-amber-600"
-  if (score >= -1000) return "bg-orange-500/20 text-orange-600"
-  return "bg-rose-500/20 text-rose-600"
+  if (score >= 3000) return "text-emerald-600"
+  if (score >= 1500) return "text-lime-600"
+  if (score >= 500) return "text-amber-600"
+  if (score >= -1000) return "text-orange-600"
+  return "text-rose-600"
 }
 
 // Get score tooltip
@@ -231,8 +242,8 @@ function getScoreTooltip(suggestion: FilterSuggestion): string {
     `Operator: ${suggestion.operator}`,
   )
   
-  if (suggestion.value?.kind === "string") {
-    lines.push(`Value: "${suggestion.value.value}"`)
+  if (suggestion.arguments?.[0]?.kind === "string") {
+    lines.push(`Value: "${suggestion.arguments[0].value}"`)
   }
   
   return lines.join("\n")
@@ -259,10 +270,24 @@ const priorityColors = [
 function formatNumber(num: number): string {
   return num.toLocaleString()
 }
+
+// Get column by ID from schema
+function getColumnById(columnId: string) {
+  return TASK_SCHEMA.columns.find((c) => c.id === columnId)
+}
+
+// Column definitions for headers
+const statusColumn = getColumnById(COLUMN_IDS.status)
+const assigneeColumn = getColumnById(COLUMN_IDS.assignee)
+const priorityColumn = getColumnById(COLUMN_IDS.priority)
+const departmentColumn = getColumnById(COLUMN_IDS.department)
+const createdAtColumn = getColumnById(COLUMN_IDS.createdAt)
+const isBlockedColumn = getColumnById(COLUMN_IDS.isBlocked)
+const commentsColumn = getColumnById(COLUMN_IDS.comments)
 </script>
 
 <template>
-  <div class="w-full space-y-6">
+  <div class="w-full flex flex-col gap-6 min-h-0 flex-1">
     <!-- Filter controls -->
     <div class="space-y-4">
       <!-- Applied filters -->
@@ -316,8 +341,11 @@ function formatNumber(num: number): string {
           v-if="isOpen && suggestions.length > 0"
           class="absolute z-50 w-full mt-1 bg-popover border border-border rounded-lg shadow-lg overflow-hidden"
         >
-          <div class="px-2 py-1.5 border-b border-border">
-            <span class="text-xs font-medium text-muted-foreground">Suggestions</span>
+          <!-- Column headers - matches item padding -->
+          <div class="flex items-center w-full gap-2 pl-3 pr-3 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide border-b border-border/50 whitespace-nowrap">
+            <span class="flex-1">Suggestion</span>
+            <span class="w-10 shrink-0">Score</span>
+            <span class="w-14 shrink-0"># Results</span>
           </div>
           <div class="max-h-80 overflow-y-auto p-1">
             <div
@@ -325,35 +353,47 @@ function formatNumber(num: number): string {
               :key="suggestion.id"
               :data-testid="`suggestion-${suggestion.column.id}-${suggestion.operator}`"
               :class="cn(
-                'flex items-center justify-between px-2 py-2 cursor-pointer rounded-md transition-colors',
+                'flex items-center w-full gap-2 pl-2 pr-3 py-1.5 cursor-pointer rounded-md transition-colors text-xs',
                 index === selectedIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
               )"
               @click="handleSelect(index)"
             >
-              <div class="flex items-center gap-2 min-w-0 flex-1">
+              <!-- Suggestion column - left aligned, grows to push score/results right -->
+              <div class="flex items-center gap-1.5 min-w-0 flex-1">
                 <component :is="getColumnTypeIcon(suggestion.column.type)" class="size-3.5 text-muted-foreground shrink-0" />
-                <span class="font-medium text-foreground truncate text-sm">
+                <span class="font-medium text-foreground truncate">
                   {{ suggestion.parts.column.text }}
                 </span>
-                <span :class="cn('shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center font-medium', getOperatorVariant(suggestion.operator))">
-                  {{ suggestion.parts.operator.symbol || suggestion.parts.operator.text }}
+                <span class="shrink-0 h-4 px-1 rounded inline-flex items-center gap-0.5 font-medium bg-muted text-muted-foreground">
+                  <component :is="getOperatorIcon(suggestion.operator)" class="size-3" />
                 </span>
-                <span v-if="suggestion.parts.argument" class="text-muted-foreground truncate text-sm">
-                  {{ suggestion.parts.argument.text }}
-                </span>
+                <template v-if="suggestion.parts.arguments && suggestion.parts.arguments.length > 0">
+                  <span 
+                    v-for="(arg, i) in suggestion.parts.arguments" 
+                    :key="i"
+                    class="shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground"
+                  >
+                    {{ arg.text }}
+                  </span>
+                </template>
+                <span v-if="!suggestion.isComplete" class="text-[10px] text-muted-foreground/50">…</span>
               </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <span
-                  :class="cn('text-[10px] px-1.5 py-0.5 rounded font-mono tabular-nums cursor-help', getScoreColor(suggestion.score))"
-                  :title="getScoreTooltip(suggestion)"
-                >
-                  {{ Math.round(suggestion.score) }}
-                </span>
-                <span class="text-xs text-muted-foreground tabular-nums" data-testid="result-count">
-                  {{ suggestion.resultCount }} {{ suggestion.resultCount === 1 ? 'result' : 'results' }}
-                </span>
-                <span v-if="!suggestion.isComplete" class="text-[10px] text-muted-foreground/60">...</span>
-              </div>
+              
+              <!-- Score column - left aligned, fixed width -->
+              <span
+                :class="cn('w-10 font-mono tabular-nums cursor-help shrink-0', getScoreColor(suggestion.score))"
+                :title="getScoreTooltip(suggestion)"
+              >
+                {{ Math.round(suggestion.score) }}
+              </span>
+              
+              <!-- Results column - left aligned, fixed width -->
+              <span 
+                class="w-14 text-muted-foreground tabular-nums shrink-0" 
+                data-testid="result-count"
+              >
+                {{ suggestion.resultCount.toLocaleString() }}
+              </span>
             </div>
           </div>
         </div>
@@ -388,69 +428,111 @@ function formatNumber(num: number): string {
       <p class="text-xs">Try adjusting your filters</p>
     </div>
 
-    <div v-else class="overflow-hidden rounded-lg border border-border">
-      <!-- Fixed header -->
-      <div class="flex items-center border-b bg-muted/50 sticky top-0 z-10">
-        <div class="px-4 py-3 w-[140px] shrink-0 text-left font-medium text-muted-foreground text-sm">Status</div>
-        <div class="px-4 py-3 w-[180px] shrink-0 text-left font-medium text-muted-foreground text-sm">Assignee</div>
-        <div class="px-4 py-3 w-[100px] shrink-0 text-left font-medium text-muted-foreground text-sm">Priority</div>
-        <div class="px-4 py-3 w-[140px] shrink-0 text-left font-medium text-muted-foreground text-sm">Department</div>
-        <div class="px-4 py-3 w-[120px] shrink-0 text-left font-medium text-muted-foreground text-sm">Created</div>
-        <div class="px-4 py-3 w-[80px] shrink-0 text-center font-medium text-muted-foreground text-sm">Blocked</div>
-      </div>
-
-      <!-- Virtualized body -->
+    <div v-else class="overflow-hidden rounded-lg border border-border min-h-0 flex flex-col max-h-full">
       <div
         ref="scrollContainerRef"
-        class="h-[500px] overflow-auto"
+        class="min-h-0 overflow-auto"
       >
-        <div
-          :style="{
-            height: `${virtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }"
-        >
-          <div
-            v-for="virtualRow in virtualizer.getVirtualItems()"
-            :key="filteredData[virtualRow.index].id"
-            :style="{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: `${virtualRow.size}px`,
-              transform: `translateY(${virtualRow.start}px)`,
-            }"
-            :class="cn(
-              'flex items-center border-b transition-colors',
-              appliedFilters.length > 0 ? 'bg-primary/5' : '',
-              filteredData[virtualRow.index].id % 2 !== 0 ? 'bg-muted/30' : ''
-            )"
-          >
-            <div class="px-4 py-3 w-[140px] shrink-0">
-              <span :class="cn(
-                'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
-                statusVariants[filteredData[virtualRow.index].status]?.bg ?? 'bg-muted',
-                statusVariants[filteredData[virtualRow.index].status]?.text ?? 'text-muted-foreground'
-              )">
-                {{ filteredData[virtualRow.index].status }}
-              </span>
-            </div>
-            <div class="px-4 py-3 w-[180px] shrink-0 font-medium truncate">{{ filteredData[virtualRow.index].assignee }}</div>
-            <div class="px-4 py-3 w-[100px] shrink-0">
-              <div class="flex items-center gap-1">
-                <div :class="cn('size-2 rounded-full', priorityColors[filteredData[virtualRow.index].priority - 1] ?? priorityColors[0])" />
-                <span class="text-sm tabular-nums">{{ filteredData[virtualRow.index].priority }}</span>
-              </div>
-            </div>
-            <div class="px-4 py-3 w-[140px] shrink-0 text-muted-foreground">{{ filteredData[virtualRow.index].department }}</div>
-            <div class="px-4 py-3 w-[120px] shrink-0 text-muted-foreground tabular-nums">{{ filteredData[virtualRow.index].createdAt }}</div>
-            <div class="px-4 py-3 w-[80px] shrink-0 text-center">
-              <XIcon v-if="filteredData[virtualRow.index].isBlocked" class="size-4 text-rose-500 mx-auto" />
-              <CheckIcon v-else class="size-4 text-emerald-500 mx-auto" />
-            </div>
-          </div>
+        <div :style="{ height: `${virtualizer.getTotalSize()}px` }">
+          <table class="w-full">
+            <thead class="sticky top-0 z-10 bg-muted/95 backdrop-blur-sm">
+              <tr class="border-b">
+                <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+                  <div v-if="statusColumn" class="flex items-center gap-1">
+                    <DataTypeIcon :type="statusColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">Status</span>
+                    <ColumnInfoPopover :column="statusColumn" />
+                  </div>
+                </th>
+                <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+                  <div v-if="assigneeColumn" class="flex items-center gap-1">
+                    <DataTypeIcon :type="assigneeColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">Assignee</span>
+                    <ColumnInfoPopover :column="assigneeColumn" />
+                  </div>
+                </th>
+                <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+                  <div v-if="priorityColumn" class="flex items-center gap-1">
+                    <DataTypeIcon :type="priorityColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">Priority</span>
+                    <ColumnInfoPopover :column="priorityColumn" />
+                  </div>
+                </th>
+                <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+                  <div v-if="departmentColumn" class="flex items-center gap-1">
+                    <DataTypeIcon :type="departmentColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">Dept</span>
+                    <ColumnInfoPopover :column="departmentColumn" />
+                  </div>
+                </th>
+                <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+                  <div v-if="createdAtColumn" class="flex items-center gap-1">
+                    <DataTypeIcon :type="createdAtColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">Created</span>
+                    <ColumnInfoPopover :column="createdAtColumn" />
+                  </div>
+                </th>
+                <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+                  <div v-if="isBlockedColumn" class="flex items-center gap-1">
+                    <DataTypeIcon :type="isBlockedColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">Blocked</span>
+                    <ColumnInfoPopover :column="isBlockedColumn" />
+                  </div>
+                </th>
+                <th class="px-3 py-3 text-left font-normal">
+                  <div v-if="commentsColumn" class="flex items-center gap-1">
+                    <DataTypeIcon :type="commentsColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">Comments</span>
+                    <ColumnInfoPopover :column="commentsColumn" />
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(virtualRow, index) in virtualizer.getVirtualItems()"
+                :key="filteredData[virtualRow.index].id"
+                :style="{
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start - index * virtualRow.size}px)`,
+                }"
+                :class="cn(
+                  'border-b transition-colors h-12',
+                  appliedFilters.length > 0 ? 'bg-primary/5' : '',
+                  filteredData[virtualRow.index].id % 2 !== 0 ? 'bg-muted/30' : ''
+                )"
+              >
+                <td class="px-3 py-2 whitespace-nowrap h-12">
+                  <span :class="cn(
+                    'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                    statusVariants[filteredData[virtualRow.index].status]?.bg ?? 'bg-muted',
+                    statusVariants[filteredData[virtualRow.index].status]?.text ?? 'text-muted-foreground'
+                  )">
+                    {{ filteredData[virtualRow.index].status }}
+                  </span>
+                </td>
+                <td class="px-3 py-2 font-medium whitespace-nowrap h-12">{{ filteredData[virtualRow.index].assignee }}</td>
+                <td class="px-3 py-2 whitespace-nowrap h-12">
+                  <div class="flex items-center gap-1">
+                    <div :class="cn('size-2 rounded-full', priorityColors[filteredData[virtualRow.index].priority - 1] ?? priorityColors[0])" />
+                    <span class="text-sm tabular-nums">{{ filteredData[virtualRow.index].priority }}</span>
+                  </div>
+                </td>
+                <td class="px-3 py-2 text-muted-foreground whitespace-nowrap h-12">{{ filteredData[virtualRow.index].department }}</td>
+                <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">{{ filteredData[virtualRow.index].createdAt }}</td>
+                <td class="px-3 py-2 text-center whitespace-nowrap h-12">
+                  <XIcon v-if="filteredData[virtualRow.index].isBlocked" class="size-4 text-rose-500 mx-auto" />
+                  <CheckIcon v-else class="size-4 text-emerald-500 mx-auto" />
+                </td>
+                <td class="px-3 py-2 text-muted-foreground text-sm h-12 max-w-[200px]" :title="filteredData[virtualRow.index].comments">
+                  <span class="block truncate">
+                    <template v-if="filteredData[virtualRow.index].comments">{{ filteredData[virtualRow.index].comments }}</template>
+                    <span v-else class="text-muted-foreground/50 italic">No comments</span>
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

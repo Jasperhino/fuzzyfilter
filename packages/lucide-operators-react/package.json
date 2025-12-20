@@ -1,0 +1,25 @@
+{
+  "name": "lucide-operators-react",
+  "version": "0.1.0",
+  "description": "React icon components for fuzzyfilter operators - wraps lucide-react",
+  "module": "src/index.tsx",
+  "main": "src/index.tsx",
+  "types": "src/index.tsx",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.tsx",
+      "types": "./src/index.tsx"
+    }
+  },
+  "dependencies": {
+    "lucide-operators": "workspace:*",
+    "lucide-react": "^0.561.0"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "keywords": ["fuzzyfilter", "icons", "lucide", "operators", "react"],
+  "license": "MIT"
+}
+

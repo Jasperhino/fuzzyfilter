@@ -3,9 +3,10 @@
  * Final output types for the suggestion system.
  */
 
-import type { ColumnId, Operator, RowId } from "./core.ts";
+import type { ColumnId, RowId } from "./core.ts";
+import type { Operator } from "../operators/registry.ts";
 import type { AnyColumnDefinition } from "./schema.ts";
-import type { Hypothesis, ScoredHypothesis, HypothesisValueType } from "./hypothesis.ts";
+import type { HypothesisValueType } from "./hypothesis.ts";
 import type { RoaringBitmap } from "./index-layer.ts";
 
 // ============================================================================
@@ -32,7 +33,7 @@ export interface FilterSuggestion {
       matchedAlias?: string;
       highlight?: boolean;
     };
-    argument?: { text: string; highlight?: boolean };
+    arguments?: { text: string; highlight?: boolean }[];
   };
 
   /** The column this filter applies to */
@@ -41,8 +42,8 @@ export interface FilterSuggestion {
   /** The operator */
   operator: Operator;
 
-  /** The value (if any) */
-  value?: HypothesisValueType;
+  /** The argument values (array to support variadic operators) */
+  arguments?: HypothesisValueType[];
 
   /** Number of rows matching this filter */
   resultCount: number;
@@ -141,8 +142,8 @@ export interface CompiledFilter {
   /** The operator */
   operator: Operator;
 
-  /** The argument value(s) */
-  argument: unknown;
+  /** The argument values (array to support variadic operators) */
+  arguments: unknown[];
 
   /** Predicate function to test a row */
   predicate: (row: Record<string, unknown>) => boolean;
@@ -277,7 +278,7 @@ export interface OperatorBitmapStrategy {
 export interface CacheKey {
   columnId: ColumnId;
   operator: Operator;
-  argument: string | number | boolean | Date | null;
+  arguments: Array<string | number | boolean | Date | null>;
 }
 
 /**

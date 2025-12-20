@@ -7,9 +7,9 @@
  * @module fuzzyfilter/types/api
  */
 
-import type { ColumnId, DataType, Operator } from "./core.ts";
+import type { ColumnId } from "./core.ts";
+import type { Operator } from "../operators/registry.ts";
 import type { Schema, SchemaInput, AnyColumnDefinition } from "./schema.ts";
-import type { DataIndex } from "./index-layer.ts";
 import type { ParsedInput } from "./parsing.ts";
 import type { ScoringWeights, HypothesisGenerationOptions } from "./hypothesis.ts";
 import type {
@@ -65,7 +65,7 @@ export const DEFAULT_CONFIG: FuzzyFilterConfig = {
   scoringWeights: {
     column: 0.4,
     operator: 0.35,
-    argument: 0.25,
+    arguments: 0.25,
     orderBonus: 0.1,
     inferredPenalty: 0.15,
     completenessBonus: 0.2,
