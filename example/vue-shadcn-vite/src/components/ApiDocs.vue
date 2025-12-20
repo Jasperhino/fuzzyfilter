@@ -366,7 +366,7 @@ const options = [
                     <span v-else>{{ op.symbol || op.id }}</span>
                   </span>
                   <span class="text-muted-foreground">
-                    {{ op.aliases[0] || op.label }}
+                    {{ op.label }}
                   </span>
                 </div>
               </div>
