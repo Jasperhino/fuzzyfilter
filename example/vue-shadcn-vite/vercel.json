@@ -1,0 +1,4 @@
+{
+  "buildCommand": "cd ../.. && bunx turbo build --filter=vue-shadcn-vite",
+  "outputDirectory": "dist"
+}
