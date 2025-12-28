@@ -30,6 +30,8 @@ export interface UseFuzzyFilterOptions {
 export interface UseFuzzyFilterReturn {
   /** Current query (v-model compatible) */
   query: Ref<string>;
+  /** The query that the current suggestions were generated for (after debounce) */
+  suggestionsQuery: Ref<string>;
   /** Current suggestions */
   suggestions: Ref<FilterSuggestion[]>;
   /** Loading state */
@@ -124,6 +126,7 @@ export function useFuzzyFilter(
 
   // Reactive state
   const query = ref(initialQuery);
+  const suggestionsQuery = ref(initialQuery);
   const suggestions = ref<FilterSuggestion[]>([]);
   const isLoading = ref(false);
   const error = ref<Error | null>(null);
@@ -154,6 +157,7 @@ export function useFuzzyFilter(
       const context = filterContext?.value ?? undefined;
       const response = await filter.suggest(q, undefined, context);
       suggestions.value = response.suggestions;
+      suggestionsQuery.value = q;
       selectedIndex.value = 0;
     } catch (err) {
       if (err instanceof Error && err.name !== "AbortError") {
@@ -225,6 +229,7 @@ export function useFuzzyFilter(
    */
   function reset() {
     query.value = "";
+    suggestionsQuery.value = "";
     suggestions.value = [];
     selectedIndex.value = 0;
     error.value = null;
@@ -241,6 +246,7 @@ export function useFuzzyFilter(
 
   return {
     query,
+    suggestionsQuery,
     suggestions,
     isLoading,
     error,

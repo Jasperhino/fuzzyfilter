@@ -5,6 +5,8 @@
 // Core types (type-only exports)
 export type {
   OperatorInfoBase,
+  AliasPattern,
+  SpreadPattern,
   ColumnId,
   RowId,
   Match,

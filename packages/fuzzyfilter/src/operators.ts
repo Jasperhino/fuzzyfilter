@@ -10,6 +10,51 @@
 import type { OperatorInfoBase } from "./types/index.ts";
 import { DataType, OperatorCategory } from "./types/index.ts";
 
+// ============================================================================
+// WORD SETS FOR ALIAS GENERATION
+// ============================================================================
+
+/**
+ * Word sets for generating operator aliases.
+ * 
+ * Each key maps to an array of synonymous words that can be used
+ * interchangeably when constructing operator aliases.
+ * 
+ * These are combined via AliasPattern to generate all valid permutations.
+ */
+export const WORD_SETS = {
+  // Comparison words
+  less: ["less", "smaller", "lower", "under"],
+  greater: ["greater", "bigger", "larger", "more", "over", "above"],
+  than: ["than"],
+  
+  // Equality/Combination words
+  equal: ["equal", "equals", "eq"],
+  or: ["or"],
+  not: ["not"],
+  
+  // Range/Spread keywords
+  from: ["from"],
+  to: ["to", "till", "until"],
+  between: ["between"],
+  and: ["and"],
+  
+  // Pattern matching words
+  contains: ["contains", "has", "includes"],
+  starts: ["starts", "begins"],
+  ends: ["ends"],
+  with: ["with"],
+  
+  // Existence words
+  is: ["is"],
+  empty: ["empty", "blank", "null", "missing"],
+} as const;
+
+/**
+ * Type for word set keys
+ */
+export type WordSetKey = keyof typeof WORD_SETS;
+
 /**
  * Complete registry of all operators.
  * This is the single source of truth - the Operator type is derived from its keys.
@@ -33,7 +78,11 @@ export const OPERATORS = {
     id: "neq",
     category: OperatorCategory.EQUALITY,
     label: "not equals",
-    aliases: ["notEquals", "not equal", "isNot", "is not", "!=", "!==", "<>", "≠"],
+    aliases: ["!=", "!==", "<>", "≠"],
+    aliasPatterns: [
+      { parts: ["not", "equal"] },
+      { parts: ["is?", "not", "equal"] },
+    ],
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM],
     requiresArgument: true,
   },
@@ -61,7 +110,10 @@ export const OPERATORS = {
     id: "lt",
     category: OperatorCategory.COMPARISON,
     label: "less than",
-    aliases: ["lessThan", "less", "<", "before", "under"],
+    aliases: ["<", "before", "under"],
+    aliasPatterns: [
+      { parts: ["less", "than?"] },
+    ],
     supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
   },
@@ -69,7 +121,10 @@ export const OPERATORS = {
     id: "lte",
     category: OperatorCategory.COMPARISON,
     label: "less than or equal",
-    aliases: ["smaller equal", "less eq", "<=", "max", "at most", "≤"],
+    aliases: ["<=", "max", "at most", "≤"],
+    aliasPatterns: [
+      { parts: ["less", "than?", "or?", "equal"] },
+    ],
     supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
   },
@@ -77,7 +132,10 @@ export const OPERATORS = {
     id: "gt",
     category: OperatorCategory.COMPARISON,
     label: "greater than",
-    aliases: ["greaterThan", "greater", ">", "after", "over", "above", "bigger"],
+    aliases: [">", "after"],
+    aliasPatterns: [
+      { parts: ["greater", "than?"] },
+    ],
     supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
   },
@@ -85,7 +143,10 @@ export const OPERATORS = {
     id: "gte",
     category: OperatorCategory.COMPARISON,
     label: "greater than or equal",
-    aliases: ["greater equal", "bigger equal", ">=", "min", "at least", "≥"],
+    aliases: [">=", "min", "at least", "≥"],
+    aliasPatterns: [
+      { parts: ["greater", "than?", "or?", "equal"] },
+    ],
     supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
   },
@@ -137,7 +198,10 @@ export const OPERATORS = {
     id: "startsWith",
     category: OperatorCategory.PATTERN_MATCHING,
     label: "starts with",
-    aliases: ["beginsWith", "prefix", "^", "^…"],
+    aliases: ["prefix", "^", "^…"],
+    aliasPatterns: [
+      { parts: ["starts", "with?"] },
+    ],
     supportedTypes: [DataType.STRING],
     requiresArgument: true,
   },
@@ -146,6 +210,9 @@ export const OPERATORS = {
     category: OperatorCategory.PATTERN_MATCHING,
     label: "ends with",
     aliases: ["suffix", "$", "…$"],
+    aliasPatterns: [
+      { parts: ["ends", "with?"] },
+    ],
     supportedTypes: [DataType.STRING],
     requiresArgument: true,
   },
@@ -157,7 +224,10 @@ export const OPERATORS = {
     id: "isEmpty",
     category: OperatorCategory.NULLABILITY,
     label: "is empty",
-    aliases: ["isNull", "null", "empty", "blank", "missing", "∅"],
+    aliases: ["isNull", "null", "∅", "hasValue"],
+    aliasPatterns: [
+      { parts: ["is?", "empty"] },
+    ],
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM, DataType.ARRAY],
     requiresArgument: false,
   },
@@ -165,7 +235,10 @@ export const OPERATORS = {
     id: "isNotEmpty",
     category: OperatorCategory.NULLABILITY,
     label: "is not empty",
-    aliases: ["isNotNull", "notNull", "hasValue", "exists", "present", "≠∅"],
+    aliases: ["isNotNull", "notNull", "exists", "present", "≠∅"],
+    aliasPatterns: [
+      { parts: ["is?", "not", "empty"] },
+    ],
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM, DataType.ARRAY],
     requiresArgument: false,
   },
@@ -213,7 +286,11 @@ export const OPERATORS = {
     id: "between",
     category: OperatorCategory.DATE,
     label: "between",
-    aliases: ["range", "from to", "within", "↔"],
+    aliases: ["range", "within", "↔"],
+    spreadPatterns: [
+      { keywords: ["from", "to"], keywordSets: ["from", "to"] },
+      { keywords: ["between", "and"], keywordSets: ["between", "and"] },
+    ],
     supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
     isVariadic: true,

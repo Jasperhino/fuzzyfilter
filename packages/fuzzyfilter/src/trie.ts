@@ -103,10 +103,12 @@ export function createTrie<T>(): Trie<T> {
       }));
     }
 
+    // Tightened threshold from -10000 to -3000 to filter poor matches faster
+    // This reduces the number of results that need to be processed
     const results = fuzzysort.go(query.toLowerCase(), allEntries, {
       key: "prepared",
       limit,
-      threshold: -10000,
+      threshold: -3000,
     });
 
     return results.map((r) => ({

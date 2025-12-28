@@ -9,10 +9,11 @@ const apps = [
 ];
 
 /**
- * Helper to parse the result count from "X results" text
+ * Helper to parse the result count from text (just the number, e.g., "8,503")
  */
 function parseResultCount(text: string): number {
-  const match = text.match(/(\d[\d,]*)\s+results?/);
+  // The UI shows just the number with locale formatting (e.g., "8,503")
+  const match = text.match(/^([\d,]+)$/);
   if (!match) throw new Error(`Could not parse result count from: ${text}`);
   return parseInt(match[1].replace(/,/g, ""), 10);
 }
@@ -69,10 +70,9 @@ for (const { name, url } of apps) {
       console.log(`${name}: First suggestion for 'blocked true': "${suggestionText}"`);
 
       // The first suggestion should contain "Is Blocked" and indicate true
-      // It should have the checkmark symbol (✓) for isTrue operator
+      // The UI shows the operator text like "true" or "isTrue"
       const isBlockedBooleanFilter = suggestionText && (
-        (suggestionText.includes("Is Blocked") && suggestionText.includes("✓")) ||
-        (suggestionText.includes("Is Blocked") && suggestionText.toLowerCase().includes("true"))
+        suggestionText.includes("Is Blocked") && suggestionText.toLowerCase().includes("true")
       );
 
       expect(isBlockedBooleanFilter).toBe(true);
@@ -138,10 +138,9 @@ for (const { name, url } of apps) {
       console.log(`${name}: First suggestion for 'blocked false': "${suggestionText}"`);
 
       // The first suggestion should contain "Is Blocked" and indicate false
-      // It should have the X symbol (✗) for isFalse operator
+      // The UI shows the operator text like "false" or "isFalse"
       const isBlockedFalseFilter = suggestionText && (
-        (suggestionText.includes("Is Blocked") && suggestionText.includes("✗")) ||
-        (suggestionText.includes("Is Blocked") && suggestionText.toLowerCase().includes("false"))
+        suggestionText.includes("Is Blocked") && suggestionText.toLowerCase().includes("false")
       );
 
       expect(isBlockedFalseFilter).toBe(true);
@@ -200,9 +199,12 @@ for (const { name, url } of apps) {
         const scoreText = await scoreElement.textContent();
         const score = parseInt(scoreText || "0", 10);
 
-        // Check if suggestion is complete (boolean filter with Is Blocked)
+        // Check if suggestion is complete (boolean filter with Is Blocked and true/false operator)
+        // The UI shows operator text like "true", "false", "isTrue", "isFalse"
         const isComplete = text ? (
-          (text.includes("Is Blocked") && (text.includes("✓") || text.includes("✗")))
+          text.includes("Is Blocked") && 
+          (text.toLowerCase().includes("true") || text.toLowerCase().includes("false")) &&
+          !text.toLowerCase().includes("equals") // "equals" means it needs a value argument
         ) : false;
 
         suggestionsData.push({ text: text || "", score, isComplete });
@@ -257,7 +259,9 @@ for (const { name, url } of apps) {
       let foundIsEmptySuggestion = false;
       for (let i = 0; i < count; i++) {
         const text = await suggestions.nth(i).textContent();
-        if (text && text.includes("Is Blocked") && text.includes("∅")) {
+        // The UI shows operator text like "isEmpty" or "is empty"
+        if (text && text.includes("Is Blocked") && 
+            (text.toLowerCase().includes("isempty") || text.toLowerCase().includes("empty"))) {
           foundIsEmptySuggestion = true;
           console.log(`${name}: Found isEmpty suggestion: "${text}"`);
           break;

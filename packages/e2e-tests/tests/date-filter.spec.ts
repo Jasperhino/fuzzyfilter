@@ -9,10 +9,11 @@ const apps = [
 ];
 
 /**
- * Helper to parse the result count from "X results" text
+ * Helper to parse the result count from text (just the number, e.g., "10,000")
  */
 function parseResultCount(text: string): number {
-  const match = text.match(/(\d[\d,]*)\s+results?/);
+  // The UI shows just the number with locale formatting (e.g., "10,000")
+  const match = text.match(/^([\d,]+)$/);
   if (!match) throw new Error(`Could not parse result count from: ${text}`);
   return parseInt(match[1].replace(/,/g, ""), 10);
 }
@@ -214,8 +215,9 @@ for (const { name, url } of apps) {
       const suggestionText = await firstSuggestion.textContent();
       console.log(`${name}: First suggestion for 'yesterday today': "${suggestionText}"`);
       
-      // Should be a between (↔) operator with two dates (Dec ... - Dec ...)
-      expect(suggestionText).toMatch(/↔.*Dec.*-.*Dec/);
+      // Should be a between operator with two dates
+      // The UI shows "between" as text and dates in separate badges (no "-" between them)
+      expect(suggestionText).toMatch(/between.*Dec.*Dec/);
       
       // =========================================================
       // STEP 3: Get the preview result count and apply filter
@@ -327,8 +329,9 @@ for (const { name, url } of apps) {
       // =========================================================
       // STEP 2: Find the between suggestion for the date range
       // =========================================================
+      // The UI shows "between" as text and dates in separate badges
       const betweenSuggestion = page.locator('[data-testid^="suggestion-"]').filter({
-        hasText: /↔.*Dec.*-.*Dec/,
+        hasText: /between.*Dec.*Dec/,
       }).first();
       
       await expect(betweenSuggestion).toBeVisible({ timeout: 5000 });

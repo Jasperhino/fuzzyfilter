@@ -76,6 +76,53 @@ export type OperatorCategory = (typeof OperatorCategory)[keyof typeof OperatorCa
 // Note: Operator type is derived from OPERATORS in operators.ts
 // and re-exported from types/index.ts
 
+// ============================================================================
+// ALIAS PATTERNS
+// ============================================================================
+
+/**
+ * Pattern for generating combinatorial aliases.
+ * 
+ * Parts are word set keys that get expanded into all combinations.
+ * Suffix "?" means the part is optional.
+ * 
+ * @example
+ * ```typescript
+ * // Pattern: ["less", "than?", "or?", "equal"]
+ * // Generates: "less equal", "less than equal", "less or equal", 
+ * //            "less than or equal", plus all synonym combinations
+ * ```
+ */
+export interface AliasPattern {
+  /** Word set keys to combine. Suffix "?" means optional */
+  parts: readonly string[];
+}
+
+/**
+ * Pattern for operators with spread syntax (keywords around arguments).
+ * 
+ * Used for operators like "between" where the query looks like:
+ * "from yesterday to today" or "between 10 and 20"
+ * 
+ * @example
+ * ```typescript
+ * spreadPatterns: [
+ *   { keywords: ["from", "to"], keywordSets: ["from", "to"] },
+ *   { keywords: ["between", "and"], keywordSets: ["between", "and"] },
+ * ]
+ * ```
+ */
+export interface SpreadPattern {
+  /** The literal keywords that delimit arguments (start, middle) */
+  keywords: readonly [string, string];
+  /** Word set keys for synonym expansion of each keyword */
+  keywordSets: readonly [string, string];
+}
+
+// ============================================================================
+// OPERATOR METADATA
+// ============================================================================
+
 /**
  * Base operator metadata for display and validation.
  * Used as the constraint type for OPERATORS.
@@ -86,8 +133,29 @@ export interface OperatorInfoBase {
   category: OperatorCategory;
   /** Human-readable label */
   label: string;
-  /** Alternative names/aliases for fuzzy matching */
+  /** 
+   * Explicit aliases for fuzzy matching.
+   * These are in addition to any generated from aliasPatterns.
+   * Use for symbols (<=, >=) and single words that don't fit patterns.
+   */
   aliases: readonly string[];
+  /**
+   * Patterns for generating combinatorial aliases.
+   * Each pattern expands word set references into all combinations.
+   * 
+   * @example
+   * ```typescript
+   * aliasPatterns: [
+   *   { parts: ["less", "than?", "or?", "equal"] },
+   * ]
+   * ```
+   */
+  aliasPatterns?: readonly AliasPattern[];
+  /**
+   * Patterns for spread syntax operators.
+   * Enables parsing "from X to Y" as a between operator.
+   */
+  spreadPatterns?: readonly SpreadPattern[];
   /**
    * Type-specific aliases that only apply for certain column types.
    * For example, "at" and "on" only make sense for date equality.

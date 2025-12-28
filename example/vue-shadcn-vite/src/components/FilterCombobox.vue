@@ -61,6 +61,7 @@ const compiledFiltersForContext = computed(() => {
 // Use the composable with filter context for stacked counts
 const {
   query,
+  suggestionsQuery,
   suggestions,
   selectedIndex,
   navigateSuggestions,
@@ -73,6 +74,9 @@ const {
 // Applied filters state - use the same ref for both display and context
 const appliedFilters = appliedFiltersForContext
 const isOpen = ref(false)
+
+// Track hovered suggestion index for input highlighting
+const hoveredIndex = ref<number | null>(null)
 
 // Virtual scroll container ref
 const scrollContainerRef = ref<HTMLDivElement | null>(null)
@@ -297,23 +301,40 @@ function getHighlightSegments(queryText: string, matches: QueryMatch[]): Highlig
     return [{ text: queryText, matchType: null }]
   }
 
-  // Sort matches by start position
-  const sorted = [...matches].sort((a, b) => a.inputRange.start - b.inputRange.start)
+  // Priority for match types when there are overlaps: column > operator > value
+  const matchTypePriority = { column: 0, operator: 1, value: 2 }
+
+  // Sort matches by start position, then by priority (lower = higher priority)
+  const sorted = [...matches].sort((a, b) => {
+    if (a.inputRange.start !== b.inputRange.start) {
+      return a.inputRange.start - b.inputRange.start
+    }
+    return matchTypePriority[a.matchType] - matchTypePriority[b.matchType]
+  })
+
   const segments: HighlightSegment[] = []
   let currentPos = 0
 
   for (const match of sorted) {
+    // Skip matches that are entirely within already processed text (overlapping)
+    if (match.inputRange.end <= currentPos) {
+      continue
+    }
+
+    // Adjust start if match overlaps with already processed text
+    const effectiveStart = Math.max(match.inputRange.start, currentPos)
+
     // Add unmatched text before this match
-    if (match.inputRange.start > currentPos) {
+    if (effectiveStart > currentPos) {
       segments.push({
-        text: queryText.slice(currentPos, match.inputRange.start),
+        text: queryText.slice(currentPos, effectiveStart),
         matchType: null,
       })
     }
 
     // Add the matched segment
     segments.push({
-      text: queryText.slice(match.inputRange.start, match.inputRange.end),
+      text: queryText.slice(effectiveStart, match.inputRange.end),
       matchType: match.matchType,
     })
 
@@ -355,6 +376,113 @@ function getMatchTypeClass(matchType: "column" | "operator" | "value" | null): s
   return matchType ? `px-0.5 rounded ${colorClasses[matchType]}` : "text-muted-foreground"
 }
 
+/**
+ * Segment for highlighted text rendering
+ */
+interface TextHighlightSegment {
+  text: string
+  highlighted: boolean
+}
+
+/**
+ * Get segments for highlighted text based on matched character indexes.
+ * Used to show which characters in a suggestion matched the user's query.
+ * 
+ * @param text - The text to render
+ * @param matchedIndexes - Array of character indexes to highlight
+ */
+function getTextHighlightSegments(text: string, matchedIndexes?: number[]): TextHighlightSegment[] {
+  if (!matchedIndexes || matchedIndexes.length === 0) {
+    return [{ text, highlighted: false }]
+  }
+
+  // Create a set for O(1) lookup
+  const indexSet = new Set(matchedIndexes)
+  
+  // Group consecutive characters into segments
+  const segments: TextHighlightSegment[] = []
+  let currentSegment = { text: "", highlighted: indexSet.has(0) }
+  
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]!
+    const isHighlighted = indexSet.has(i)
+    if (isHighlighted === currentSegment.highlighted) {
+      currentSegment.text += char
+    } else {
+      if (currentSegment.text) {
+        segments.push(currentSegment)
+      }
+      currentSegment = { text: char, highlighted: isHighlighted }
+    }
+  }
+  if (currentSegment.text) {
+    segments.push(currentSegment)
+  }
+
+  return segments
+}
+
+/**
+ * Find the query match for a specific match type from a suggestion
+ */
+function getMatchForType(suggestion: FilterSuggestion, matchType: "column" | "operator" | "value", valueIndex?: number): QueryMatch | undefined {
+  if (!suggestion.queryMatches) return undefined
+  
+  if (matchType === "value") {
+    // Get the nth value match
+    const valueMatches = suggestion.queryMatches.filter(m => m.matchType === "value")
+    return valueIndex !== undefined ? valueMatches[valueIndex] : valueMatches[0]
+  }
+  
+  return suggestion.queryMatches.find(m => m.matchType === matchType)
+}
+
+/**
+ * Check if an argument value was matched in the query
+ */
+function isArgMatched(suggestion: FilterSuggestion, argText: string): boolean {
+  if (!suggestion.queryMatches) return false
+  const valueMatches = suggestion.queryMatches.filter(m => m.matchType === "value")
+  return valueMatches.some(m => m.matchedTarget === argText)
+}
+
+/**
+ * Get the color class for a match type (for input overlay)
+ */
+function getMatchTypeColorClass(matchType: "column" | "operator" | "value" | null): string {
+  if (!matchType) return "text-foreground"
+  
+  const colorClasses = {
+    column: "text-blue-600 dark:text-blue-400",
+    operator: "text-amber-600 dark:text-amber-400",
+    value: "text-emerald-600 dark:text-emerald-400",
+  }
+  return colorClasses[matchType]
+}
+
+// Check if query is in sync with suggestions (after debounce)
+const isQueryInSync = computed(() => query.value === suggestionsQuery.value)
+
+// Get the highlighted suggestion: hovered > selected > first
+const highlightedSuggestion = computed(() => {
+  if (!isQueryInSync.value || suggestions.value.length === 0) return null
+  if (hoveredIndex.value !== null) return suggestions.value[hoveredIndex.value]
+  return suggestions.value[selectedIndex.value] ?? suggestions.value[0]
+})
+
+// Computed property for the query matches from the highlighted suggestion
+const inputQueryMatches = computed(() => {
+  return highlightedSuggestion.value?.queryMatches ?? []
+})
+
+// Computed segments for the colored input overlay
+const coloredInputSegments = computed(() => {
+  if (!query.value || !isQueryInSync.value || inputQueryMatches.value.length === 0) {
+    return []
+  }
+  return getHighlightSegments(query.value, inputQueryMatches.value)
+})
+
 // Get column by ID from schema
 function getColumnById(columnId: string) {
   return TASK_SCHEMA.columns.find((c) => c.id === columnId)
@@ -393,13 +521,14 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
           <span class="shrink-0 h-4 px-1 rounded inline-flex items-center font-medium bg-muted text-muted-foreground text-[10px]">
             {{ f.parts.operator.matchedAlias ?? f.parts.operator.text }}
           </span>
-          <!-- Render existing arguments (no placeholders for applied filters) -->
+          <!-- Render existing arguments (no placeholders for applied filters), use displayText with ellipsis for long values -->
           <span 
             v-for="(arg, i) in f.parts.arguments" 
             :key="i"
             class="shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground"
+            :title="arg.displayText ? arg.text : undefined"
           >
-            {{ arg.text }}
+            {{ arg.displayText ?? arg.text }}
           </span>
           <button
             @click="removeFilter(f.id)"
@@ -416,19 +545,39 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
         </button>
       </div>
 
-      <!-- Combobox -->
+      <!-- Combobox with colored input overlay -->
       <div class="relative">
-        <div class="flex items-center gap-2 px-3 py-2 bg-background rounded-lg border border-input focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 transition-all">
+        <div class="flex items-center gap-2 px-3 py-2 bg-background rounded-lg border border-input focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 transition-all relative">
           <SearchIcon class="size-4 text-muted-foreground shrink-0" />
-          <input
-            v-model="query"
-            type="text"
-            placeholder="Filter by column, operator, or value..."
-            class="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground outline-none text-sm"
-            @focus="handleFocus"
-            @blur="handleBlur"
-            @keydown="handleKeydown"
-          />
+          <!-- Input wrapper with colored overlay -->
+          <div class="flex-1 relative">
+            <!-- Colored text overlay - positioned to match input -->
+            <div 
+              v-if="query && coloredInputSegments.length > 0"
+              class="absolute inset-0 flex items-center pointer-events-none"
+              aria-hidden="true"
+            >
+              <span class="text-sm whitespace-pre">
+                <span 
+                  v-for="(seg, i) in coloredInputSegments" 
+                  :key="i"
+                  :class="getMatchTypeColorClass(seg.matchType)"
+                >{{ seg.text }}</span>
+              </span>
+            </div>
+            <input
+              v-model="query"
+              type="text"
+              placeholder="Filter by column, operator, or value..."
+              :class="cn(
+                'w-full bg-transparent placeholder:text-muted-foreground outline-none text-sm',
+                query && coloredInputSegments.length > 0 ? 'text-transparent caret-foreground' : 'text-foreground'
+              )"
+              @focus="handleFocus"
+              @blur="handleBlur"
+              @keydown="handleKeydown"
+            />
+          </div>
           <button
             v-if="query.length > 0"
             @click="query = ''"
@@ -459,22 +608,31 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                 index === selectedIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
               )"
               @click="handleSelect(index)"
+              @mouseenter="hoveredIndex = index"
+              @mouseleave="hoveredIndex = null"
             >
               <!-- Suggestion column - left aligned, grows to push score/results right -->
               <div class="flex items-center gap-1.5 min-w-0 flex-1">
                 <span class="font-medium text-foreground truncate">
-                  {{ suggestion.parts.column.text }}
+                  <template v-for="(seg, segIdx) in getTextHighlightSegments(suggestion.parts.column.text, getMatchForType(suggestion, 'column')?.matchedCharIndexes)" :key="segIdx">
+                    <span v-if="seg.highlighted" class="font-bold">{{ seg.text }}</span>
+                    <span v-else>{{ seg.text }}</span>
+                  </template>
                 </span>
-                <span class="shrink-0 h-4 px-1 rounded inline-flex items-center font-medium bg-muted text-muted-foreground text-[10px]">
-                  {{ suggestion.parts.operator.matchedAlias ?? suggestion.parts.operator.text }}
+                <span class="shrink-0 h-4 px-1 rounded inline-flex items-center bg-muted text-muted-foreground text-[10px]">
+                  <template v-for="(seg, segIdx) in getTextHighlightSegments(suggestion.parts.operator.matchedAlias ?? suggestion.parts.operator.text, getMatchForType(suggestion, 'operator')?.matchedCharIndexes)" :key="segIdx">
+                    <span v-if="seg.highlighted" class="font-bold">{{ seg.text }}</span>
+                    <span v-else>{{ seg.text }}</span>
+                  </template>
                 </span>
-                <!-- Render existing arguments -->
+                <!-- Render existing arguments - bold if matched, use displayText with ellipsis for long values -->
                 <span 
                   v-for="(arg, i) in suggestion.parts.arguments" 
                   :key="i"
-                  class="shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground"
+                  :class="['shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground', isArgMatched(suggestion, arg.text) ? 'font-bold' : '']"
+                  :title="arg.displayText ? arg.text : undefined"
                 >
-                  {{ arg.text }}
+                  {{ arg.displayText ?? arg.text }}
                 </span>
                 <!-- Render placeholders for missing arguments -->
                 <span 

@@ -93,18 +93,22 @@ function generateTask(id: number, options: GeneratorOptions = {}): Task {
     .toISOString()
     .split("T")[0] as string;
 
-  // Generate a task-related comment
+  // Generate a task-related comment (longer, more realistic)
   const verb = faker.word.verb();
   const capitalizedVerb = verb.charAt(0).toUpperCase() + verb.slice(1);
+  const noun = faker.word.noun();
+  const adjective = faker.word.adjective();
   const commentOptions = [
-    faker.lorem.sentence(),
-    faker.lorem.sentences(2),
-    `${capitalizedVerb} ${faker.word.noun()} before deadline`,
-    `Waiting on ${faker.person.firstName()} for review`,
-    `Need to ${faker.word.verb()} the ${faker.word.noun()}`,
-    `Blocked by ${faker.company.name()} integration`,
-    `High priority - ${faker.lorem.sentence()}`,
-    `Follow up with ${faker.person.fullName()}`,
+    faker.lorem.sentences({ min: 2, max: 4 }),
+    faker.lorem.paragraph(),
+    `${capitalizedVerb} the ${adjective} ${noun} before the upcoming deadline. This is critical for the next milestone and should be prioritized accordingly.`,
+    `Waiting on ${faker.person.firstName()} ${faker.person.lastName()} for code review. They mentioned they would get to it by end of day. Follow up if no response by tomorrow morning.`,
+    `Need to ${faker.word.verb()} the ${faker.word.noun()} module. The current implementation has some performance issues that need to be addressed before we can ship to production.`,
+    `Blocked by ${faker.company.name()} integration - their API is currently returning 503 errors. Support ticket #${faker.number.int({ min: 10000, max: 99999 })} has been opened and we're awaiting their response.`,
+    `High priority task - ${faker.lorem.sentences(2)} Please escalate if this is not resolved within 48 hours.`,
+    `Follow up with ${faker.person.fullName()} regarding the ${adjective} ${noun} implementation. They have context from the previous sprint that would be helpful here.`,
+    `Technical debt: The ${faker.word.noun()} component needs refactoring. Current code is difficult to maintain and lacks proper test coverage. Estimate: ${faker.number.int({ min: 2, max: 8 })} story points.`,
+    `Customer feedback received: "${faker.lorem.sentence()}" - This should be addressed in the next iteration to improve user experience.`,
   ];
   const comments = faker.helpers.arrayElement(commentOptions) as string;
 

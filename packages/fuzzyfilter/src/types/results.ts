@@ -61,7 +61,18 @@ export interface FilterSuggestion {
       matchedAlias?: string;
       highlight?: boolean;
     };
-    arguments?: { text: string; highlight?: boolean }[];
+    /** 
+     * Argument parts for display.
+     * - `text`: Full value (used for completion and actual filter)
+     * - `displayText`: Truncated text with ellipsis for long values (optional)
+     */
+    arguments?: { 
+      /** Full value text */
+      text: string; 
+      /** Truncated display text with ellipsis (for long values) */
+      displayText?: string;
+      highlight?: boolean;
+    }[];
   };
 
   /** The column this filter applies to */

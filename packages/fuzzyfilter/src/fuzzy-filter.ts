@@ -42,6 +42,11 @@ import {
   formatDateForDisplay,
   mightBeDateExpression,
 } from "./date-parser.ts";
+import {
+  expandAliasPatterns,
+  getSpreadStartKeywords,
+  getSpreadSeparatorKeywords,
+} from "./alias-generator.ts";
 
 /**
  * Operator alias entry with optional type restriction
@@ -56,12 +61,28 @@ interface OperatorAliasEntry {
 /**
  * Internal state for FuzzyFilter
  */
+/**
+ * Cached filter context result
+ */
+interface CachedContextResult {
+  rowIndices: Set<number>;
+  availableValues: ContextAvailableValues;
+  dataVersion: number; // Incremented when data changes
+}
+
+/**
+ * Internal state for FuzzyFilter
+ */
 interface FuzzyFilterState {
   schema: Schema | null;
   columnTrie: Trie<AnyColumnDefinition>;
   operatorTrie: Trie<OperatorAliasEntry>;
   valueTrie: Trie<{ value: string; columnId: ColumnId; rowCount: number }>;
   data: Array<Record<string, unknown>>;
+  /** Version counter incremented when data changes, used for cache invalidation */
+  dataVersion: number;
+  /** LRU cache for filter context results */
+  contextCache: Map<string, CachedContextResult>;
 }
 
 /**
@@ -106,8 +127,11 @@ function generateNgrams(tokens: Token[]): NgramWithMeta[] {
     });
   }
 
-  // N-grams (size 2 to all tokens)
-  for (let n = 2; n <= tokens.length; n++) {
+  // N-grams (size 2 to min(4, all tokens))
+  // Limit to 4 tokens max since operators rarely exceed 3-4 words
+  // This reduces O(n^2) complexity for longer queries
+  const maxNgramSize = Math.min(4, tokens.length);
+  for (let n = 2; n <= maxNgramSize; n++) {
     for (let i = 0; i <= tokens.length - n; i++) {
       const slicedTokens = tokens.slice(i, i + n);
       const ngram = slicedTokens.map((t) => t.normalized).join(" ");
@@ -167,6 +191,59 @@ function detectValueTokens(
   }
 
   return result;
+}
+
+/**
+ * Represents a value match with its input position information.
+ * Used for non-overlapping assignment of ngrams to values.
+ */
+interface PositionedValueMatch {
+  value: string;
+  score: number;
+  ngram: NgramWithMeta;
+}
+
+/**
+ * Select a non-overlapping subset of value matches.
+ * Uses a greedy algorithm: sort by score descending, pick highest scoring
+ * match that doesn't overlap with already selected matches.
+ *
+ * This solves the weighted interval scheduling problem approximately,
+ * ensuring each character position in the input is only "spent" once.
+ *
+ * @param matches - All candidate matches for a column
+ * @param excludedPositions - Optional array of already-used position ranges to exclude
+ * @returns Non-overlapping subset of matches
+ */
+function selectNonOverlappingMatches(
+  matches: PositionedValueMatch[],
+  excludedPositions?: Array<{ start: number; end: number }>
+): PositionedValueMatch[] {
+  if (matches.length === 0) return [];
+
+  // Sort by score descending (greedy: pick highest first)
+  const sorted = [...matches].sort((a, b) => b.score - a.score);
+
+  const selected: PositionedValueMatch[] = [];
+  const usedPositions: Array<{ start: number; end: number }> = excludedPositions
+    ? [...excludedPositions]
+    : [];
+
+  for (const match of sorted) {
+    const { inputStart, inputEnd } = match.ngram;
+
+    // Check if this match overlaps with any already selected
+    const overlaps = usedPositions.some(
+      (pos) => !(inputEnd <= pos.start || inputStart >= pos.end)
+    );
+
+    if (!overlaps) {
+      selected.push(match);
+      usedPositions.push({ start: inputStart, end: inputEnd });
+    }
+  }
+
+  return selected;
 }
 
 /**
@@ -232,6 +309,7 @@ interface ScoreBreakdown {
   completenessBonus: number;
   fullQueryBonus: number;
   exactMatchBonus?: number;
+  targetCoveragePenalty?: number;
   tokenCount: number;
   totalTokens: number;
   adjustedScore: number;
@@ -270,6 +348,46 @@ interface MatchMetadata {
   }>;
 }
 
+// ============================================================================
+// SHARED HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Converts a primitive value to a HypothesisValueType.
+ * Unified helper to avoid repeated inline definitions.
+ *
+ * @param val - The value to convert (string, number, Date, or boolean)
+ * @returns A HypothesisValueType representing the value
+ */
+function toHypothesisValue(val: unknown): HypothesisValueType {
+  if (typeof val === "number") {
+    return { kind: "number", value: val };
+  }
+  if (val instanceof Date) {
+    const dateText = val.toISOString();
+    return {
+      kind: "date",
+      value: val,
+      parsed: {
+        text: dateText,
+        date: val,
+        isRange: false,
+        consumedText: dateText,
+      },
+    };
+  }
+  if (typeof val === "boolean") {
+    return { kind: "boolean", value: val };
+  }
+  return { kind: "string", value: String(val) };
+}
+
+
+
+// ============================================================================
+// SCORING FUNCTIONS
+// ============================================================================
+
 /**
  * Adjust score based on how much of the query was matched
  * Fuzzysort scores: 0 = exact match, negative = worse match
@@ -292,14 +410,42 @@ function adjustScoreForCoverage(
   const queryLength = ngram.text.length;
   const completenessRatio = Math.min(1, queryLength / targetLength);
   
+  // POOR MATCH PENALTY: When the raw fuzzy score is very negative (poor match),
+  // reduce the bonuses proportionally. This prevents fuzzy matches against long
+  // strings (like comment text) from scoring too high due to bonuses alone.
+  // A match with score -5000 is a poor match and should not compete with exact matches.
+  // 
+  // Quality factor: 1.0 for exact matches (score 0), scales down for worse matches
+  // Score of -1000 gives 0.9 quality, -5000 gives 0.5, -10000 gives 0
+  const POOR_MATCH_THRESHOLD = -10000;
+  const qualityFactor = Math.max(0, 1 + (baseScore / POOR_MATCH_THRESHOLD));
+  
   // Bonus for high coverage (using more of the input)
   // Max bonus of 3000 points for full coverage - this is the PRIMARY ranking factor
   // Matching more tokens is more valuable than a perfect match on fewer tokens
-  const coverageBonus = Math.round(coverageRatio * 3000);
+  // Scale by quality factor so poor matches don't get full bonuses
+  const coverageBonus = Math.round(coverageRatio * 3000 * qualityFactor);
   
   // Bonus for matching more of the target
   // Max bonus of 1000 points for complete match
-  const completenessBonus = Math.round(completenessRatio * 1000);
+  // Scale by quality factor
+  const completenessBonus = Math.round(completenessRatio * 1000 * qualityFactor);
+  
+  // TARGET COVERAGE PENALTY: When the query only covers a small portion of a long target,
+  // apply a penalty. This ensures that matching "open" against "Open" (4/4 = 100%) scores
+  // much higher than matching "open" against a 100-char comment (4/100 = 4%).
+  // 
+  // Penalty scales with how much of the target is NOT covered:
+  // - 100% coverage (query covers full target) → no penalty
+  // - 50% coverage → -1500 penalty
+  // - 10% coverage → -2700 penalty
+  // - 4% coverage (e.g., 4 chars in 100 char string) → -2880 penalty
+  // 
+  // Only apply penalty when target is significantly longer than query (> 2x)
+  // to avoid penalizing normal fuzzy matches against similar-length strings.
+  const targetCoveragePenalty = targetLength > queryLength * 2
+    ? Math.round((1 - completenessRatio) * -3000)
+    : 0;
   
   // Additional bonus if this is the full query AND it's a good match
   const fullQueryBonus = ngram.isFullQuery && baseScore >= -1000 ? 500 : 0;
@@ -315,7 +461,7 @@ function adjustScoreForCoverage(
   // Scale exact match bonus by coverage: exact match on 1 of 2 tokens = 1500, on 2 of 2 = 3000
   const exactMatchBonus = isExactMatch ? Math.round(3000 * coverageRatio) : 0;
   
-  const adjustedScore = baseScore + coverageBonus + completenessBonus + fullQueryBonus + exactMatchBonus;
+  const adjustedScore = baseScore + coverageBonus + completenessBonus + fullQueryBonus + exactMatchBonus + targetCoveragePenalty;
   
   return {
     rawScore: baseScore,
@@ -323,10 +469,90 @@ function adjustScoreForCoverage(
     completenessBonus,
     fullQueryBonus,
     exactMatchBonus,
+    targetCoveragePenalty,
     tokenCount: ngram.tokenCount,
     totalTokens: ngram.totalTokens,
     adjustedScore,
   };
+}
+
+/**
+ * Result of detecting a spread pattern in tokens
+ */
+interface SpreadPatternMatch {
+  /** The operator that this spread pattern represents */
+  operator: Operator;
+  /** Tokens between the start and separator keywords (first argument) */
+  arg1Tokens: Token[];
+  /** Tokens after the separator keyword (second argument) */
+  arg2Tokens: Token[];
+  /** The start keyword that was matched (e.g., "from") */
+  startKeyword: string;
+  /** The separator keyword that was matched (e.g., "to", "till") */
+  separatorKeyword: string;
+  /** Index of the start keyword token */
+  startIndex: number;
+  /** Index of the separator keyword token */
+  separatorIndex: number;
+}
+
+/**
+ * Detects spread patterns in tokens.
+ * 
+ * Spread patterns are operator expressions where keywords surround arguments:
+ * - "from yesterday to today" → between(yesterday, today)
+ * - "between 10 and 20" → between(10, 20)
+ * 
+ * @param tokens - The tokens to search
+ * @param operators - Array of operators that have spread patterns defined
+ * @returns Array of detected spread pattern matches
+ */
+function detectSpreadPatterns(
+  tokens: Token[],
+  operators: Array<{ id: Operator; spreadPatterns?: readonly import("./types/index.ts").SpreadPattern[] }>
+): SpreadPatternMatch[] {
+  const matches: SpreadPatternMatch[] = [];
+  
+  for (const op of operators) {
+    if (!op.spreadPatterns) continue;
+    
+    const startKeywords = getSpreadStartKeywords(op.spreadPatterns);
+    const separatorKeywords = getSpreadSeparatorKeywords(op.spreadPatterns);
+    
+    // Look for start keywords in tokens
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i]!;
+      if (!startKeywords.has(token.normalized)) continue;
+      
+      // Found a start keyword, now look for a separator keyword after it
+      for (let j = i + 1; j < tokens.length; j++) {
+        const sepToken = tokens[j]!;
+        if (!separatorKeywords.has(sepToken.normalized)) continue;
+        
+        // Found a separator, extract argument tokens
+        const arg1Tokens = tokens.slice(i + 1, j);
+        const arg2Tokens = tokens.slice(j + 1);
+        
+        // Only valid if we have at least some argument tokens
+        if (arg1Tokens.length > 0 || arg2Tokens.length > 0) {
+          matches.push({
+            operator: op.id,
+            arg1Tokens,
+            arg2Tokens,
+            startKeyword: token.normalized,
+            separatorKeyword: sepToken.normalized,
+            startIndex: i,
+            separatorIndex: j,
+          });
+        }
+        
+        // Only match the first separator for each start keyword
+        break;
+      }
+    }
+  }
+  
+  return matches;
 }
 
 /**
@@ -397,6 +623,8 @@ export function createFuzzyFilter(
     operatorTrie: createTrie<OperatorAliasEntry>(),
     valueTrie: createTrie<{ value: string; columnId: ColumnId; rowCount: number }>(),
     data: [],
+    dataVersion: 0,
+    contextCache: new Map(),
   };
 
   // Initialize operator trie with all operators and their aliases
@@ -405,9 +633,17 @@ export function createFuzzyFilter(
     state.operatorTrie.insert(op.id, { operator: op.id });
     state.operatorTrie.insert(op.label, { operator: op.id });
     
-    // Insert general aliases (no type restriction)
+    // Insert explicit aliases (no type restriction)
     for (const alias of op.aliases) {
       state.operatorTrie.insert(alias, { operator: op.id });
+    }
+    
+    // Insert expanded aliases from patterns (no type restriction)
+    if (op.aliasPatterns) {
+      const expandedAliases = expandAliasPatterns(op.aliasPatterns);
+      for (const alias of expandedAliases) {
+        state.operatorTrie.insert(alias, { operator: op.id });
+      }
     }
     
     // Insert type-specific aliases with their type restriction
@@ -469,6 +705,9 @@ export function createFuzzyFilter(
   function indexData(data: Array<Record<string, unknown>>): void {
     state.data = data;
     state.valueTrie = createTrie<{ value: string; columnId: ColumnId; rowCount: number }>();
+    // Increment version and clear cache on data change
+    state.dataVersion++;
+    state.contextCache.clear();
 
     if (!state.schema) return;
 
@@ -491,9 +730,19 @@ export function createFuzzyFilter(
     }
 
     // Build value trie
+    // Limit indexed values per column to top 100 most frequent for performance
+    // High-cardinality columns would otherwise explode the trie size
+    const MAX_VALUES_PER_COLUMN = 100;
+
     for (const col of getColumns(state.schema)) {
       const counts = valueCounts.get(col.id as string)!;
-      for (const [value, count] of counts) {
+
+      // Sort values by frequency and take top N
+      const sortedValues = [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, MAX_VALUES_PER_COLUMN);
+
+      for (const [value, count] of sortedValues) {
         // Insert value with metadata into trie
         state.valueTrie.insert(value, {
           value,
@@ -572,50 +821,101 @@ export function createFuzzyFilter(
       return match?.score ?? -Infinity;
     };
 
-    // Generate all possible assignments and find the one with highest total score
-    // Each slot can be assigned to at most one token, each token to at most one slot
-    let bestAssignment: Map<SlotType, number> = new Map();
-    let bestTotalScore = -Infinity;
+    // Use greedy assignment with exhaustive fallback for optimal performance.
+    // Greedy is O(n*m) where n=tokens, m=slots. Exhaustive is O(n!).
+    // For most inputs, greedy gives optimal or near-optimal results.
     
     const tokenIndices = classifications.map((_, i) => i);
     
-    // Recursive generator for all valid assignments
-    function findBestAssignment(
-      slotIndex: number,
-      usedTokens: Set<number>,
-      currentAssignment: Map<SlotType, number>,
-      currentScore: number
-    ): void {
-      // Base case: all slots considered
-      if (slotIndex >= slots.length) {
-        if (currentScore > bestTotalScore) {
-          bestTotalScore = currentScore;
-          bestAssignment = new Map(currentAssignment);
+    // Greedy assignment: for each slot, pick the best available token
+    function greedyAssignment(): { assignment: Map<SlotType, number>; score: number } {
+      const assignment = new Map<SlotType, number>();
+      const usedTokens = new Set<number>();
+      let totalScore = 0;
+      
+      for (const slot of slots) {
+        let bestTokenIdx = -1;
+        let bestScore = -Infinity;
+        
+        for (const tokenIdx of tokenIndices) {
+          if (usedTokens.has(tokenIdx)) continue;
+          const score = getScore(tokenIdx, slot);
+          if (score > bestScore) {
+            bestScore = score;
+            bestTokenIdx = tokenIdx;
+          }
         }
-        return;
+        
+        if (bestTokenIdx >= 0 && bestScore > -Infinity) {
+          assignment.set(slot, bestTokenIdx);
+          usedTokens.add(bestTokenIdx);
+          totalScore += bestScore;
+        }
       }
       
-      const slot = slots[slotIndex]!;
-      
-      // Option 1: Don't assign any token to this slot
-      findBestAssignment(slotIndex + 1, usedTokens, currentAssignment, currentScore);
-      
-      // Option 2: Try assigning each unused token to this slot
-      for (const tokenIdx of tokenIndices) {
-        if (usedTokens.has(tokenIdx)) continue;
-        
-        const score = getScore(tokenIdx, slot);
-        if (score === -Infinity) continue; // No match for this slot
-        
-        currentAssignment.set(slot, tokenIdx);
-        usedTokens.add(tokenIdx);
-        findBestAssignment(slotIndex + 1, usedTokens, currentAssignment, currentScore + score);
-        usedTokens.delete(tokenIdx);
-        currentAssignment.delete(slot);
-      }
+      return { assignment, score: totalScore };
     }
     
-    findBestAssignment(0, new Set(), new Map(), 0);
+    // Exhaustive assignment (fallback for edge cases)
+    function exhaustiveAssignment(): { assignment: Map<SlotType, number>; score: number } {
+      let bestAssignment = new Map<SlotType, number>();
+      let bestTotalScore = -Infinity;
+      
+      function findBest(
+        slotIndex: number,
+        usedTokens: Set<number>,
+        currentAssignment: Map<SlotType, number>,
+        currentScore: number
+      ): void {
+        if (slotIndex >= slots.length) {
+          if (currentScore > bestTotalScore) {
+            bestTotalScore = currentScore;
+            bestAssignment = new Map(currentAssignment);
+          }
+          return;
+        }
+        
+        const slot = slots[slotIndex]!;
+        
+        // Option 1: Don't assign any token to this slot
+        findBest(slotIndex + 1, usedTokens, currentAssignment, currentScore);
+        
+        // Option 2: Try assigning each unused token to this slot
+        for (const tokenIdx of tokenIndices) {
+          if (usedTokens.has(tokenIdx)) continue;
+          
+          const score = getScore(tokenIdx, slot);
+          if (score === -Infinity) continue;
+          
+          // Early pruning: if current + max possible remaining < best, skip
+          // Max possible remaining = sum of best scores for remaining slots
+          // (simplified: just check if this branch can beat best)
+          if (currentScore + score <= bestTotalScore - 3000) continue;
+          
+          currentAssignment.set(slot, tokenIdx);
+          usedTokens.add(tokenIdx);
+          findBest(slotIndex + 1, usedTokens, currentAssignment, currentScore + score);
+          usedTokens.delete(tokenIdx);
+          currentAssignment.delete(slot);
+        }
+      }
+      
+      findBest(0, new Set(), new Map(), 0);
+      return { assignment: bestAssignment, score: bestTotalScore };
+    }
+    
+    // Strategy: Try greedy first, use exhaustive only if greedy score is poor
+    // or if we have many tokens (where greedy might miss optimal assignment)
+    const greedy = greedyAssignment();
+    
+    // Use greedy result if it has good scores or if input is simple (≤2 tokens)
+    // For complex inputs with poor greedy scores, fall back to exhaustive
+    const useGreedy = 
+      tokens.length <= 2 || // Simple inputs: greedy is fine
+      greedy.score > -500 || // Good match: greedy is fine
+      tokens.length > 5; // Too many tokens: exhaustive is too slow
+    
+    const bestAssignment = useGreedy ? greedy.assignment : exhaustiveAssignment().assignment;
 
     // Build result from best assignment
     let column: ParsedInput["column"];
@@ -768,33 +1068,57 @@ export function createFuzzyFilter(
 
     // Compute the set of row indices that match all context filters
     // null means no filter context (use all rows)
+    // Uses caching to avoid recomputing for the same filter context
     let contextRowIndices: Set<number> | null = null;
+    let contextAvailableValues: ContextAvailableValues | null = null;
+
     if (filterContext && filterContext.length > 0) {
-      contextRowIndices = new Set<number>();
-      for (let i = 0; i < state.data.length; i++) {
-        const row = state.data[i]!;
-        let matchesAll = true;
-        for (const filter of filterContext) {
-          if (!filter.predicate(row)) {
-            matchesAll = false;
-            break;
+      // Generate cache key from filter context
+      const cacheKey = filterContext
+        .map((f) => `${f.columnId}:${f.operator}:${JSON.stringify(f.arguments)}`)
+        .sort()
+        .join("|");
+
+      const cached = state.contextCache.get(cacheKey);
+      if (cached && cached.dataVersion === state.dataVersion) {
+        // Cache hit
+        contextRowIndices = cached.rowIndices;
+        contextAvailableValues = cached.availableValues;
+      } else {
+        // Cache miss - compute and cache
+        contextRowIndices = new Set<number>();
+        for (let i = 0; i < state.data.length; i++) {
+          const row = state.data[i]!;
+          let matchesAll = true;
+          for (const filter of filterContext) {
+            if (!filter.predicate(row)) {
+              matchesAll = false;
+              break;
+            }
+          }
+          if (matchesAll) {
+            contextRowIndices.add(i);
           }
         }
-        if (matchesAll) {
-          contextRowIndices.add(i);
-        }
-      }
-    }
 
-    // Build the set of available values per column for context-aware suggestions
-    // null means no filter context (all values are available)
-    let contextAvailableValues: ContextAvailableValues | null = null;
-    if (contextRowIndices !== null) {
-      contextAvailableValues = buildContextAvailableValues(
-        contextRowIndices,
-        state.data,
-        state.schema
-      );
+        contextAvailableValues = buildContextAvailableValues(
+          contextRowIndices,
+          state.data,
+          state.schema
+        );
+
+        // Store in cache (limit cache size to prevent memory bloat)
+        if (state.contextCache.size >= 20) {
+          // Remove oldest entry (first in map)
+          const firstKey = state.contextCache.keys().next().value;
+          if (firstKey) state.contextCache.delete(firstKey);
+        }
+        state.contextCache.set(cacheKey, {
+          rowIndices: contextRowIndices,
+          availableValues: contextAvailableValues,
+          dataVersion: state.dataVersion,
+        });
+      }
     }
 
     const parsed = parse(query);
@@ -979,6 +1303,44 @@ export function createFuzzyFilter(
       if (mightBeDateExpression(fullQuery)) {
         const parsedDate = parseDate(fullQuery);
         if (parsedDate) {
+          // Create match metadata for the value (covers full query as a date expression)
+          const queryStart = tokens[0]?.start ?? 0;
+          const queryEnd = tokens[tokens.length - 1]?.end ?? fullQuery.length;
+          const isRangeDate = parsedDate.rangeStart && parsedDate.rangeEnd;
+          
+          // For range dates, create two value matches for start and end
+          // For single dates, create one value match
+          const dateMatchMetadata: MatchMetadata = isRangeDate
+            ? {
+                values: [
+                  {
+                    inputStart: queryStart,
+                    inputEnd: queryEnd,
+                    inputText: fullQuery,
+                    matchedTarget: formatDateForDisplay(parsedDate.rangeStart!),
+                    score: 0,
+                  },
+                  {
+                    inputStart: queryStart,
+                    inputEnd: queryEnd,
+                    inputText: fullQuery,
+                    matchedTarget: formatDateForDisplay(parsedDate.rangeEnd!),
+                    score: 0,
+                  },
+                ],
+              }
+            : {
+                values: [
+                  {
+                    inputStart: queryStart,
+                    inputEnd: queryEnd,
+                    inputText: fullQuery,
+                    matchedTarget: formatDateForDisplay(parsedDate.date),
+                    score: 0,
+                  },
+                ],
+              };
+          
           // Add suggestions for all date columns
           for (const col of getColumns(state.schema!)) {
             if (col.type === DataType.DATE) {
@@ -1001,7 +1363,8 @@ export function createFuzzyFilter(
                         5000, // Highest score - both arguments provided naturally
                         countForDateFilter(col.id, op.id, parsedDate, contextRowIndices),
                         undefined,
-                        contextRowIndices
+                        contextRowIndices,
+                        dateMatchMetadata
                       )
                     );
                   }
@@ -1022,11 +1385,161 @@ export function createFuzzyFilter(
                       4000, // High score for complete date filter (above incomplete operator matches)
                       countForDateFilter(col.id, op.id, parsedDate, contextRowIndices),
                       undefined,
-                      contextRowIndices
+                      contextRowIndices,
+                      dateMatchMetadata
                     )
                   );
                 }
               }
+            }
+          }
+        }
+      }
+
+      // Detect spread patterns like "from X to Y" or "between X and Y"
+      const spreadOperators = getAllOperators().filter(op => op.spreadPatterns);
+      const spreadMatches = detectSpreadPatterns(tokens, spreadOperators);
+      
+      for (const spreadMatch of spreadMatches) {
+        const arg1Text = spreadMatch.arg1Tokens.map(t => t.text).join(" ");
+        const arg2Text = spreadMatch.arg2Tokens.map(t => t.text).join(" ");
+        
+        // Try to parse each argument
+        // For dates
+        const arg1Date = arg1Text ? parseDate(arg1Text) : null;
+        const arg2Date = arg2Text ? parseDate(arg2Text) : null;
+        
+        // For numbers  
+        const arg1Num = arg1Text ? parseFloat(arg1Text) : NaN;
+        const arg2Num = arg2Text ? parseFloat(arg2Text) : NaN;
+        
+        // Check what columns this could apply to
+        for (const col of getColumns(state.schema!)) {
+          const opInfo = getOperator(spreadMatch.operator);
+          if (!opInfo.supportedTypes.includes(col.type)) continue;
+          
+          // Date columns
+          if (col.type === DataType.DATE && arg1Date && arg2Date) {
+            const key = `${col.id}:${spreadMatch.operator}:spread:${arg1Date.date.toISOString()}-${arg2Date.date.toISOString()}`;
+            if (!seenValues.has(key)) {
+              seenValues.add(key);
+              
+              // Create a combined ParsedDate for the range
+              const combinedParsedDate: ParsedDate = {
+                text: `${arg1Text} ${spreadMatch.separatorKeyword} ${arg2Text}`,
+                date: arg1Date.date,
+                isRange: true,
+                rangeStart: arg1Date.date,
+                rangeEnd: arg2Date.date,
+                consumedText: `${arg1Text} ${spreadMatch.separatorKeyword} ${arg2Text}`,
+              };
+              
+              // Build match metadata for the spread pattern values
+              const arg1Start = spreadMatch.arg1Tokens[0]?.start ?? 0;
+              const arg1End = spreadMatch.arg1Tokens[spreadMatch.arg1Tokens.length - 1]?.end ?? arg1Text.length;
+              const arg2Start = spreadMatch.arg2Tokens[0]?.start ?? 0;
+              const arg2End = spreadMatch.arg2Tokens[spreadMatch.arg2Tokens.length - 1]?.end ?? arg2Text.length;
+              
+              const spreadMatchMeta: MatchMetadata = {
+                values: [
+                  {
+                    inputStart: arg1Start,
+                    inputEnd: arg1End,
+                    inputText: arg1Text,
+                    matchedTarget: formatDateForDisplay(arg1Date.date),
+                    score: 0,
+                  },
+                  {
+                    inputStart: arg2Start,
+                    inputEnd: arg2End,
+                    inputText: arg2Text,
+                    matchedTarget: formatDateForDisplay(arg2Date.date),
+                    score: 0,
+                  },
+                ],
+              };
+              
+              suggestions.push(
+                createDateSuggestion(
+                  col,
+                  spreadMatch.operator,
+                  combinedParsedDate,
+                  5500, // Very high score - explicit spread pattern
+                  countForDateFilter(col.id, spreadMatch.operator, combinedParsedDate, contextRowIndices),
+                  undefined,
+                  contextRowIndices,
+                  spreadMatchMeta
+                )
+              );
+            }
+          }
+          
+          // Number columns
+          if (col.type === DataType.NUMBER && isFinite(arg1Num) && isFinite(arg2Num)) {
+            const key = `${col.id}:${spreadMatch.operator}:spread:${arg1Num}-${arg2Num}`;
+            if (!seenValues.has(key)) {
+              seenValues.add(key);
+              
+              // Sort to ensure correct order
+              const sorted = [arg1Num, arg2Num].sort((a, b) => a - b);
+              const args: HypothesisValueType[] = sorted.map(v => ({ kind: "number" as const, value: v }));
+              
+              // Build match metadata for the spread pattern
+              // Include the operator token, argument tokens, and separator token
+              const startToken = tokens[spreadMatch.startIndex]!;
+              const sepToken = tokens[spreadMatch.separatorIndex]!;
+              const numArg1Start = spreadMatch.arg1Tokens[0]?.start ?? 0;
+              const numArg1End = spreadMatch.arg1Tokens[spreadMatch.arg1Tokens.length - 1]?.end ?? arg1Text.length;
+              const numArg2Start = spreadMatch.arg2Tokens[0]?.start ?? 0;
+              const numArg2End = spreadMatch.arg2Tokens[spreadMatch.arg2Tokens.length - 1]?.end ?? arg2Text.length;
+              
+              const numSpreadMatchMeta: MatchMetadata = {
+                operator: {
+                  inputStart: startToken.start,
+                  inputEnd: startToken.end,
+                  inputText: startToken.text,
+                  matchedTarget: spreadMatch.operator,
+                  score: 0,
+                },
+                values: [
+                  {
+                    inputStart: numArg1Start,
+                    inputEnd: numArg1End,
+                    inputText: arg1Text,
+                    matchedTarget: String(sorted[0]),
+                    score: 0,
+                  },
+                  // Include separator token range in a value entry so it gets marked as covered
+                  {
+                    inputStart: sepToken.start,
+                    inputEnd: sepToken.end,
+                    inputText: sepToken.text,
+                    matchedTarget: spreadMatch.separatorKeyword,
+                    score: 0,
+                  },
+                  {
+                    inputStart: numArg2Start,
+                    inputEnd: numArg2End,
+                    inputText: arg2Text,
+                    matchedTarget: String(sorted[1]),
+                    score: 0,
+                  },
+                ],
+              };
+              
+              suggestions.push(
+                createSuggestion(
+                  col,
+                  spreadMatch.operator,
+                  args,
+                  5500, // Very high score - explicit spread pattern
+                  undefined,
+                  undefined,
+                  contextRowIndices,
+                  numSpreadMatchMeta,
+                  tokens
+                )
+              );
             }
           }
         }
@@ -1087,25 +1600,6 @@ export function createFuzzyFilter(
                   return contextAvailableValues.get(col.id)?.dates.has(val.getTime()) ?? false;
                 })
             : [];
-        
-        // Helper to convert primitive value to HypothesisValueType
-        const toArgValue = (val: number | Date): HypothesisValueType => {
-          if (typeof val === "number") {
-            return { kind: "number", value: val };
-          } else {
-            const dateText = val.toISOString();
-            return { 
-              kind: "date", 
-              value: val, 
-              parsed: { 
-                text: dateText, 
-                date: val, 
-                isRange: false, 
-                consumedText: dateText 
-              } 
-            };
-          }
-        };
 
         // If we have 2+ compatible values, prioritize variadic operators
         if (compatibleValues.length >= 2) {
@@ -1129,16 +1623,16 @@ export function createFuzzyFilter(
                   }
                   return (a as number) - (b as number);
                 });
-                suggestionArgs = sorted.map(toArgValue);
+                suggestionArgs = sorted.map(toHypothesisValue);
               } else {
                 // Operators like "in"/"nin" that accept any number of values
                 valuesUsed = compatibleValues.length;
-                suggestionArgs = compatibleValues.map(toArgValue);
+                suggestionArgs = compatibleValues.map(toHypothesisValue);
               }
             } else if (opInfo.requiresArgument) {
               // Single-value operator - uses first value
               valuesUsed = 1;
-              suggestionArgs = [toArgValue(compatibleValues[0]!)];
+              suggestionArgs = [toHypothesisValue(compatibleValues[0]!)];
             }
             
             // Check if this operator was also matched in the input
@@ -1188,7 +1682,7 @@ export function createFuzzyFilter(
         } else if (compatibleValues.length === 1) {
           // Single value - suggest operators with that value
           const firstVal = compatibleValues[0]!;
-          const argValue = toArgValue(firstVal);
+          const argValue = toHypothesisValue(firstVal);
           
           for (const op of ops.slice(0, 5)) {
             const opInfo = getOperator(op.id);
@@ -1364,26 +1858,7 @@ export function createFuzzyFilter(
       
       // Detect numeric and date values from tokens not used for operator matching
       const operatorDetectedValues = detectValueTokens(tokens, usedForOperator);
-      
-      // Helper to convert primitive value to HypothesisValueType for operator suggestions
-      const opToArgValue = (val: number | Date): HypothesisValueType => {
-        if (typeof val === "number") {
-          return { kind: "number", value: val };
-        } else {
-          const dateText = val.toISOString();
-          return { 
-            kind: "date", 
-            value: val, 
-            parsed: { 
-              text: dateText, 
-              date: val, 
-              isRange: false, 
-              consumedText: dateText 
-            } 
-          };
-        }
-      };
-      
+
       for (const [_key, { breakdown: opBreakdown, operator, forType, matchedAlias, ngram: opNgram, matchedTarget: opMatchedTarget, matchIndexes: opMatchIndexes }] of operatorScores) {
         const opInfo = getOperator(operator);
         for (const col of getColumns(state.schema!)) {
@@ -1486,21 +1961,21 @@ export function createFuzzyFilter(
                         }
                         return (a as number) - (b as number);
                       });
-                      suggestionArgs = sorted.map(opToArgValue);
+                      suggestionArgs = sorted.map(toHypothesisValue);
                     } else if (compatibleValues.length === 1) {
                       // Single value - show partial progress
                       valuesUsed = 1;
-                      suggestionArgs = [opToArgValue(compatibleValues[0]!)];
+                      suggestionArgs = [toHypothesisValue(compatibleValues[0]!)];
                     }
                   } else {
                     // Operators like "in"/"nin" that accept any number of values (min 1)
                     valuesUsed = compatibleValues.length;
-                    suggestionArgs = compatibleValues.map(opToArgValue);
+                    suggestionArgs = compatibleValues.map(toHypothesisValue);
                   }
                 } else {
                   // Single-value operator - uses first value
                   valuesUsed = 1;
-                  suggestionArgs = [opToArgValue(compatibleValues[0]!)];
+                  suggestionArgs = [toHypothesisValue(compatibleValues[0]!)];
                 }
                 
                 if (valuesUsed > 0 && suggestionArgs) {
@@ -1697,6 +2172,56 @@ export function createFuzzyFilter(
               const parsedDate = parseDate(valueQuery);
               
               if (parsedDate) {
+                // Build match metadata for column, operator, and value
+                const colToken = parsed.column!.token;
+                const opToken = parsed.operator!.token;
+                const valueStart = valueTokens[0]?.start ?? 0;
+                const valueEnd = valueTokens[valueTokens.length - 1]?.end ?? valueQuery.length;
+                const isRangeDate = parsedDate.rangeStart && parsedDate.rangeEnd && opInfo.isVariadic;
+                
+                const dateMatchMeta: MatchMetadata = {
+                  column: {
+                    inputStart: colToken.start,
+                    inputEnd: colToken.end,
+                    inputText: colToken.text,
+                    matchedTarget: col.name,
+                    score: parsed.column!.match.score,
+                  },
+                  operator: {
+                    inputStart: opToken.start,
+                    inputEnd: opToken.end,
+                    inputText: opToken.text,
+                    matchedTarget: opInfo.label,
+                    score: parsed.operator!.match.score,
+                  },
+                  values: isRangeDate
+                    ? [
+                        {
+                          inputStart: valueStart,
+                          inputEnd: valueEnd,
+                          inputText: valueQuery,
+                          matchedTarget: formatDateForDisplay(parsedDate.rangeStart!),
+                          score: 0,
+                        },
+                        {
+                          inputStart: valueStart,
+                          inputEnd: valueEnd,
+                          inputText: valueQuery,
+                          matchedTarget: formatDateForDisplay(parsedDate.rangeEnd!),
+                          score: 0,
+                        },
+                      ]
+                    : [
+                        {
+                          inputStart: valueStart,
+                          inputEnd: valueEnd,
+                          inputText: valueQuery,
+                          matchedTarget: formatDateForDisplay(parsedDate.date),
+                          score: 0,
+                        },
+                      ],
+                };
+                
                 // Add date suggestion with parsed date value
                 const key = `${col.id}:${op}:date:${parsedDate.date.toISOString()}`;
                 if (!seenValues.has(key)) {
@@ -1709,7 +2234,8 @@ export function createFuzzyFilter(
                       4500, // High score for complete date filter with explicit column/operator
                       countForDateFilter(col.id, op, parsedDate, contextRowIndices),
                       undefined,
-                      contextRowIndices
+                      contextRowIndices,
+                      dateMatchMeta
                     )
                   );
                 }
@@ -1749,6 +2275,26 @@ export function createFuzzyFilter(
               }
             } else {
               // No value tokens yet - suggest common date phrases
+              // Build match metadata for column and operator only (no value input yet)
+              const colToken = parsed.column!.token;
+              const opToken = parsed.operator!.token;
+              const colOpMatchMeta: MatchMetadata = {
+                column: {
+                  inputStart: colToken.start,
+                  inputEnd: colToken.end,
+                  inputText: colToken.text,
+                  matchedTarget: col.name,
+                  score: parsed.column!.match.score,
+                },
+                operator: {
+                  inputStart: opToken.start,
+                  inputEnd: opToken.end,
+                  inputText: opToken.text,
+                  matchedTarget: opInfo.label,
+                  score: parsed.operator!.match.score,
+                },
+              };
+              
               for (const dateSuggestion of COMMON_DATE_SUGGESTIONS) {
                 const parsedDate = parseDate(dateSuggestion.text);
                 if (parsedDate) {
@@ -1763,7 +2309,8 @@ export function createFuzzyFilter(
                         parsed.column.match.score,
                         countForDateFilter(col.id, op, parsedDate, contextRowIndices),
                         dateSuggestion.label,
-                        contextRowIndices
+                        contextRowIndices,
+                        colOpMatchMeta
                       )
                     );
                   }
@@ -1776,6 +2323,8 @@ export function createFuzzyFilter(
               // For variadic operators (in, nin), search for EACH value token separately
               // and combine results into a multi-value suggestion
               if (opInfo.isVariadic && valueTokens.length >= 1) {
+                // Track which token matched which value for proper highlighting
+                const tokenMatchInfo: Array<{ token: Token; matchedValue: string; score: number } | null> = [];
                 const matchedValues: Array<{ value: string; score: number }> = [];
                 
                 for (const valueToken of valueTokens) {
@@ -1790,10 +2339,18 @@ export function createFuzzyFilter(
                   // Find best match for this token that belongs to the current column
                   const bestMatch = filteredMatches.find(m => m.value.columnId === col.id);
                   if (bestMatch) {
-                    // Avoid duplicates
+                    // Track this token's match for highlighting
+                    tokenMatchInfo.push({ 
+                      token: valueToken, 
+                      matchedValue: bestMatch.value.value, 
+                      score: bestMatch.score 
+                    });
+                    // Avoid duplicates in the final values list
                     if (!matchedValues.some(v => v.value === bestMatch.value.value)) {
                       matchedValues.push({ value: bestMatch.value.value, score: bestMatch.score });
                     }
+                  } else {
+                    tokenMatchInfo.push(null);
                   }
                 }
                 
@@ -1812,6 +2369,37 @@ export function createFuzzyFilter(
                   const args: HypothesisValueType[] = matchedValues.map(v => ({ kind: "string", value: v.value }));
                   const key = `${col.id}:${op}:${matchedValues.map(v => v.value).join(",")}`;
                   
+                  // Build match metadata for highlighting - only include tokens that matched
+                  const colToken = parsed.column!.token;
+                  const opToken = parsed.operator!.token;
+                  const valueMatchEntries = tokenMatchInfo
+                    .filter((info): info is { token: Token; matchedValue: string; score: number } => info !== null)
+                    .map(info => ({
+                      inputStart: info.token.start,
+                      inputEnd: info.token.end,
+                      inputText: info.token.text,
+                      matchedTarget: info.matchedValue,
+                      score: info.score,
+                    }));
+                  
+                  const matchMeta: MatchMetadata = {
+                    column: {
+                      inputStart: colToken.start,
+                      inputEnd: colToken.end,
+                      inputText: colToken.text,
+                      matchedTarget: col.name,
+                      score: colScore,
+                    },
+                    operator: {
+                      inputStart: opToken.start,
+                      inputEnd: opToken.end,
+                      inputText: opToken.text,
+                      matchedTarget: op,
+                      score: opScore,
+                    },
+                    values: valueMatchEntries,
+                  };
+                  
                   if (!seenValues.has(key)) {
                     seenValues.add(key);
                     suggestions.push(
@@ -1823,7 +2411,7 @@ export function createFuzzyFilter(
                         undefined,
                         undefined,
                         contextRowIndices,
-                        undefined,
+                        matchMeta,
                         tokens
                       )
                     );
@@ -1932,74 +2520,47 @@ export function createFuzzyFilter(
       const hasColumnMatches = columnScores.size > 0;
       const hasOperatorMatches = operatorScores.size > 0;
       
-      // DEBUG: Uncomment to trace why Strategy 3 might not run
-      // console.log(`[Strategy 3] hasColumnMatches=${hasColumnMatches}, hasOperatorMatches=${hasOperatorMatches}, tokens=${tokens.length}`);
-      // console.log(`[Strategy 3] columnScores:`, [...columnScores.keys()]);
-      // console.log(`[Strategy 3] operatorScores:`, [...operatorScores.keys()]);
-      
       if (!hasColumnMatches && !hasOperatorMatches && tokens.length >= 1) {
         // Detect all potential argument values from tokens
         const allDetectedValues = detectValueTokens(tokens, new Set());
         
-        // For variadic operators, we need best-match-per-token logic:
-        // Each token should contribute at most ONE value (the best match for that token).
-        // This prevents "hello world" from matching 5 "Hello*" values via the "hello" token.
+        // For variadic operators, we need position-based deduplication:
+        // Each character position in the input can only be "spent" once.
+        // This prevents overlapping ngrams from independently contributing values.
+        // For example, "insert autus sorder" generates ngrams like "insert", "autus", 
+        // "insert autus", etc. - these overlap and should compete for the same positions.
         
-        // Step 1: Group value matches by source token
-        const valuesBySourceToken = new Map<string, Map<ColumnId, { value: string; score: number }[]>>();
-        for (const [_key, { match, breakdown, sourceTokenText }] of valueScores) {
-          if (!valuesBySourceToken.has(sourceTokenText)) {
-            valuesBySourceToken.set(sourceTokenText, new Map());
+        // Step 1: Collect ALL value matches per column with their ngram positions
+        const allMatchesByColumn = new Map<ColumnId, PositionedValueMatch[]>();
+        for (const [_key, { match, breakdown, ngram }] of valueScores) {
+          if (!allMatchesByColumn.has(match.value.columnId)) {
+            allMatchesByColumn.set(match.value.columnId, []);
           }
-          const tokenMap = valuesBySourceToken.get(sourceTokenText)!;
-          if (!tokenMap.has(match.value.columnId)) {
-            tokenMap.set(match.value.columnId, []);
-          }
-          tokenMap.get(match.value.columnId)!.push({ 
-            value: match.value.value, 
-            score: breakdown.adjustedScore 
+          allMatchesByColumn.get(match.value.columnId)!.push({
+            value: match.value.value,
+            score: breakdown.adjustedScore,
+            ngram,
           });
         }
         
-        // Step 2: For each token, keep only the best match per column
-        // stringValueMatches will contain at most one value per source token per column
-        const stringValueMatches: Map<ColumnId, string[]> = new Map();
-        for (const [_sourceToken, columnMatches] of valuesBySourceToken) {
-          for (const [columnId, matches] of columnMatches) {
-            // Sort by score descending, take the best
-            matches.sort((a, b) => b.score - a.score);
-            const bestMatch = matches[0];
-            if (bestMatch) {
-              const existing = stringValueMatches.get(columnId) || [];
-              // Avoid duplicates if the same value was matched by different tokens
-              if (!existing.includes(bestMatch.value)) {
-                existing.push(bestMatch.value);
-                stringValueMatches.set(columnId, existing);
-              }
+        // Step 2: For each column, select non-overlapping matches
+        // This ensures each input position contributes to at most one value
+        const stringValueMatches: Map<ColumnId, PositionedValueMatch[]> = new Map();
+        for (const [columnId, matches] of allMatchesByColumn) {
+          const nonOverlapping = selectNonOverlappingMatches(matches);
+          // Deduplicate by value (same value matched by different non-overlapping ngrams)
+          const seen = new Set<string>();
+          const dedupedMatches: PositionedValueMatch[] = [];
+          for (const m of nonOverlapping) {
+            if (!seen.has(m.value)) {
+              seen.add(m.value);
+              dedupedMatches.push(m);
             }
           }
-        }
-        
-        // Helper to convert primitive value to HypothesisValueType
-        const toArgValue = (val: number | Date | string): HypothesisValueType => {
-          if (typeof val === "number") {
-            return { kind: "number", value: val };
-          } else if (val instanceof Date) {
-            const dateText = val.toISOString();
-            return { 
-              kind: "date", 
-              value: val, 
-              parsed: { 
-                text: dateText, 
-                date: val, 
-                isRange: false, 
-                consumedText: dateText 
-              } 
-            };
-          } else {
-            return { kind: "string", value: val };
+          if (dedupedMatches.length > 0) {
+            stringValueMatches.set(columnId, dedupedMatches);
           }
-        };
+        }
         
         // Generate suggestions for numeric columns when we have numeric tokens
         if (allDetectedValues.numbers.length >= 1) {
@@ -2037,16 +2598,16 @@ export function createFuzzyFilter(
                     valuesUsed = 2;
                     // Sort values to ensure start < end
                     const sorted = [...numValues].slice(0, 2).sort((a, b) => a - b);
-                    suggestionArgs = sorted.map(v => toArgValue(v));
+                    suggestionArgs = sorted.map(v => toHypothesisValue(v));
                   } else {
                     // Operators like "in"/"nin" that accept any number of values
                     valuesUsed = numValues.length;
-                    suggestionArgs = numValues.map(v => toArgValue(v));
+                    suggestionArgs = numValues.map(v => toHypothesisValue(v));
                   }
                 } else if (opInfo.requiresArgument) {
                   // Single-value operator - uses first value
                   valuesUsed = 1;
-                  suggestionArgs = [toArgValue(numValues[0]!)];
+                  suggestionArgs = [toHypothesisValue(numValues[0]!)];
                 }
                 
                 if (valuesUsed > 0) {
@@ -2075,7 +2636,7 @@ export function createFuzzyFilter(
                 suggestions.push(createSuggestion(
                   col, 
                   op.id, 
-                  [toArgValue(numVal)], 
+                  [toHypothesisValue(numVal)], 
                   baseScore + 1500, // Full coverage bonus
                   undefined, 
                   undefined, 
@@ -2119,15 +2680,15 @@ export function createFuzzyFilter(
                     // Operators like "between" that need exactly 2 values
                     valuesUsed = 2;
                     const sorted = [...dateValues].slice(0, 2).sort((a, b) => a.getTime() - b.getTime());
-                    suggestionArgs = sorted.map(v => toArgValue(v));
+                    suggestionArgs = sorted.map(v => toHypothesisValue(v));
                   } else {
                     // Operators that accept any number of values
                     valuesUsed = dateValues.length;
-                    suggestionArgs = dateValues.map(v => toArgValue(v));
+                    suggestionArgs = dateValues.map(v => toHypothesisValue(v));
                   }
                 } else if (opInfo.requiresArgument) {
                   valuesUsed = 1;
-                  suggestionArgs = [toArgValue(dateValues[0]!)];
+                  suggestionArgs = [toHypothesisValue(dateValues[0]!)];
                 }
                 
                 if (valuesUsed > 0) {
@@ -2155,7 +2716,7 @@ export function createFuzzyFilter(
                 suggestions.push(createSuggestion(
                   col, 
                   op.id, 
-                  [toArgValue(dateVal)], 
+                  [toHypothesisValue(dateVal)], 
                   baseScore + 1500,
                   undefined, 
                   undefined, 
@@ -2168,27 +2729,35 @@ export function createFuzzyFilter(
         
         // Generate suggestions for string/enum columns when we have indexed value matches
         // Group by column and generate in/eq suggestions
-        for (const [columnId, values] of stringValueMatches) {
+        for (const [columnId, valueMatches] of stringValueMatches) {
           const col = getColumnById(columnId);
           if (!col || (col.type !== DataType.STRING && col.type !== DataType.ENUM)) continue;
-          
-          const baseScore = 1500;
-          
-          // DEBUG: Uncomment to trace value matches
-          // console.log(`[Strategy 3] Column ${columnId} has ${values.length} values from ${tokens.length} tokens:`, values);
-          
-          if (values.length >= 2) {
-            // Multiple values matched for same column: suggest "in" operator
+
+          if (valueMatches.length >= 2) {
+            // Multiple values matched for same column: suggest "in" and "nin" operators
+            // Score higher than single-value suggestions since we explain more of the query
             const ops = getOperatorsForType(col.type);
-            const inOp = ops.find(op => op.id === "in");
+            const variadicOps = ops.filter(op => {
+              const opInfo = getOperator(op.id);
+              return opInfo.isVariadic && (opInfo.minArguments ?? 1) === 1;
+            });
             
-            if (inOp) {
-              const argumentCoverageBonus = Math.round((values.length / tokens.length) * 1500);
+            // Use scores from the non-overlapping matches directly
+            const avgValueScore = valueMatches.reduce((sum, v) => sum + v.score, 0) / valueMatches.length;
+            
+            // Multi-value bonus: each additional value explained is worth more
+            const multiValueBonus = valueMatches.length * 1500;
+            // Coverage bonus: how much of the query tokens we've explained
+            const coverageBonus = Math.round((valueMatches.length / tokens.length) * 2000);
+            
+            const combinedScore = avgValueScore + multiValueBonus + coverageBonus;
+            
+            for (const op of variadicOps) {
               suggestions.push(createSuggestion(
                 col,
-                "in",
-                values.map(v => toArgValue(v)),
-                baseScore + argumentCoverageBonus,
+                op.id,
+                valueMatches.map(v => toHypothesisValue(v.value)),
+                combinedScore,
                 undefined,
                 undefined,
                 contextRowIndices
@@ -2196,6 +2765,227 @@ export function createFuzzyFilter(
             }
           }
           // Note: Single string value matches are already handled by the valueScores loop above
+        }
+      }
+      
+      // =========================================================================
+      // Strategy 3.5: Column-matched multi-value aggregation (without explicit operator)
+      // When a column IS matched AND multiple string values match for that column,
+      // but NO explicit operator is matched, generate variadic suggestions (in, nin)
+      // that use ALL matching values.
+      // This handles queries like "status open closed" where:
+      // - "status" matches the Status column
+      // - "open" and "closed" match string values for that column
+      // - We should suggest "Status in [Open, Closed]" and "Status nin [Open, Closed]"
+      // Note: When an operator IS explicitly matched (e.g., "status in open closed"),
+      // Strategy 4 handles the multi-value aggregation instead.
+      // =========================================================================
+      if (hasColumnMatches && valueScores.size > 0 && !hasOperatorMatches) {
+        // Collect ALL value matches per column with their ngram positions
+        const allValueMatchesByColumn = new Map<ColumnId, PositionedValueMatch[]>();
+        for (const [_key, { match, breakdown, ngram: valNgram }] of valueScores) {
+          if (!allValueMatchesByColumn.has(match.value.columnId)) {
+            allValueMatchesByColumn.set(match.value.columnId, []);
+          }
+          allValueMatchesByColumn.get(match.value.columnId)!.push({
+            value: match.value.value,
+            score: breakdown.adjustedScore,
+            ngram: valNgram,
+          });
+        }
+        
+        // For each column that has a column match, aggregate values using position-based deduplication
+        for (const [colId, colEntry] of columnScores) {
+          const col = getColumnById(colId as ColumnId);
+          if (!col || (col.type !== DataType.STRING && col.type !== DataType.ENUM)) continue;
+          
+          const matchesForCol = allValueMatchesByColumn.get(col.id);
+          if (!matchesForCol || matchesForCol.length === 0) continue;
+          
+          // Exclude the column's input positions from value matching
+          // (those positions are "used" by the column match)
+          const excludedPositions = [{ start: colEntry.ngram.inputStart, end: colEntry.ngram.inputEnd }];
+          
+          // Select non-overlapping value matches (excluding column positions)
+          const nonOverlapping = selectNonOverlappingMatches(matchesForCol, excludedPositions);
+          
+          // Deduplicate by value
+          const seenValueStrings = new Set<string>();
+          const aggregatedValues: PositionedValueMatch[] = [];
+          for (const m of nonOverlapping) {
+            if (!seenValueStrings.has(m.value)) {
+              seenValueStrings.add(m.value);
+              aggregatedValues.push(m);
+            }
+          }
+          
+          // Only generate multi-value suggestions if we have 2+ values
+          if (aggregatedValues.length >= 2) {
+            const ops = getOperatorsForType(col.type);
+            const variadicOps = ops.filter(op => {
+              const opInfo = getOperator(op.id);
+              return opInfo.isVariadic && (opInfo.minArguments ?? 1) === 1;
+            });
+            
+            for (const op of variadicOps) {
+              const args: HypothesisValueType[] = aggregatedValues.map(v => toHypothesisValue(v.value));
+              
+              // Calculate score: column score + average value scores + multi-value coverage bonus
+              const avgValueScore = aggregatedValues.reduce((sum, v) => sum + v.score, 0) / aggregatedValues.length;
+              // Big bonus for using multiple values - each additional value explained is worth more
+              const multiValueBonus = aggregatedValues.length * 1500;
+              // Coverage bonus: how much of the non-column tokens we've explained
+              const nonColTokenCount = Math.max(1, tokens.length - 1); // Assume 1 token used for column
+              const valueCoverage = aggregatedValues.length / nonColTokenCount;
+              const coverageBonus = Math.round(valueCoverage * 2000);
+              
+              const combinedScore = colEntry.breakdown.adjustedScore + avgValueScore + multiValueBonus + coverageBonus;
+              
+              // Build match metadata
+              const matchMeta: MatchMetadata = {
+                column: {
+                  inputStart: colEntry.ngram.inputStart,
+                  inputEnd: colEntry.ngram.inputEnd,
+                  inputText: colEntry.ngram.text,
+                  matchedTarget: colEntry.matchedTarget,
+                  matchIndexes: colEntry.matchIndexes,
+                  score: colEntry.breakdown.rawScore,
+                },
+                values: aggregatedValues.map(v => ({
+                  inputStart: v.ngram.inputStart,
+                  inputEnd: v.ngram.inputEnd,
+                  inputText: v.ngram.text,
+                  matchedTarget: v.value,
+                  score: v.score,
+                })),
+              };
+              
+              const key = `${col.id}:${op.id}:${aggregatedValues.map(v => v.value).join(",")}`;
+              if (!seenValues.has(key)) {
+                seenValues.add(key);
+                suggestions.push(
+                  createSuggestion(
+                    col,
+                    op.id,
+                    args,
+                    combinedScore,
+                    undefined,
+                    undefined,
+                    contextRowIndices,
+                    matchMeta,
+                    tokens
+                  )
+                );
+              }
+            }
+          }
+        }
+      }
+      
+      // =========================================================================
+      // Strategy 4: Operator-matched variadic value aggregation
+      // When an operator IS matched (e.g., "one of" → "in") but no column is matched,
+      // combine multiple string values for the same column into a multi-value suggestion.
+      // This handles queries like "one of open closed" where the operator is matched
+      // via an alias but we need to aggregate the values.
+      // =========================================================================
+      if (hasOperatorMatches && valueScores.size > 0) {
+        // Collect ALL value matches per column with their ngram positions
+        const allValueMatchesByColumnForOp = new Map<ColumnId, PositionedValueMatch[]>();
+        for (const [_key, { match, breakdown, ngram: valNgram }] of valueScores) {
+          if (!allValueMatchesByColumnForOp.has(match.value.columnId)) {
+            allValueMatchesByColumnForOp.set(match.value.columnId, []);
+          }
+          allValueMatchesByColumnForOp.get(match.value.columnId)!.push({
+            value: match.value.value,
+            score: breakdown.adjustedScore,
+            ngram: valNgram,
+          });
+        }
+        
+        // For each matched variadic operator, create combined suggestions
+        for (const [_opKey, { breakdown: opBreakdown, operator, matchedAlias, ngram: opNgram, matchedTarget: opMatchedTarget, matchIndexes: opMatchIndexes }] of operatorScores) {
+          const opInfo = getOperator(operator);
+          if (!opInfo.isVariadic) continue;
+          
+          // For each column, use position-based deduplication
+          for (const [colId, matchesForCol] of allValueMatchesByColumnForOp) {
+            const col = getColumnById(colId);
+            if (!col || !opInfo.supportedTypes.includes(col.type)) continue;
+            
+            // Check if column was also matched
+            const colMatchEntry = columnScores.get(col.id as string);
+            
+            // Exclude positions used by operator and column matches
+            const excludedPositions: Array<{ start: number; end: number }> = [
+              { start: opNgram.inputStart, end: opNgram.inputEnd },
+            ];
+            if (colMatchEntry) {
+              excludedPositions.push({ start: colMatchEntry.ngram.inputStart, end: colMatchEntry.ngram.inputEnd });
+            }
+            
+            // Select non-overlapping value matches
+            const nonOverlapping = selectNonOverlappingMatches(matchesForCol, excludedPositions);
+            
+            // Deduplicate by value
+            const seenValueStrings = new Set<string>();
+            const values: PositionedValueMatch[] = [];
+            for (const m of nonOverlapping) {
+              if (!seenValueStrings.has(m.value)) {
+                seenValueStrings.add(m.value);
+                values.push(m);
+              }
+            }
+            
+            if (values.length < 2) continue; // Need at least 2 values for variadic to make sense
+            
+            // Calculate combined score
+            const avgValScore = values.reduce((sum, v) => sum + v.score, 0) / values.length;
+            const valueCoverageBonus = Math.round((values.length / tokens.length) * 1000);
+            const combinedScore = opBreakdown.adjustedScore + avgValScore + valueCoverageBonus + 
+              (colMatchEntry ? colMatchEntry.breakdown.adjustedScore : 0);
+            
+            // Build match metadata
+            const matchMeta: MatchMetadata = {
+              column: colMatchEntry ? {
+                inputStart: colMatchEntry.ngram.inputStart,
+                inputEnd: colMatchEntry.ngram.inputEnd,
+                inputText: colMatchEntry.ngram.text,
+                matchedTarget: colMatchEntry.matchedTarget,
+                matchIndexes: colMatchEntry.matchIndexes,
+                score: colMatchEntry.breakdown.rawScore,
+              } : undefined,
+              operator: {
+                inputStart: opNgram.inputStart,
+                inputEnd: opNgram.inputEnd,
+                inputText: opNgram.text,
+                matchedTarget: opMatchedTarget,
+                matchIndexes: opMatchIndexes,
+                score: opBreakdown.rawScore,
+              },
+              values: values.map(v => ({
+                inputStart: v.ngram.inputStart,
+                inputEnd: v.ngram.inputEnd,
+                inputText: v.ngram.text,
+                matchedTarget: v.value,
+                score: v.score,
+              })),
+            };
+            
+            suggestions.push(
+              createSuggestion(
+                col,
+                operator,
+                values.map(v => toHypothesisValue(v.value)),
+                combinedScore,
+                undefined,
+                matchedAlias,
+                contextRowIndices,
+                matchMeta,
+                tokens
+              )
+            );
+          }
         }
       }
     }
@@ -2217,6 +3007,55 @@ export function createFuzzyFilter(
       config.maxSuggestions
     );
 
+    // Compute result counts only for the final limited suggestions (lazy evaluation)
+    // This avoids computing counts for suggestions that won't be shown
+    for (const suggestion of limitedSuggestions) {
+      if (suggestion.resultCount === -1) {
+        // Check if this is a date filter based on arguments
+        const firstArg = suggestion.arguments?.[0];
+        const hasDateArg = firstArg?.kind === "date";
+
+        if (hasDateArg) {
+          // For date filters, build ParsedDate from arguments
+          const firstDate = firstArg.value as Date;
+          const secondArg = suggestion.arguments?.[1];
+          const secondDate = secondArg?.kind === "date" ? (secondArg.value as Date) : undefined;
+
+          // Use parsed info from first arg, or construct one
+          const baseParsed = firstArg.parsed;
+          const parsedDate: ParsedDate = baseParsed
+            ? {
+                ...baseParsed,
+                // Override range if we have two date arguments
+                rangeStart: secondDate ? firstDate : baseParsed.rangeStart,
+                rangeEnd: secondDate || baseParsed.rangeEnd,
+              }
+            : {
+                text: "",
+                date: firstDate,
+                isRange: !!secondDate,
+                consumedText: "",
+                rangeStart: secondDate ? firstDate : undefined,
+                rangeEnd: secondDate,
+              };
+
+          suggestion.resultCount = countForDateFilter(
+            suggestion.column.id,
+            suggestion.operator,
+            parsedDate,
+            contextRowIndices
+          );
+        } else {
+          suggestion.resultCount = countForFilter(
+            suggestion.column.id,
+            suggestion.operator,
+            suggestion.arguments,
+            contextRowIndices
+          );
+        }
+      }
+    }
+
     return {
       query,
       cursorPosition: cursorPosition ?? query.length,
@@ -2235,6 +3074,66 @@ export function createFuzzyFilter(
     };
   }
 
+  /**
+   * Truncates a long value string to show the matched portion with ellipsis.
+   * Shows context around the matched portion within a max width.
+   * 
+   * @param value - The full value string
+   * @param matchedIndexes - The matched character indexes (from fuzzy matching)
+   * @param maxDisplayLength - Maximum display length (default: 30)
+   * @returns Truncated string with ellipsis, or undefined if no truncation needed
+   */
+  function truncateWithEllipsis(
+    value: string,
+    matchedIndexes?: readonly number[],
+    maxDisplayLength = 30
+  ): string | undefined {
+    // If value is short enough, no truncation needed
+    if (value.length <= maxDisplayLength) {
+      return undefined;
+    }
+    
+    // If no match indexes, truncate from the start
+    if (!matchedIndexes || matchedIndexes.length === 0) {
+      return value.slice(0, maxDisplayLength - 1) + "…";
+    }
+    
+    // Find the range of matched characters
+    const firstMatchIdx = Math.min(...matchedIndexes);
+    const lastMatchIdx = Math.max(...matchedIndexes);
+    const matchLength = lastMatchIdx - firstMatchIdx + 1;
+    
+    // Calculate padding around the match
+    const availableSpace = maxDisplayLength - matchLength - 2; // Reserve space for ellipses
+    const paddingBefore = Math.floor(availableSpace / 2);
+    const paddingAfter = Math.ceil(availableSpace / 2);
+    
+    // Calculate visible range
+    let start = Math.max(0, firstMatchIdx - paddingBefore);
+    let end = Math.min(value.length, lastMatchIdx + paddingAfter + 1);
+    
+    // Adjust if we're near the edges
+    if (start === 0) {
+      end = Math.min(value.length, maxDisplayLength - 1);
+    } else if (end === value.length) {
+      start = Math.max(0, value.length - maxDisplayLength + 1);
+    }
+    
+    // Build truncated string with ellipsis
+    const showStartEllipsis = start > 0;
+    const showEndEllipsis = end < value.length;
+    
+    let result = value.slice(start, end);
+    if (showStartEllipsis) {
+      result = "…" + result;
+    }
+    if (showEndEllipsis) {
+      result = result + "…";
+    }
+    
+    return result;
+  }
+
   function createSuggestion(
     column: AnyColumnDefinition,
     operator: Operator,
@@ -2242,7 +3141,7 @@ export function createFuzzyFilter(
     scoreOrBreakdown: number | ScoreBreakdown,
     resultCount?: number,
     matchedAlias?: string,
-    contextRowIndices: Set<number> | null = null,
+    _contextRowIndices: Set<number> | null = null,
     matchMetadata?: MatchMetadata,
     queryTokens?: Token[]
   ): FilterSuggestion {
@@ -2250,7 +3149,7 @@ export function createFuzzyFilter(
     
     // Format value text based on arguments
     let valueText = "";
-    const argumentParts: { text: string; highlight?: boolean }[] = [];
+    const argumentParts: { text: string; displayText?: string; highlight?: boolean }[] = [];
     
     if (args && args.length > 0) {
       const formattedValues = args.map(arg => {
@@ -2268,8 +3167,14 @@ export function createFuzzyFilter(
         valueText = formattedValues.join(", ");
       }
       
-      for (const val of formattedValues) {
-        argumentParts.push({ text: val });
+      // Create argument parts with truncation for long values
+      // Match each formatted value to its corresponding match metadata
+      for (let i = 0; i < formattedValues.length; i++) {
+        const val = formattedValues[i]!;
+        // Find the matching value in matchMetadata (if available)
+        const valueMatch = matchMetadata?.values?.find(v => v.matchedTarget === val);
+        const displayText = truncateWithEllipsis(val, valueMatch?.matchIndexes);
+        argumentParts.push({ text: val, displayText });
       }
     }
     
@@ -2344,10 +3249,13 @@ export function createFuzzyFilter(
         }
       }
       
-      // Calculate token coverage bonus (proportional, max 500 for full coverage)
-      // This acts as a tiebreaker - using more tokens is slightly better
+      // Calculate token coverage bonus (proportional, max 2500 for full coverage)
+      // This is a PRIMARY ranking factor - suggestions that explain more of the query
+      // should score significantly higher than those that leave tokens unexplained.
+      // For example, "Priority in 1 2 3" (all tokens used) should beat "Priority in 1"
+      // (leaves "2" and "3" unexplained) when the user types "in 1 2 3".
       const coverageRatio = coveredTokenIndices.size / queryTokens.length;
-      const tokenCoverageBonus = Math.round(coverageRatio * 500);
+      const tokenCoverageBonus = Math.round(coverageRatio * 2500);
       score += tokenCoverageBonus;
     }
     
@@ -2415,7 +3323,9 @@ export function createFuzzyFilter(
       column,
       operator,
       arguments: args,
-      resultCount: resultCount ?? countForFilter(column.id, operator, args, contextRowIndices),
+      // Defer count computation to post-processing (lazy evaluation)
+      // Use -1 as placeholder; counts are computed only for final suggestions
+      resultCount: resultCount ?? -1,
       score,
       scoreBreakdown,
       isComplete: !opInfo.requiresArgument || (
@@ -2513,6 +3423,29 @@ export function createFuzzyFilter(
         }
         return count;
       }
+
+      if (firstArg.kind === "date") {
+        let count = 0;
+        const targetDate = firstArg.value;
+        for (const row of rowsToCheck) {
+          const cellValue = row[columnId as string];
+          if (cellValue == null) continue;
+          const dateValue = cellValue instanceof Date ? cellValue : new Date(String(cellValue));
+          if (isNaN(dateValue.getTime())) continue;
+          switch (operator) {
+            case "eq": if (isSameDay(dateValue, targetDate)) count++; break;
+            case "neq": if (!isSameDay(dateValue, targetDate)) count++; break;
+            case "lt":
+            case "before": if (dateValue < targetDate) count++; break;
+            case "lte": if (dateValue <= targetDate || isSameDay(dateValue, targetDate)) count++; break;
+            case "gt":
+            case "after": if (dateValue > targetDate) count++; break;
+            case "gte": if (dateValue >= targetDate || isSameDay(dateValue, targetDate)) count++; break;
+            default: count++;
+          }
+        }
+        return count;
+      }
     }
 
     // Handle variadic operators (between, in, nin)
@@ -2578,7 +3511,8 @@ export function createFuzzyFilter(
     score: number,
     resultCount?: number,
     customLabel?: string,
-    contextRowIndices: Set<number> | null = null
+    _contextRowIndices: Set<number> | null = null,
+    matchMetadata?: MatchMetadata
   ): FilterSuggestion {
     const opInfo = getOperator(operator);
     
@@ -2616,6 +3550,43 @@ export function createFuzzyFilter(
         ]
       : [{ text: displayDate }];
 
+    // Build queryMatches array from match metadata
+    const queryMatches: QueryMatch[] = [];
+    if (matchMetadata) {
+      if (matchMetadata.column) {
+        queryMatches.push({
+          inputRange: { start: matchMetadata.column.inputStart, end: matchMetadata.column.inputEnd },
+          inputText: matchMetadata.column.inputText,
+          matchType: "column",
+          matchedTarget: matchMetadata.column.matchedTarget,
+          matchedCharIndexes: matchMetadata.column.matchIndexes ? [...matchMetadata.column.matchIndexes] : undefined,
+          score: matchMetadata.column.score,
+        });
+      }
+      if (matchMetadata.operator) {
+        queryMatches.push({
+          inputRange: { start: matchMetadata.operator.inputStart, end: matchMetadata.operator.inputEnd },
+          inputText: matchMetadata.operator.inputText,
+          matchType: "operator",
+          matchedTarget: matchMetadata.operator.matchedTarget,
+          matchedCharIndexes: matchMetadata.operator.matchIndexes ? [...matchMetadata.operator.matchIndexes] : undefined,
+          score: matchMetadata.operator.score,
+        });
+      }
+      if (matchMetadata.values) {
+        for (const val of matchMetadata.values) {
+          queryMatches.push({
+            inputRange: { start: val.inputStart, end: val.inputEnd },
+            inputText: val.inputText,
+            matchType: "value",
+            matchedTarget: val.matchedTarget,
+            matchedCharIndexes: val.matchIndexes ? [...val.matchIndexes] : undefined,
+            score: val.score,
+          });
+        }
+      }
+    }
+
     return {
       id: suggestionId,
       label,
@@ -2627,12 +3598,15 @@ export function createFuzzyFilter(
       column,
       operator,
       arguments: args,
-      resultCount: resultCount ?? countForDateFilter(column.id, operator, parsedDate, contextRowIndices),
+      // Defer count computation to post-processing (lazy evaluation)
+      // Use -1 as placeholder; counts are computed only for final suggestions
+      resultCount: resultCount ?? -1,
       score,
       isComplete: true,
       completionText,
       cursorPositionAfter: completionText.length,
       category: "fuzzy",
+      queryMatches: queryMatches.length > 0 ? queryMatches : undefined,
     };
   }
 

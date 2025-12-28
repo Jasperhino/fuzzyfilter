@@ -9,10 +9,11 @@ const apps = [
 ];
 
 /**
- * Helper to parse the result count from "X results" text
+ * Helper to parse the result count from text (just the number, e.g., "2,816")
  */
 function parseResultCount(text: string): number {
-  const match = text.match(/(\d[\d,]*)\s+results?/);
+  // The UI shows just the number with locale formatting (e.g., "2,816")
+  const match = text.match(/^([\d,]+)$/);
   if (!match) throw new Error(`Could not parse result count from: ${text}`);
   return parseInt(match[1].replace(/,/g, ""), 10);
 }

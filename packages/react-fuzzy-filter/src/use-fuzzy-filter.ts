@@ -33,6 +33,8 @@ export interface UseFuzzyFilterOptions {
 export interface UseFuzzyFilterReturn {
   /** Current query */
   query: string;
+  /** The query that the current suggestions were generated for (after debounce) */
+  suggestionsQuery: string;
   /** Current suggestions */
   suggestions: FilterSuggestion[];
   /** Loading state */
@@ -138,6 +140,7 @@ export function useFuzzyFilter(
 
   // State
   const [query, setQueryState] = useState(initialQuery);
+  const [suggestionsQuery, setSuggestionsQuery] = useState(initialQuery);
   const [suggestions, setSuggestions] = useState<FilterSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -168,6 +171,7 @@ export function useFuzzyFilter(
         // Pass filter context for stacked filter counts
         const response = await filter.suggest(q, undefined, filterContext);
         setSuggestions(response.suggestions);
+        setSuggestionsQuery(q);
         setSelectedIndex(0);
       } catch (err) {
         if (err instanceof Error && err.name !== "AbortError") {
@@ -251,6 +255,7 @@ export function useFuzzyFilter(
    */
   const reset = useCallback(() => {
     setQueryState("");
+    setSuggestionsQuery("");
     setSuggestions([]);
     setSelectedIndex(0);
     setError(null);
@@ -269,6 +274,7 @@ export function useFuzzyFilter(
 
   return {
     query,
+    suggestionsQuery,
     suggestions,
     isLoading,
     error,

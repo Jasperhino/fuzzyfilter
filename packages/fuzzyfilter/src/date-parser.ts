@@ -192,6 +192,77 @@ function calculateImpliedRange(text: string, referenceDate: Date): { start: Date
 }
 
 // ============================================================================
+// LRU CACHE FOR DATE PARSING
+// ============================================================================
+
+/**
+ * Simple LRU cache for date parsing results.
+ * Caches parsed dates to avoid repeated chrono-node calls for the same input.
+ */
+class DateParseCache {
+  private cache = new Map<string, { result: ParsedDate | null; timestamp: number }>();
+  private readonly maxSize: number;
+  private readonly maxAge: number; // ms
+
+  constructor(maxSize = 100, maxAgeMs = 60 * 60 * 1000) {
+    this.maxSize = maxSize;
+    this.maxAge = maxAgeMs;
+  }
+
+  /**
+   * Generates a cache key that includes the day to handle date-relative expressions.
+   * Cache is invalidated daily since "today" means different things on different days.
+   */
+  private getCacheKey(input: string, referenceDate?: Date): string {
+    const date = referenceDate ?? new Date();
+    const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    return `${input.toLowerCase().trim()}:${dayKey}`;
+  }
+
+  get(input: string, referenceDate?: Date): ParsedDate | null | undefined {
+    const key = this.getCacheKey(input, referenceDate);
+    const entry = this.cache.get(key);
+
+    if (!entry) return undefined;
+
+    // Check if entry is expired
+    if (Date.now() - entry.timestamp > this.maxAge) {
+      this.cache.delete(key);
+      return undefined;
+    }
+
+    // Move to end (most recently used) by deleting and re-adding
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+
+    return entry.result;
+  }
+
+  set(input: string, result: ParsedDate | null, referenceDate?: Date): void {
+    const key = this.getCacheKey(input, referenceDate);
+
+    // Evict oldest entries if at capacity
+    if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey) this.cache.delete(firstKey);
+    }
+
+    this.cache.set(key, { result, timestamp: Date.now() });
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  get size(): number {
+    return this.cache.size;
+  }
+}
+
+/** Global cache instance for date parsing */
+const dateParseCache = new DateParseCache();
+
+// ============================================================================
 // PUBLIC API
 // ============================================================================
 
@@ -274,15 +345,27 @@ export function parseDate(input: string, options?: DateParseOptions): ParsedDate
   }
 
   const referenceDate = options?.referenceDate ?? new Date();
+
+  // Check cache first (only for standard options)
+  if (!options?.forwardDate) {
+    const cached = dateParseCache.get(input, referenceDate);
+    if (cached !== undefined) {
+      return cached;
+    }
+  }
+
   const results = customChrono.parse(input, referenceDate, {
     forwardDate: options?.forwardDate ?? false,
   });
 
-  if (results.length === 0) {
-    return null;
+  const result = results.length === 0 ? null : toParsedDate(results[0]!, referenceDate);
+
+  // Cache the result (only for standard options)
+  if (!options?.forwardDate) {
+    dateParseCache.set(input, result, referenceDate);
   }
 
-  return toParsedDate(results[0]!, referenceDate);
+  return result;
 }
 
 /**

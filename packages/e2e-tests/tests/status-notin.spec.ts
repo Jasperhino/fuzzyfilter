@@ -34,20 +34,25 @@ for (const { name, url } of apps) {
       await filterInput.fill("status notin");
 
       // Wait for suggestions to appear
-      await page.waitForTimeout(300); // Debounce delay
+      await page.waitForTimeout(500); // Debounce delay
 
-      // Find the listbox with suggestions
-      const listbox = page.getByRole("listbox");
-      await expect(listbox).toBeVisible();
+      // Find suggestions using data-testid (works for both React and Vue)
+      const suggestions = page.locator('[data-testid^="suggestion-"]');
+      await expect(suggestions.first()).toBeVisible({ timeout: 5000 });
 
-      // Get the first suggestion option
-      const firstOption = listbox.getByRole("option").first();
-      await expect(firstOption).toBeVisible();
+      // Get the first suggestion
+      const firstSuggestion = suggestions.first();
 
-      // The first option should contain "Status" and "notIn" (the nin operator label)
-      const optionText = await firstOption.textContent();
-      expect(optionText).toContain("Status");
-      expect(optionText?.toLowerCase()).toContain("notin");
+      // The first suggestion should contain "Status" and "notIn" operator
+      const suggestionText = await firstSuggestion.textContent();
+      expect(suggestionText).toContain("Status");
+      // Check for either "notIn", "nin", or "not in" (case insensitive)
+      const lowerText = suggestionText?.toLowerCase() ?? "";
+      expect(
+        lowerText.includes("notin") ||
+          lowerText.includes("nin") ||
+          lowerText.includes("not in")
+      ).toBe(true);
     });
 
     test("'nin status' also shows Status nin as top suggestion", async ({
@@ -70,21 +75,20 @@ for (const { name, url } of apps) {
       await filterInput.fill("nin status");
 
       // Wait for suggestions to appear
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(500);
 
-      // Find the listbox with suggestions
-      const listbox = page.getByRole("listbox");
-      await expect(listbox).toBeVisible();
+      // Find suggestions using data-testid (works for both React and Vue)
+      const suggestions = page.locator('[data-testid^="suggestion-"]');
+      await expect(suggestions.first()).toBeVisible({ timeout: 5000 });
 
-      // Get the first suggestion option
-      const firstOption = listbox.getByRole("option").first();
-      await expect(firstOption).toBeVisible();
+      // Get the first suggestion
+      const firstSuggestion = suggestions.first();
 
-      // The first option should contain "Status" and the nin operator
-      const optionText = await firstOption.textContent();
-      expect(optionText).toContain("Status");
+      // The first suggestion should contain "Status" and the nin operator
+      const suggestionText = await firstSuggestion.textContent();
+      expect(suggestionText).toContain("Status");
       // Check for either "notIn", "nin", or "not in"
-      const lowerText = optionText?.toLowerCase() ?? "";
+      const lowerText = suggestionText?.toLowerCase() ?? "";
       expect(
         lowerText.includes("notin") ||
           lowerText.includes("nin") ||
@@ -112,18 +116,18 @@ for (const { name, url } of apps) {
       await filterInput.fill("status notin");
 
       // Wait for suggestions to appear
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(500);
 
-      // Find the listbox with suggestions
-      const listbox = page.getByRole("listbox");
-      await expect(listbox).toBeVisible();
+      // Find suggestions using data-testid (works for both React and Vue)
+      const suggestions = page.locator('[data-testid^="suggestion-"]');
+      await expect(suggestions.first()).toBeVisible({ timeout: 5000 });
 
-      // Get the first suggestion option
-      const firstOption = listbox.getByRole("option").first();
+      // Get the first suggestion
+      const firstSuggestion = suggestions.first();
 
       // Check that the score is high (> 5000) indicating both column and operator matched
       // The score element has a title with score breakdown
-      const scoreElement = firstOption.locator('[title*="Final Score"]');
+      const scoreElement = firstSuggestion.locator('[title*="Final Score"]');
       if ((await scoreElement.count()) > 0) {
         const title = await scoreElement.getAttribute("title");
         const scoreMatch = title?.match(/Final Score:\s*(\d+)/);

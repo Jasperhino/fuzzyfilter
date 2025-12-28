@@ -5,7 +5,7 @@
  */
 
 import { test, expect, describe, beforeEach } from "bun:test";
-import { createFuzzyFilter, columnId } from "./index.ts";
+import { createFuzzyFilter, columnId, DataType } from "./index.ts";
 import type { FuzzyFilter } from "./types/index.ts";
 import {
   TASK_SCHEMA,
@@ -190,6 +190,26 @@ describe("FuzzyFilter", () => {
       
       // Should have both Open and Closed as values
       const values = top?.arguments?.map(a => a.kind === 'string' ? a.value : null).filter(Boolean);
+      expect(values).toContain("Open");
+      expect(values).toContain("Closed");
+    });
+
+    test("suggest 'one of open closed' should show Status in [Open, Closed] (operator alias with multiple values)", async () => {
+      // "one of" is an alias for the "in" operator
+      // When typed without a column name, it should infer Status from the values
+      const response = await filter.suggest("one of open closed");
+      
+      // Find a suggestion that has both Open and Closed as values for Status column
+      const multiValueSuggestion = response.suggestions.find(s => 
+        s.column.name === "Status" && 
+        s.operator === "in" && 
+        s.arguments && 
+        s.arguments.length >= 2
+      );
+      
+      expect(multiValueSuggestion).toBeDefined();
+      
+      const values = multiValueSuggestion?.arguments?.map(a => a.kind === 'string' ? a.value : null).filter(Boolean);
       expect(values).toContain("Open");
       expect(values).toContain("Closed");
     });
@@ -1936,6 +1956,100 @@ describe("QueryMatch Highlighting", () => {
       expect(suggestion.queryMatches).toBeUndefined();
     }
   });
+
+  test("chrono date value includes queryMatches for value highlighting", async () => {
+    // Create a filter with a date column - use high maxSuggestions to ensure
+    // all suggestions are captured (some are generated from different code paths)
+    const dateFilter = createFuzzyFilter({ maxSuggestions: 50 });
+    dateFilter.setSchema({
+      columns: [
+        { id: columnId("created"), name: "Created", type: "date" },
+      ],
+    });
+    
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    dateFilter.indexData([
+      { created: yesterday.toISOString() },
+      { created: today.toISOString() },
+    ]);
+
+    // Using "created eq yesterday" to go through the column+operator+value path
+    const response = await dateFilter.suggest("created eq yesterday");
+    
+    // Find a date suggestion that has the value match (there may be multiple 
+    // Created eq suggestions from different code paths, we want the one with value queryMatch)
+    const suggestion = response.suggestions.find(
+      s => s.column.id === "created" && 
+           s.arguments?.[0]?.kind === "date" &&
+           s.queryMatches?.some(m => m.matchType === "value" && m.inputText === "yesterday")
+    );
+    expect(suggestion).toBeDefined();
+    
+    // Should have queryMatches
+    expect(suggestion?.queryMatches).toBeDefined();
+    expect(suggestion?.queryMatches?.length).toBeGreaterThan(0);
+    
+    // Should have a column match
+    const columnMatch = suggestion?.queryMatches?.find(m => m.matchType === "column");
+    expect(columnMatch).toBeDefined();
+    expect(columnMatch?.matchedTarget).toBe("Created");
+    expect(columnMatch?.inputText).toBe("created");
+    
+    // Should have an operator match
+    const opMatch = suggestion?.queryMatches?.find(m => m.matchType === "operator");
+    expect(opMatch).toBeDefined();
+    
+    // Should have a value match for the chrono-parsed date
+    const valueMatch = suggestion?.queryMatches?.find(m => m.matchType === "value");
+    expect(valueMatch).toBeDefined();
+    expect(valueMatch?.inputText).toBe("yesterday");
+    // The matchedTarget should be the formatted date (e.g., "Dec 27, 2025")
+    expect(valueMatch?.matchedTarget).toBeDefined();
+    expect(valueMatch?.matchedTarget.length).toBeGreaterThan(0);
+  });
+
+  test("standalone date expression like 'yesterday' includes queryMatches for value highlighting", async () => {
+    // Create a filter with a date column
+    const dateFilter = createFuzzyFilter({ maxSuggestions: 10 });
+    dateFilter.setSchema({
+      columns: [
+        { id: columnId("created"), name: "Created", type: "date" },
+      ],
+    });
+    
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    dateFilter.indexData([
+      { created: yesterday.toISOString() },
+      { created: today.toISOString() },
+    ]);
+
+    // Just type "yesterday" without column - should still match as a date value
+    const response = await dateFilter.suggest("yesterday");
+    
+    // Find a date suggestion
+    const suggestion = response.suggestions.find(
+      s => s.column.id === "created" && s.arguments?.[0]?.kind === "date"
+    );
+    expect(suggestion).toBeDefined();
+    
+    // Should have queryMatches with value type for the date
+    expect(suggestion?.queryMatches).toBeDefined();
+    const valueMatch = suggestion?.queryMatches?.find(m => m.matchType === "value");
+    expect(valueMatch).toBeDefined();
+    expect(valueMatch?.inputText).toBe("yesterday");
+    // The matchedTarget should be the formatted date (e.g., "Dec 27, 2025")
+    expect(valueMatch?.matchedTarget).toBeDefined();
+  });
 });
 
 describe("Complete vs Incomplete Suggestion Scoring", () => {
@@ -2130,6 +2244,530 @@ describe("Fuzzy multi-word operator matching", () => {
     
     // neq should be in the top suggestions
     expect(neqIndex).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("Alias Pattern Expansion", () => {
+  let filter: FuzzyFilter;
+
+  const sampleData = generateTestData(10) as unknown as Record<string, unknown>[];
+
+  beforeEach(() => {
+    filter = createFuzzyFilter({ maxSuggestions: 20 });
+    filter.setSchema(TASK_SCHEMA);
+    filter.indexData(sampleData);
+  });
+
+  test("'smaller than equals' matches lte via expanded pattern", async () => {
+    // This alias is generated from the pattern ["less", "than?", "or?", "equal"]
+    // with "smaller" as a synonym for "less"
+    const response = await filter.suggest("smaller than equal");
+    
+    const lteMatches = response.suggestions.filter(s => s.operator === "lte");
+    expect(lteMatches.length).toBeGreaterThan(0);
+  });
+
+  test("'under or eq' matches lte via expanded pattern", async () => {
+    // "under" is a synonym for "less", "or" is optional, "eq" is a synonym for "equal"
+    const response = await filter.suggest("under or eq");
+    
+    const lteMatches = response.suggestions.filter(s => s.operator === "lte");
+    expect(lteMatches.length).toBeGreaterThan(0);
+  });
+
+  test("'bigger than or equals' matches gte via expanded pattern", async () => {
+    // From pattern ["greater", "than?", "or?", "equal"]
+    // with "bigger" as a synonym for "greater"
+    const response = await filter.suggest("bigger than or equals");
+    
+    const gteMatches = response.suggestions.filter(s => s.operator === "gte");
+    expect(gteMatches.length).toBeGreaterThan(0);
+  });
+
+  test("'above or eq' matches gte via expanded pattern", async () => {
+    // "above" is a synonym for "greater"
+    const response = await filter.suggest("above or eq");
+    
+    const gteMatches = response.suggestions.filter(s => s.operator === "gte");
+    expect(gteMatches.length).toBeGreaterThan(0);
+  });
+
+  test("'begins with' matches startsWith via expanded pattern", async () => {
+    // From pattern ["starts", "with?"] with "begins" as synonym
+    const response = await filter.suggest("begins with");
+    
+    const startsWithMatches = response.suggestions.filter(s => s.operator === "startsWith");
+    expect(startsWithMatches.length).toBeGreaterThan(0);
+  });
+
+  test("'is not empty' matches isNotEmpty via expanded pattern", async () => {
+    // From pattern ["is?", "not", "empty"]
+    const response = await filter.suggest("is not empty");
+    
+    const isNotEmptyMatches = response.suggestions.filter(s => s.operator === "isNotEmpty");
+    expect(isNotEmptyMatches.length).toBeGreaterThan(0);
+  });
+
+  test("'not blank' matches isNotEmpty via expanded pattern", async () => {
+    // "blank" is a synonym for "empty"
+    const response = await filter.suggest("not blank");
+    
+    const isNotEmptyMatches = response.suggestions.filter(s => s.operator === "isNotEmpty");
+    expect(isNotEmptyMatches.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Spread Pattern Detection", () => {
+  let filter: FuzzyFilter;
+
+  beforeEach(() => {
+    filter = createFuzzyFilter({ maxSuggestions: 20 });
+    filter.setSchema({
+      columns: [
+        { id: columnId("createdAt"), name: "Created At", type: "date", aliases: ["created"] },
+        { id: columnId("amount"), name: "Amount", type: "number" },
+      ],
+    });
+    
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const twoDaysAgo = new Date(today);
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    
+    filter.indexData([
+      { createdAt: today.toISOString(), amount: 100 },
+      { createdAt: yesterday.toISOString(), amount: 200 },
+      { createdAt: twoDaysAgo.toISOString(), amount: 300 },
+    ]);
+  });
+
+  test("'from yesterday to today' generates between suggestion for date column", async () => {
+    const response = await filter.suggest("from yesterday to today");
+    
+    const betweenSuggestions = response.suggestions.filter(
+      s => s.operator === "between" && s.column.id === "createdAt"
+    );
+    
+    expect(betweenSuggestions.length).toBeGreaterThan(0);
+    expect(betweenSuggestions[0]?.arguments?.length).toBe(2);
+  });
+
+  test("'from yesterday till today' uses till as separator", async () => {
+    // "till" is a synonym for "to" in spread patterns
+    const response = await filter.suggest("from yesterday till today");
+    
+    const betweenSuggestions = response.suggestions.filter(
+      s => s.operator === "between" && s.column.id === "createdAt"
+    );
+    
+    expect(betweenSuggestions.length).toBeGreaterThan(0);
+  });
+
+  test("'from yesterday until today' uses until as separator", async () => {
+    // "until" is a synonym for "to" in spread patterns
+    const response = await filter.suggest("from yesterday until today");
+    
+    const betweenSuggestions = response.suggestions.filter(
+      s => s.operator === "between" && s.column.id === "createdAt"
+    );
+    
+    expect(betweenSuggestions.length).toBeGreaterThan(0);
+  });
+
+  test("'between 100 and 300' generates between suggestion for number column", async () => {
+    const response = await filter.suggest("between 100 and 300");
+    
+    const betweenSuggestions = response.suggestions.filter(
+      s => s.operator === "between" && s.column.id === "amount"
+    );
+    
+    expect(betweenSuggestions.length).toBeGreaterThan(0);
+    expect(betweenSuggestions[0]?.arguments?.length).toBe(2);
+    
+    // Check the arguments are correctly parsed
+    const args = betweenSuggestions[0]!.arguments!;
+    expect(args[0]?.kind).toBe("number");
+    expect(args[1]?.kind).toBe("number");
+    if (args[0]?.kind === "number" && args[1]?.kind === "number") {
+      expect([args[0].value, args[1].value].sort((a, b) => a - b)).toEqual([100, 300]);
+    }
+  });
+});
+
+// ============================================================================
+// MULTI-VALUE STRING AGGREGATION TESTS
+// ============================================================================
+describe("Multi-value string aggregation", () => {
+  /**
+   * Test that queries with multiple value tokens generate "in" operator suggestions
+   * For example: "status open closed" should suggest "Status in [Open, Closed]"
+   */
+  test("'status open closed' generates 'in' suggestion with both values", async () => {
+    const filter = createFuzzyFilter();
+    
+    filter.setSchema({
+      columns: [
+        { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed", "In Progress"] },
+        { id: columnId("priority"), name: "Priority", type: "number" },
+      ],
+    });
+    
+    filter.indexData([
+      { status: "Open", priority: 1 },
+      { status: "Closed", priority: 2 },
+      { status: "In Progress", priority: 3 },
+      { status: "Open", priority: 4 },
+      { status: "Closed", priority: 5 },
+    ]);
+    
+    const response = await filter.suggest("status open closed");
+    
+    // Find the "in" suggestion with both Open and Closed
+    const inSuggestion = response.suggestions.find(
+      s => s.column.id === "status" && 
+           s.operator === "in" &&
+           s.arguments?.length === 2 &&
+           s.arguments.some(a => a.kind === "string" && a.value === "Open") &&
+           s.arguments.some(a => a.kind === "string" && a.value === "Closed")
+    );
+    
+    expect(inSuggestion).toBeDefined();
+    expect(inSuggestion?.operator).toBe("in");
+    expect(inSuggestion?.arguments?.length).toBe(2);
+  });
+
+  /**
+   * Test that multi-value suggestions rank higher than single-value suggestions
+   * because they explain more of the query
+   */
+  test("multi-value 'in' suggestion ranks higher than single-value 'eq' suggestions", async () => {
+    const filter = createFuzzyFilter();
+    
+    filter.setSchema({
+      columns: [
+        { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed", "In Progress"] },
+      ],
+    });
+    
+    filter.indexData([
+      { status: "Open" },
+      { status: "Closed" },
+      { status: "In Progress" },
+    ]);
+    
+    const response = await filter.suggest("status open closed");
+    
+    // Find the multi-value "in" suggestion
+    const inSuggestion = response.suggestions.find(
+      s => s.column.id === "status" && 
+           s.operator === "in" &&
+           s.arguments?.length === 2
+    );
+    
+    // Find single-value "eq" suggestions
+    const eqOpenSuggestion = response.suggestions.find(
+      s => s.column.id === "status" && 
+           s.operator === "eq" &&
+           s.arguments?.length === 1 &&
+           s.arguments[0]?.kind === "string" &&
+           s.arguments[0]?.value === "Open"
+    );
+    
+    const eqClosedSuggestion = response.suggestions.find(
+      s => s.column.id === "status" && 
+           s.operator === "eq" &&
+           s.arguments?.length === 1 &&
+           s.arguments[0]?.kind === "string" &&
+           s.arguments[0]?.value === "Closed"
+    );
+    
+    expect(inSuggestion).toBeDefined();
+    expect(eqOpenSuggestion).toBeDefined();
+    expect(eqClosedSuggestion).toBeDefined();
+    
+    // The "in" suggestion should have a higher score because it explains more tokens
+    expect(inSuggestion!.score).toBeGreaterThan(eqOpenSuggestion!.score);
+    expect(inSuggestion!.score).toBeGreaterThan(eqClosedSuggestion!.score);
+  });
+
+  /**
+   * Test that "nin" (not in) suggestions are also generated
+   */
+  test("'status open closed' also generates 'nin' suggestion", async () => {
+    const filter = createFuzzyFilter();
+    
+    filter.setSchema({
+      columns: [
+        { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed", "In Progress"] },
+      ],
+    });
+    
+    filter.indexData([
+      { status: "Open" },
+      { status: "Closed" },
+      { status: "In Progress" },
+    ]);
+    
+    const response = await filter.suggest("status open closed");
+    
+    // Find the "nin" suggestion with both Open and Closed
+    const ninSuggestion = response.suggestions.find(
+      s => s.column.id === "status" && 
+           s.operator === "nin" &&
+           s.arguments?.length === 2 &&
+           s.arguments.some(a => a.kind === "string" && a.value === "Open") &&
+           s.arguments.some(a => a.kind === "string" && a.value === "Closed")
+    );
+    
+    expect(ninSuggestion).toBeDefined();
+    expect(ninSuggestion?.operator).toBe("nin");
+  });
+
+  /**
+   * Test that "open closed" (without column name) generates multi-value suggestions
+   * This tests Strategy 3's handling of value-only queries
+   */
+  test("'open closed' (without column) generates 'in' suggestion with both values", async () => {
+    const filter = createFuzzyFilter();
+    
+    filter.setSchema({
+      columns: [
+        { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed", "In Progress"] },
+        { id: columnId("priority"), name: "Priority", type: "number" },
+      ],
+    });
+    
+    filter.indexData([
+      { status: "Open", priority: 1 },
+      { status: "Closed", priority: 2 },
+      { status: "In Progress", priority: 3 },
+    ]);
+    
+    const response = await filter.suggest("open closed");
+    
+    // Find the "in" suggestion with both Open and Closed
+    const inSuggestion = response.suggestions.find(
+      s => s.column.id === "status" && 
+           s.operator === "in" &&
+           s.arguments?.length === 2 &&
+           s.arguments.some(a => a.kind === "string" && a.value === "Open") &&
+           s.arguments.some(a => a.kind === "string" && a.value === "Closed")
+    );
+    
+    expect(inSuggestion).toBeDefined();
+    expect(inSuggestion?.operator).toBe("in");
+    expect(inSuggestion?.arguments?.length).toBe(2);
+  });
+
+  /**
+   * Test that multi-value 'in' suggestion ranks higher than single-value suggestions
+   * for queries without column name like "open closed"
+   */
+  test("'open closed' multi-value suggestion ranks higher than single-value suggestions", async () => {
+    const filter = createFuzzyFilter();
+    
+    filter.setSchema({
+      columns: [
+        { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed", "In Progress"] },
+      ],
+    });
+    
+    filter.indexData([
+      { status: "Open" },
+      { status: "Closed" },
+      { status: "In Progress" },
+    ]);
+    
+    const response = await filter.suggest("open closed");
+    
+    // Find the multi-value "in" suggestion
+    const inSuggestion = response.suggestions.find(
+      s => s.column.id === "status" && 
+           s.operator === "in" &&
+           s.arguments?.length === 2
+    );
+    
+    // Find single-value "eq" suggestions
+    const eqOpenSuggestion = response.suggestions.find(
+      s => s.column.id === "status" && 
+           s.operator === "eq" &&
+           s.arguments?.length === 1 &&
+           s.arguments[0]?.kind === "string" &&
+           s.arguments[0]?.value === "Open"
+    );
+    
+    const eqClosedSuggestion = response.suggestions.find(
+      s => s.column.id === "status" && 
+           s.operator === "eq" &&
+           s.arguments?.length === 1 &&
+           s.arguments[0]?.kind === "string" &&
+           s.arguments[0]?.value === "Closed"
+    );
+    
+    expect(inSuggestion).toBeDefined();
+    expect(eqOpenSuggestion).toBeDefined();
+    expect(eqClosedSuggestion).toBeDefined();
+    
+    // The "in" suggestion should have a higher score because it explains more tokens
+    expect(inSuggestion!.score).toBeGreaterThan(eqOpenSuggestion!.score);
+    expect(inSuggestion!.score).toBeGreaterThan(eqClosedSuggestion!.score);
+  });
+});
+
+// ============================================================================
+// NON-OVERLAPPING NGRAM VALUE AGGREGATION TESTS
+// ============================================================================
+describe("Non-overlapping ngram value aggregation", () => {
+  /**
+   * Test that overlapping ngrams don't independently contribute values.
+   * For a query with N tokens, we should get at most N values.
+   *
+   * The bug scenario:
+   * - Query: "insert autus sorder" (3 tokens)
+   * - Ngrams generated: "insert", "autus", "sorder", "insert autus", "autus sorder", "insert autus sorder" (6 ngrams)
+   * - Without the fix, each ngram could match a different value → 6 values
+   * - With the fix, overlapping ngrams compete for the same positions → max 3 values
+   */
+  test("3 tokens should produce at most 3 values in 'in' suggestions", async () => {
+    const filter = createFuzzyFilter({ maxSuggestions: 20 });
+
+    // Create values that would match different ngrams/combinations
+    filter.setSchema({
+      columns: [
+        {
+          id: columnId("comments"),
+          name: "Comments",
+          type: "string",
+        },
+      ],
+    });
+
+    // Create data with values that fuzzy-match different parts of the query
+    // These are designed to match: "insert", "autus", "sorder", "insert autus", etc.
+    filter.indexData([
+      { comments: "Insert something here" },
+      { comments: "Autus value" },
+      { comments: "Sordeo entry" },
+      { comments: "Insert autus combined" },
+      { comments: "Autus sordeo together" },
+      { comments: "Insert autus sordeo all" },
+      { comments: "Something else" },
+    ]);
+
+    const response = await filter.suggest("insert autus sordeo");
+
+    // Find all "in" suggestions for the comments column
+    const inSuggestions = response.suggestions.filter(
+      (s) => s.column.id === "comments" && s.operator === "in"
+    );
+
+    // Each "in" suggestion should have at most 3 values (one per input token)
+    // because overlapping ngrams should not independently contribute values
+    for (const suggestion of inSuggestions) {
+      expect(suggestion.arguments?.length ?? 0).toBeLessThanOrEqual(3);
+    }
+  });
+
+  /**
+   * Test that the best-scoring non-overlapping set is chosen.
+   * When ngrams overlap, we should pick the combination that maximizes total score.
+   */
+  test("best-scoring non-overlapping values are selected", async () => {
+    const filter = createFuzzyFilter({ maxSuggestions: 20 });
+
+    filter.setSchema({
+      columns: [
+        {
+          id: columnId("title"),
+          name: "Title",
+          type: "string",
+        },
+      ],
+    });
+
+    // "foo bar" query:
+    // - "foo" matches "Foo Item" (good match)
+    // - "bar" matches "Bar Thing" (good match)
+    // - "foo bar" matches "Foobar Combined" (okay match for the bigram)
+    // The algorithm should prefer the two non-overlapping exact matches
+    filter.indexData([
+      { title: "Foo Item" },
+      { title: "Bar Thing" },
+      { title: "Foobar Combined" },
+    ]);
+
+    const response = await filter.suggest("foo bar");
+
+    // Find the "in" suggestion
+    const inSuggestion = response.suggestions.find(
+      (s) => s.column.id === "title" && s.operator === "in"
+    );
+
+    if (inSuggestion && inSuggestion.arguments) {
+      // Should have at most 2 values (one per token)
+      expect(inSuggestion.arguments.length).toBeLessThanOrEqual(2);
+
+      // The values should be from non-overlapping ngrams
+      const values = inSuggestion.arguments.map((a) =>
+        a.kind === "string" ? a.value : null
+      );
+
+      // Should not have more values than tokens
+      expect(values.length).toBeLessThanOrEqual(2);
+    }
+  });
+
+  /**
+   * Test that column positions are excluded from value matching.
+   * When "status open closed" is typed, "status" matches the column,
+   * so only "open" and "closed" should contribute to values.
+   */
+  test("column match position is excluded from value matching", async () => {
+    const filter = createFuzzyFilter({ maxSuggestions: 20 });
+
+    filter.setSchema({
+      columns: [
+        {
+          id: columnId("status"),
+          name: "Status",
+          type: "enum",
+          values: ["Open", "Closed", "In Progress", "StatusLike"],
+        },
+      ],
+    });
+
+    filter.indexData([
+      { status: "Open" },
+      { status: "Closed" },
+      { status: "In Progress" },
+      { status: "StatusLike" }, // This would fuzzy-match "status" but shouldn't be included
+    ]);
+
+    const response = await filter.suggest("status open closed");
+
+    // Find the "in" suggestion
+    const inSuggestion = response.suggestions.find(
+      (s) =>
+        s.column.id === "status" &&
+        s.operator === "in" &&
+        s.arguments?.length === 2
+    );
+
+    expect(inSuggestion).toBeDefined();
+
+    if (inSuggestion?.arguments) {
+      const values = inSuggestion.arguments
+        .filter((a) => a.kind === "string")
+        .map((a) => (a as { kind: "string"; value: string }).value);
+
+      // Should include Open and Closed (from "open" and "closed" tokens)
+      expect(values).toContain("Open");
+      expect(values).toContain("Closed");
+
+      // Should NOT include StatusLike (the "status" token was used for the column match)
+      expect(values).not.toContain("StatusLike");
+    }
   });
 });
 
