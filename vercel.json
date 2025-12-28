@@ -1,0 +1,7 @@
+{
+  "buildCommand": "bunx turbo run build",
+  "devCommand": "bunx turbo run dev",
+  "installCommand": "bun install",
+  "framework": null,
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD ./"
+}

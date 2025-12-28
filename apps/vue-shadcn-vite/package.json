@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "vercel --prod --yes",
+    "deploy:preview": "vercel --yes",
+    "deploy:link": "vercel link --yes"
   },
   "dependencies": {
     "@alwaysmeticulous/recorder-loader": "^2.248.0",

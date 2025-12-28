@@ -8,6 +8,7 @@ const packagesPath = path.resolve(__dirname, "../../packages")
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/vue/',
   plugins: [
     vue(),
     tailwindcss(),

@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "vercel --prod --yes",
+    "deploy:preview": "vercel --yes",
+    "deploy:link": "vercel link --yes"
   },
   "dependencies": {
     "react": "^19.2.0",

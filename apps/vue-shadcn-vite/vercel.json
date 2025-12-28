@@ -1,0 +1,5 @@
+{
+  "buildCommand": "turbo run build --filter=vue-shadcn-vite",
+  "outputDirectory": "dist",
+  "framework": "vite"
+}

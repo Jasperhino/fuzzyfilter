@@ -1,4 +1,15 @@
 {
-  "buildCommand": "cd ../.. && bunx turbo build --filter=landing",
-  "outputDirectory": "dist"
+  "buildCommand": "turbo run build --filter=landing",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/react/:path*",
+      "destination": "https://fuzzyfilter-react-shadcn-vite.vercel.app/react/:path*"
+    },
+    {
+      "source": "/vue/:path*",
+      "destination": "https://fuzzyfilter-vue-shadcn-vite.vercel.app/vue/:path*"
+    }
+  ]
 }

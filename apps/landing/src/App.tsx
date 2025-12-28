@@ -1,35 +1,19 @@
 import './App.css'
 
 function App() {
-  const getSubdomainUrl = (subdomain: string) => {
+  const getAppUrl = (app: 'react' | 'vue') => {
     if (typeof window !== 'undefined') {
       const hostname = window.location.hostname
-      const protocol = window.location.protocol
       
       // Check if we're on localhost (development)
       if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return subdomain === 'react' 
-          ? 'http://localhost:5173'
-          : 'http://localhost:5174'
+        return app === 'react' 
+          ? 'http://localhost:5173/react/'
+          : 'http://localhost:5174/vue/'
       }
       
-      // In production, construct subdomain URL
-      // Handle both root domain (fuzzyfilter.com) and www (www.fuzzyfilter.com)
-      const parts = hostname.split('.')
-      
-      // If it's a root domain like "fuzzyfilter.com"
-      if (parts.length === 2) {
-        return `${protocol}//${subdomain}.${parts.join('.')}`
-      }
-      
-      // If it has www or other subdomain, replace the first part
-      if (parts.length >= 2) {
-        parts[0] = subdomain
-        return `${protocol}//${parts.join('.')}`
-      }
-      
-      // Fallback: try to construct subdomain
-      return `${protocol}//${subdomain}.${hostname}`
+      // In production, use path-based routing
+      return `/${app}/`
     }
     return '#'
   }
@@ -46,14 +30,14 @@ function App() {
       <main className="main">
         <div className="container">
           <div className="cards">
-            <a href={getSubdomainUrl('react')} className="card">
+            <a href={getAppUrl('react')} className="card">
               <div className="card-icon">⚛️</div>
               <h2>React Example</h2>
               <p>Explore the React implementation with interactive demos and documentation</p>
               <div className="card-link">View React Demo →</div>
             </a>
             
-            <a href={getSubdomainUrl('vue')} className="card">
+            <a href={getAppUrl('vue')} className="card">
               <div className="card-icon">💚</div>
               <h2>Vue Example</h2>
               <p>See how FuzzyFilter works with Vue.js and explore the composable API</p>

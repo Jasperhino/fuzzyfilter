@@ -16,6 +16,17 @@
     },
     "lint": {
       "outputs": []
+    },
+    "deploy": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "deploy:preview": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "deploy:link": {
+      "cache": false
     }
   }
 }
