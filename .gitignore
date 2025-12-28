@@ -39,4 +39,5 @@ playwright-report
 test-results
 .playwright-mcp
 .vercel
+.vercel-output
 .turbo

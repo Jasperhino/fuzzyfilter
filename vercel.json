@@ -1,7 +1,8 @@
 {
-  "buildCommand": "bunx turbo run build",
+  "buildCommand": "bunx turbo run build --filter=landing --filter=fuzzyfilter-vue --filter=fuzzyfilter-react && node scripts/combine-dist.js",
   "devCommand": "bunx turbo run dev",
   "installCommand": "bun install",
   "framework": null,
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD ./"
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD ./",
+  "outputDirectory": ".vercel-output"
 }

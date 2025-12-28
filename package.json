@@ -15,8 +15,8 @@
     "deploy:preview": "turbo run deploy:preview --filter='./apps/*'",
     "deploy:link": "turbo run deploy:link --filter='./apps/*'",
     "deploy:landing": "turbo run deploy --filter=landing",
-    "deploy:react": "turbo run deploy --filter=react-shadcn-vite",
-    "deploy:vue": "turbo run deploy --filter=vue-shadcn-vite"
+    "deploy:react": "turbo run deploy --filter=fuzzyfilter-react",
+    "deploy:vue": "turbo run deploy --filter=fuzzyfilter-vue"
   },
   "workspaces": [
     "packages/*",
@@ -24,7 +24,7 @@
   ],
   "devDependencies": {
     "@types/bun": "latest",
-    "turbo": "^2.0.0"
+    "turbo": "^2.7.2"
   },
   "packageManager": "bun@1.1.0",
   "engines": {

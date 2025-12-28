@@ -39,7 +39,6 @@ export default defineConfig({
       // Resolve lucide-operators packages
       "lucide-operators/assets": path.resolve(packagesPath, "lucide-operators/assets"),
       "lucide-operators": path.resolve(packagesPath, "lucide-operators/src/index.ts"),
-      "lucide-operators-vue": path.resolve(packagesPath, "lucide-operators-vue/src/index.ts"),
     },
   },
   server: {
@@ -52,6 +51,6 @@ export default defineConfig({
   // Pre-bundle fuzzyfilter dependencies
   optimizeDeps: {
     include: ["fuzzysort", "chrono-node"],
-    exclude: ["fuzzyfilter", "vue-fuzzy-filter", "@fuzzyfilter/sample-data", "lucide-operators", "lucide-operators-vue"],
+    exclude: ["fuzzyfilter", "vue-fuzzy-filter", "@fuzzyfilter/sample-data", "lucide-operators"],
   },
 })

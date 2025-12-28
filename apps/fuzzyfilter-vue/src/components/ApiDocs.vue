@@ -22,7 +22,7 @@ import {
   LayersIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-} from "lucide-operators-vue"
+} from "lucide-vue-next"
 import { cn } from "@/lib/utils"
 import DataTypeIcon from "./DataTypeIcon.vue"
 

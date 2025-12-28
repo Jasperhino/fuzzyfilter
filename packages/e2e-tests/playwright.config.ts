@@ -25,14 +25,14 @@ export default defineConfig({
   webServer: [
     {
       command: "bun run dev",
-      cwd: "../../example/react-shadcn-vite",
+      cwd: "../../example/fuzzyfilter-react",
       port: 5173,
       reuseExistingServer: !process.env.CI,
       timeout: 120 * 1000,
     },
     {
       command: "bun run dev",
-      cwd: "../../example/vue-shadcn-vite",
+      cwd: "../../example/fuzzyfilter-vue",
       port: 5174,
       reuseExistingServer: !process.env.CI,
       timeout: 120 * 1000,

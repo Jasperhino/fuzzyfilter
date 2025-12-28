@@ -1,5 +1,8 @@
 {
   "files.associations": {
     "*.svg": "default"
-  }
+  },
+  "cSpell.words": [
+    "fuzzyfilter"
+  ]
 }

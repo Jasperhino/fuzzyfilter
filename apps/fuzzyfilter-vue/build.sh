@@ -11,4 +11,4 @@ if [ ! -f "package.json" ] || [ ! -f "turbo.json" ]; then
 fi
 
 # Run turbo build
-bunx turbo run build --filter=vue-shadcn-vite
+bunx turbo run build --filter=fuzzyfilter-vue

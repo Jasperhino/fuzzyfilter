@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "vue-shadcn-vite",
+      "name": "fuzzyfilter-vue",
       "dependencies": {
         "vue": "^3.5.24",
       },

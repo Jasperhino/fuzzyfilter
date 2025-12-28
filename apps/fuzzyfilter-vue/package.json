@@ -1,5 +1,5 @@
 {
-  "name": "vue-shadcn-vite",
+  "name": "fuzzyfilter-vue",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -18,7 +18,7 @@
     "vue-router": "^4.5.1",
     "fuzzysort": "^3.1.0",
     "chrono-node": "^2.7.7",
-    "lucide-operators-vue": "workspace:*",
+    "lucide-vue-next": "^0.562.0",
     "@fontsource-variable/inter": "^5.2.8",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
