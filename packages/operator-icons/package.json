@@ -16,7 +16,8 @@
     "fuzzyfilter": "workspace:*"
   },
   "keywords": ["fuzzyfilter", "icons", "lucide", "operators"],
-  "license": "MIT"
+  "license": "MIT",
+  "packageManager": "bun@1.3.5"
 }
 
 

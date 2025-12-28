@@ -40,7 +40,8 @@
     }
   },
   "keywords": ["fuzzy", "filter", "search", "suggestions", "autocomplete"],
-  "license": "MIT"
+  "license": "MIT",
+  "packageManager": "bun@1.3.5"
 }
 
 

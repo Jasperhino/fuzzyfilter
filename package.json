@@ -14,7 +14,7 @@
     "deploy": "turbo run deploy --filter='./apps/*'",
     "deploy:preview": "turbo run deploy:preview --filter='./apps/*'",
     "deploy:link": "turbo run deploy:link --filter='./apps/*'",
-    "deploy:landing": "turbo run deploy --filter=landing",
+    "deploy:landing": "turbo run deploy --filter=fuzzyfilter-landing",
     "deploy:react": "turbo run deploy --filter=fuzzyfilter-react",
     "deploy:vue": "turbo run deploy --filter=fuzzyfilter-vue"
   },
@@ -26,7 +26,7 @@
     "@types/bun": "latest",
     "turbo": "^2.7.2"
   },
-  "packageManager": "bun@1.1.0",
+  "packageManager": "bun@1.3.5",
   "engines": {
     "node": ">=18"
   }

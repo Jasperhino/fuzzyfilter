@@ -17,5 +17,6 @@
   },
   "peerDependencies": {
     "fuzzyfilter": "workspace:*"
-  }
+  },
+  "packageManager": "bun@1.3.5"
 }

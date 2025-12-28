@@ -28,6 +28,7 @@
     "filter",
     "datatable"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "packageManager": "bun@1.3.5"
 }
 

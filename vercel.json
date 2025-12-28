@@ -1,5 +1,5 @@
 {
-  "buildCommand": "bunx turbo run build --filter=landing --filter=fuzzyfilter-vue --filter=fuzzyfilter-react && node scripts/combine-dist.js",
+  "buildCommand": "bunx turbo run build --filter=fuzzyfilter-landing --filter=fuzzyfilter-vue --filter=fuzzyfilter-react && node scripts/combine-dist.js",
   "devCommand": "bunx turbo run dev",
   "installCommand": "bun install",
   "framework": null,
