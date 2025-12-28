@@ -7,7 +7,7 @@
 import { test, expect, describe } from "bun:test";
 import {
   columnId,
-  OPERATOR_REGISTRY,
+  OPERATORS,
   getAllOperators,
   getOperator,
   getOperatorsForType,

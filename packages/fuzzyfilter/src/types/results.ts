@@ -10,6 +10,34 @@ import type { HypothesisValueType } from "./hypothesis.ts";
 import type { RoaringBitmap } from "./index-layer.ts";
 
 // ============================================================================
+// QUERY MATCH (for highlighting)
+// ============================================================================
+
+/**
+ * Represents how a portion of the user's query matched a filter component.
+ * Used for rendering highlighted query input showing what matched what.
+ */
+export interface QueryMatch {
+  /** Position range in the original query string */
+  inputRange: { start: number; end: number };
+
+  /** The raw text from the user's input that was matched */
+  inputText: string;
+
+  /** Which filter component this matched */
+  matchType: "column" | "operator" | "value";
+
+  /** The canonical target value that was matched (e.g., "Status", "equals", "Open") */
+  matchedTarget: string;
+
+  /** Character-level indexes within matchedTarget that the input matched (fuzzysort-style) */
+  matchedCharIndexes?: number[];
+
+  /** Match score for this component */
+  score: number;
+}
+
+// ============================================================================
 // SUGGESTION RESULT
 // ============================================================================
 
@@ -53,14 +81,16 @@ export interface FilterSuggestion {
 
   /** Detailed score breakdown for debugging/display */
   scoreBreakdown?: {
-    /** Raw fuzzy match score from fuzzysort */
+    /** Raw fuzzy match score from fuzzysort (0 = perfect, negative = fuzzy) */
     rawScore: number;
-    /** Bonus for query coverage (using more of the input) */
+    /** Bonus for query coverage (using more of the input). Max +2000 */
     coverageBonus: number;
-    /** Bonus for matching more of the target */
+    /** Bonus for matching more of the target. Max +1000 */
     completenessBonus: number;
-    /** Bonus for full query match */
+    /** Bonus for full query match. +500 if entire query used */
     fullQueryBonus: number;
+    /** Bonus for exact case-insensitive match. +3000 if exact */
+    exactMatchBonus?: number;
     /** Number of tokens in the matching n-gram */
     tokenCount: number;
     /** Total tokens in the query */
@@ -81,6 +111,13 @@ export interface FilterSuggestion {
 
   /** Category for grouping suggestions */
   category?: "recent" | "popular" | "exact" | "fuzzy" | "inferred";
+
+  /**
+   * How the query tokens matched to produce this suggestion.
+   * Each entry maps a portion of the input to a filter component.
+   * Useful for rendering highlighted query input.
+   */
+  queryMatches?: QueryMatch[];
 }
 
 /**

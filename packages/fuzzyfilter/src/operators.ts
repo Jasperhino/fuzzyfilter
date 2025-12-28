@@ -14,7 +14,7 @@ import { DataType, OperatorCategory } from "./types/index.ts";
  * Complete registry of all operators.
  * This is the single source of truth - the Operator type is derived from its keys.
  */
-export const OPERATOR_REGISTRY = {
+export const OPERATORS = {
   // ---------------------------------------------------------------------------
   // Equality Operators
   // ---------------------------------------------------------------------------
@@ -69,7 +69,7 @@ export const OPERATOR_REGISTRY = {
     id: "lte",
     category: OperatorCategory.COMPARISON,
     label: "less than or equal",
-    aliases: ["lessThanOrEqual", "lessOrEqual", "<=", "max", "at most", "≤"],
+    aliases: ["smaller equal", "less eq", "<=", "max", "at most", "≤"],
     supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
   },
@@ -77,7 +77,7 @@ export const OPERATOR_REGISTRY = {
     id: "gt",
     category: OperatorCategory.COMPARISON,
     label: "greater than",
-    aliases: ["greaterThan", "greater", ">", "after", "over", "above"],
+    aliases: ["greaterThan", "greater", ">", "after", "over", "above", "bigger"],
     supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
   },
@@ -85,7 +85,7 @@ export const OPERATOR_REGISTRY = {
     id: "gte",
     category: OperatorCategory.COMPARISON,
     label: "greater than or equal",
-    aliases: ["greaterThanOrEqual", "greaterOrEqual", ">=", "min", "at least", "≥"],
+    aliases: ["greater equal", "bigger equal", ">=", "min", "at least", "≥"],
     supportedTypes: [DataType.NUMBER, DataType.DATE],
     requiresArgument: true,
   },
@@ -223,9 +223,9 @@ export const OPERATOR_REGISTRY = {
 
 /**
  * All supported filter operators.
- * Derived from OPERATOR_REGISTRY keys - single source of truth.
+ * Derived from OPERATORS keys - single source of truth.
  */
-export type Operator = keyof typeof OPERATOR_REGISTRY;
+export type Operator = keyof typeof OPERATORS;
 
 /**
  * Full operator info including the id field.
@@ -240,14 +240,14 @@ export interface OperatorInfo extends OperatorInfoBase {
  * Get all operators
  */
 export function getAllOperators(): OperatorInfo[] {
-  return Object.values(OPERATOR_REGISTRY) as OperatorInfo[];
+  return Object.values(OPERATORS) as OperatorInfo[];
 }
 
 /**
  * Get operator by ID
  */
 export function getOperator(id: Operator): OperatorInfo {
-  return OPERATOR_REGISTRY[id] as OperatorInfo;
+  return OPERATORS[id] as OperatorInfo;
 }
 
 /**
@@ -387,7 +387,7 @@ export function isAliasForOperator(alias: string, operator: Operator, forType?: 
  * Type guard to check if a string is a valid operator
  */
 export function isOperator(value: string): value is Operator {
-  return value in OPERATOR_REGISTRY;
+  return value in OPERATORS;
 }
 
 

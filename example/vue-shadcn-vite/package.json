@@ -9,8 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@alwaysmeticulous/recorder-loader": "^2.248.0",
     "@tanstack/vue-virtual": "^3.11.3",
     "vue": "^3.5.24",
+    "vue-router": "^4.5.1",
     "fuzzysort": "^3.1.0",
     "chrono-node": "^2.7.7",
     "lucide-operators-vue": "workspace:*",

@@ -68,7 +68,7 @@ const typeConfig: Record<string, { icon: typeof TypeIcon; color: string; label: 
   },
 }
 
-const config = computed(() => typeConfig[props.type] ?? typeConfig.string)
+const config = computed(() => typeConfig[props.type] ?? typeConfig.string!)
 
 const badgeSizeClasses = computed(() => 
   props.badgeSize === "sm" ? "text-[9px] px-1 py-0.5" : "text-[10px] px-1.5 py-0.5"

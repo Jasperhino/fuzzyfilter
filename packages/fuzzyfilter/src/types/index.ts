@@ -77,6 +77,7 @@ export { DEFAULT_SCORING_WEIGHTS } from "./hypothesis.ts";
 
 // Result types
 export type {
+  QueryMatch,
   FilterSuggestion,
   SuggestionGroup,
   SuggestionResponse,

@@ -39,6 +39,7 @@ export const SAMPLE_DATA_COUNT = 50;
 
 /**
  * Task type definition for filtering results.
+ * Includes index signature for compatibility with Record<string, unknown>.
  */
 export interface Task {
   id: number;
@@ -49,6 +50,7 @@ export interface Task {
   created: string;
   isBlocked: boolean;
   comments: string;
+  [key: string]: string | number | boolean;
 }
 
 /**

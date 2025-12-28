@@ -91,7 +91,7 @@ function generateTask(id: number, options: GeneratorOptions = {}): Task {
   const created = faker.date
     .between({ from: fromDate, to: toDate })
     .toISOString()
-    .split("T")[0];
+    .split("T")[0] as string;
 
   // Generate a task-related comment
   const verb = faker.word.verb();

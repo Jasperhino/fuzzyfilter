@@ -73,12 +73,12 @@ export const OperatorCategory = {
  */
 export type OperatorCategory = (typeof OperatorCategory)[keyof typeof OperatorCategory];
 
-// Note: Operator type is derived from OPERATOR_REGISTRY in operators.ts
+// Note: Operator type is derived from OPERATORS in operators.ts
 // and re-exported from types/index.ts
 
 /**
  * Base operator metadata for display and validation.
- * Used as the constraint type for OPERATOR_REGISTRY.
+ * Used as the constraint type for OPERATORS.
  * The full OperatorInfo type is derived in registry.ts.
  */
 export interface OperatorInfoBase {

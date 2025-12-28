@@ -343,14 +343,9 @@ const options = [
                 <div
                   v-for="op in operatorsForActiveType"
                   :key="op.id"
-                  class="flex items-center gap-1 px-2 py-1 rounded-md bg-muted/50 text-xs"
+                  class="px-2 py-1 rounded-md bg-muted/50 text-xs text-muted-foreground"
                 >
-                  <span class="shrink-0 text-[10px] h-4 px-1 rounded inline-flex items-center font-medium bg-muted text-muted-foreground">
-                    {{ op.symbol || op.id }}
-                  </span>
-                  <span class="text-muted-foreground">
-                    {{ op.label }}
-                  </span>
+                  {{ op.label }}
                 </div>
               </div>
             </div>

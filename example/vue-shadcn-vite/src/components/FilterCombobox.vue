@@ -8,8 +8,8 @@
 import { ref, onMounted, computed } from "vue"
 import { useVirtualizer } from "@tanstack/vue-virtual"
 import { useFuzzyFilter } from "vue-fuzzy-filter"
-import { createFuzzyFilter, getOperator, type CompiledFilter, type FilterSuggestion, type HypothesisValueType } from "fuzzyfilter"
-import { TASK_SCHEMA, COLUMN_IDS, generateLargeDataset, type Task } from "@fuzzyfilter/sample-data"
+import { createFuzzyFilter, getOperator, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch } from "fuzzyfilter"
+import { TASK_SCHEMA, COLUMN_IDS, generateLargeDataset } from "@fuzzyfilter/sample-data"
 import DataTypeIcon from "./DataTypeIcon.vue"
 import ColumnInfoPopover from "./ColumnInfoPopover.vue"
 import {
@@ -245,6 +245,19 @@ function getScoreTooltip(suggestion: FilterSuggestion): string {
     }
   }
   
+  // Show query match info for highlighting
+  if (suggestion.queryMatches && suggestion.queryMatches.length > 0) {
+    lines.push(
+      "",
+      "── Query Matches ──",
+    )
+    for (const match of suggestion.queryMatches) {
+      lines.push(
+        `${match.matchType}: "${match.inputText}" → "${match.matchedTarget}" (pos ${match.inputRange.start}-${match.inputRange.end})`
+      )
+    }
+  }
+  
   return lines.join("\n")
 }
 
@@ -270,9 +283,86 @@ function formatNumber(num: number): string {
   return num.toLocaleString()
 }
 
+/**
+ * Helper to convert QueryMatch array into renderable segments for highlighting.
+ * Segments are sorted by position and gaps are filled with unmatched text.
+ */
+interface HighlightSegment {
+  text: string
+  matchType: "column" | "operator" | "value" | null
+}
+
+function getHighlightSegments(queryText: string, matches: QueryMatch[]): HighlightSegment[] {
+  if (!matches.length || !queryText) {
+    return [{ text: queryText, matchType: null }]
+  }
+
+  // Sort matches by start position
+  const sorted = [...matches].sort((a, b) => a.inputRange.start - b.inputRange.start)
+  const segments: HighlightSegment[] = []
+  let currentPos = 0
+
+  for (const match of sorted) {
+    // Add unmatched text before this match
+    if (match.inputRange.start > currentPos) {
+      segments.push({
+        text: queryText.slice(currentPos, match.inputRange.start),
+        matchType: null,
+      })
+    }
+
+    // Add the matched segment
+    segments.push({
+      text: queryText.slice(match.inputRange.start, match.inputRange.end),
+      matchType: match.matchType,
+    })
+
+    currentPos = match.inputRange.end
+  }
+
+  // Add any remaining text after last match
+  if (currentPos < queryText.length) {
+    segments.push({
+      text: queryText.slice(currentPos),
+      matchType: null,
+    })
+  }
+
+  return segments
+}
+
+// Computed property for highlighted query segments based on the first suggestion
+const highlightedQuerySegments = computed(() => {
+  if (!query.value || suggestions.value.length === 0) {
+    return []
+  }
+  
+  const firstSuggestion = suggestions.value[0]
+  if (!firstSuggestion?.queryMatches || firstSuggestion.queryMatches.length === 0) {
+    return []
+  }
+  
+  return getHighlightSegments(query.value, firstSuggestion.queryMatches)
+})
+
+// Get CSS class for match type
+function getMatchTypeClass(matchType: "column" | "operator" | "value" | null): string {
+  const colorClasses = {
+    column: "bg-blue-500/20 text-blue-700 dark:text-blue-300",
+    operator: "bg-amber-500/20 text-amber-700 dark:text-amber-300",
+    value: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300",
+  }
+  return matchType ? `px-0.5 rounded ${colorClasses[matchType]}` : "text-muted-foreground"
+}
+
 // Get column by ID from schema
 function getColumnById(columnId: string) {
   return TASK_SCHEMA.columns.find((c) => c.id === columnId)
+}
+
+// Get row by virtual index (with non-null assertion for type safety)
+function getRow(index: number) {
+  return filteredData.value[index]!
 }
 
 // Column definitions for headers
@@ -416,6 +506,21 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
         </div>
       </div>
 
+      <!-- Query match highlighting demo -->
+      <div v-if="highlightedQuerySegments.length > 0" class="flex items-center gap-2 text-xs px-1">
+        <span class="text-muted-foreground">Query matches:</span>
+        <span class="font-mono text-xs">
+          <span 
+            v-for="(seg, i) in highlightedQuerySegments" 
+            :key="i"
+            :class="getMatchTypeClass(seg.matchType)"
+            :title="seg.matchType ? `Matched: ${seg.matchType}` : undefined"
+          >{{ seg.text }}</span>
+        </span>
+        <span class="text-muted-foreground">→</span>
+        <span class="text-foreground">{{ suggestions[0]?.label }}</span>
+      </div>
+
       <!-- Help text -->
       <p class="text-xs text-muted-foreground">
         Try typing: <code class="bg-muted px-1 rounded">status</code>,
@@ -522,38 +627,38 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
               <tr :style="{ height: `${virtualizer.getVirtualItems()[0]?.start ?? 0}px` }" />
               <tr
                 v-for="virtualRow in virtualizer.getVirtualItems()"
-                :key="filteredData[virtualRow.index].id"
+                :key="getRow(virtualRow.index).id"
                 :class="cn(
                   'border-b transition-colors h-12',
                   appliedFilters.length > 0 ? 'bg-primary/5' : '',
-                  filteredData[virtualRow.index].id % 2 !== 0 ? 'bg-muted/30' : ''
+                  getRow(virtualRow.index).id % 2 !== 0 ? 'bg-muted/30' : ''
                 )"
               >
                 <td class="px-3 py-2 whitespace-nowrap h-12">
                   <span :class="cn(
                     'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
-                    statusVariants[filteredData[virtualRow.index].status]?.bg ?? 'bg-muted',
-                    statusVariants[filteredData[virtualRow.index].status]?.text ?? 'text-muted-foreground'
+                    statusVariants[getRow(virtualRow.index).status]?.bg ?? 'bg-muted',
+                    statusVariants[getRow(virtualRow.index).status]?.text ?? 'text-muted-foreground'
                   )">
-                    {{ filteredData[virtualRow.index].status }}
+                    {{ getRow(virtualRow.index).status }}
                   </span>
                 </td>
-                <td class="px-3 py-2 font-medium whitespace-nowrap h-12">{{ filteredData[virtualRow.index].assignee }}</td>
+                <td class="px-3 py-2 font-medium whitespace-nowrap h-12">{{ getRow(virtualRow.index).assignee }}</td>
                 <td class="px-3 py-2 whitespace-nowrap h-12">
                   <div class="flex items-center gap-1">
-                    <div :class="cn('size-2 rounded-full', priorityColors[filteredData[virtualRow.index].priority - 1] ?? priorityColors[0])" />
-                    <span class="text-sm tabular-nums">{{ filteredData[virtualRow.index].priority }}</span>
+                    <div :class="cn('size-2 rounded-full', priorityColors[getRow(virtualRow.index).priority - 1] ?? priorityColors[0])" />
+                    <span class="text-sm tabular-nums">{{ getRow(virtualRow.index).priority }}</span>
                   </div>
                 </td>
-                <td class="px-3 py-2 text-muted-foreground whitespace-nowrap h-12">{{ filteredData[virtualRow.index].department }}</td>
-                <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">{{ filteredData[virtualRow.index].created }}</td>
+                <td class="px-3 py-2 text-muted-foreground whitespace-nowrap h-12">{{ getRow(virtualRow.index).department }}</td>
+                <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">{{ getRow(virtualRow.index).created }}</td>
                 <td class="px-3 py-2 text-center whitespace-nowrap h-12">
-                  <XIcon v-if="filteredData[virtualRow.index].isBlocked" class="size-4 text-rose-500 mx-auto" />
+                  <XIcon v-if="getRow(virtualRow.index).isBlocked" class="size-4 text-rose-500 mx-auto" />
                   <CheckIcon v-else class="size-4 text-emerald-500 mx-auto" />
                 </td>
-                <td class="px-3 py-2 text-muted-foreground text-sm h-12 max-w-xs" :title="filteredData[virtualRow.index].comments">
+                <td class="px-3 py-2 text-muted-foreground text-sm h-12 max-w-xs" :title="getRow(virtualRow.index).comments">
                   <span class="block truncate">
-                    <template v-if="filteredData[virtualRow.index].comments">{{ filteredData[virtualRow.index].comments }}</template>
+                    <template v-if="getRow(virtualRow.index).comments">{{ getRow(virtualRow.index).comments }}</template>
                     <span v-else class="text-muted-foreground/50 italic">No comments</span>
                   </span>
                 </td>

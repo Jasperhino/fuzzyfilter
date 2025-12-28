@@ -106,7 +106,7 @@ export * from "./types/index.ts";
  */
 export {
   /** Complete operator registry with all operator metadata */
-  OPERATOR_REGISTRY,
+  OPERATORS,
   /** Get all available operators */
   getAllOperators,
   /** Get metadata for a specific operator */
@@ -220,4 +220,3 @@ export {
   /** Quick check if text might contain a date expression */
   mightBeDateExpression,
 } from "./date-parser.ts";
-

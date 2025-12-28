@@ -92,13 +92,14 @@ export function createTrie<T>(): Trie<T> {
   function fuzzySearch(
     query: string,
     limit = 10
-  ): Array<{ key: string; value: T; score: number }> {
+  ): Array<{ key: string; value: T; score: number; indexes?: readonly number[] }> {
     if (!query) {
       // Return all entries if no query
       return allEntries.slice(0, limit).map((e) => ({
         key: e.key,
         value: e.value,
         score: 0,
+        indexes: undefined,
       }));
     }
 
@@ -112,6 +113,7 @@ export function createTrie<T>(): Trie<T> {
       key: r.obj.key,
       value: r.obj.value,
       score: r.score,
+      indexes: r.indexes,
     }));
   }
 

@@ -144,8 +144,8 @@ export function useFuzzyFilter(
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   // Refs for cleanup
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const abortRef = useRef<AbortController>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const abortRef = useRef<AbortController | undefined>(undefined);
 
   // Computed selected suggestion
   const selectedSuggestion = useMemo(() => {

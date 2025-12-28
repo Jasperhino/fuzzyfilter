@@ -166,6 +166,8 @@ export interface Trie<T> {
     key: string;
     value: T;
     score: number;
+    /** Character indexes in the key that matched (for highlighting) */
+    indexes?: readonly number[];
   }>;
 
   /** Get all entries */

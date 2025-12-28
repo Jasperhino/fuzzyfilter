@@ -25,6 +25,7 @@ import type {
   Token,
   HypothesisValueType,
   ParsedDate,
+  QueryMatch,
 } from "./types/index.ts";
 import { DataType, DEFAULT_CONFIG } from "./types/index.ts";
 import {
@@ -71,6 +72,12 @@ interface NgramWithMeta {
   tokenCount: number;      // How many tokens this ngram spans
   totalTokens: number;     // Total tokens in the input
   isFullQuery: boolean;    // Is this the full query?
+  /** Start position in original query string */
+  inputStart: number;
+  /** End position in original query string */
+  inputEnd: number;
+  /** The tokens that make up this ngram */
+  tokens: Token[];
 }
 
 /**
@@ -80,7 +87,7 @@ interface NgramWithMeta {
  * - Bigrams: ["is not", "not empty"]
  * - Full: ["is not empty"]
  * 
- * Returns with metadata for scoring adjustments
+ * Returns with metadata for scoring adjustments and highlighting
  */
 function generateNgrams(tokens: Token[]): NgramWithMeta[] {
   const ngrams: NgramWithMeta[] = [];
@@ -93,21 +100,25 @@ function generateNgrams(tokens: Token[]): NgramWithMeta[] {
       tokenCount: 1,
       totalTokens,
       isFullQuery: totalTokens === 1,
+      inputStart: t.start,
+      inputEnd: t.end,
+      tokens: [t],
     });
   }
 
   // N-grams (size 2 to all tokens)
   for (let n = 2; n <= tokens.length; n++) {
     for (let i = 0; i <= tokens.length - n; i++) {
-      const ngram = tokens
-        .slice(i, i + n)
-        .map((t) => t.normalized)
-        .join(" ");
+      const slicedTokens = tokens.slice(i, i + n);
+      const ngram = slicedTokens.map((t) => t.normalized).join(" ");
       ngrams.push({
         text: ngram,
         tokenCount: n,
         totalTokens,
         isFullQuery: n === totalTokens,
+        inputStart: slicedTokens[0]!.start,
+        inputEnd: slicedTokens[slicedTokens.length - 1]!.end,
+        tokens: slicedTokens,
       });
     }
   }
@@ -227,9 +238,46 @@ interface ScoreBreakdown {
 }
 
 /**
+ * Match metadata for highlighting - tracks how query matched filter components
+ */
+interface MatchMetadata {
+  /** Column match info if available */
+  column?: {
+    inputStart: number;
+    inputEnd: number;
+    inputText: string;
+    matchedTarget: string;
+    matchIndexes?: readonly number[];
+    score: number;
+  };
+  /** Operator match info if available */
+  operator?: {
+    inputStart: number;
+    inputEnd: number;
+    inputText: string;
+    matchedTarget: string;
+    matchIndexes?: readonly number[];
+    score: number;
+  };
+  /** Value match info if available (can have multiple for variadic operators) */
+  values?: Array<{
+    inputStart: number;
+    inputEnd: number;
+    inputText: string;
+    matchedTarget: string;
+    matchIndexes?: readonly number[];
+    score: number;
+  }>;
+}
+
+/**
  * Adjust score based on how much of the query was matched
  * Fuzzysort scores: 0 = exact match, negative = worse match
  * We boost scores for longer n-gram matches to prefer "in progress" over "in"
+ * 
+ * Key principle: Matches that explain MORE of the query should score higher.
+ * For example, "les eq" should prefer "lte" (via "less eq" alias) over "eq",
+ * because "lte" explains both tokens while "eq" only explains one.
  */
 function adjustScoreForCoverage(
   baseScore: number,
@@ -245,8 +293,9 @@ function adjustScoreForCoverage(
   const completenessRatio = Math.min(1, queryLength / targetLength);
   
   // Bonus for high coverage (using more of the input)
-  // Max bonus of 2000 points for full coverage
-  const coverageBonus = Math.round(coverageRatio * 2000);
+  // Max bonus of 3000 points for full coverage - this is the PRIMARY ranking factor
+  // Matching more tokens is more valuable than a perfect match on fewer tokens
+  const coverageBonus = Math.round(coverageRatio * 3000);
   
   // Bonus for matching more of the target
   // Max bonus of 1000 points for complete match
@@ -256,11 +305,15 @@ function adjustScoreForCoverage(
   const fullQueryBonus = ngram.isFullQuery && baseScore >= -1000 ? 500 : 0;
   
   // EXACT MATCH BONUS: When the n-gram text exactly matches the target (case-insensitive),
-  // give a large bonus that outweighs coverage bonuses from longer n-grams.
-  // This ensures "in" exactly matching "in" beats "in open" fuzzy matching "not in".
+  // give a bonus scaled by coverage. An exact match on the full query gets the full bonus,
+  // but an exact match on only part of the query gets a proportional bonus.
+  // This ensures:
+  // - "in" exactly matching "in" (full query) beats "in open" fuzzy matching "not in"
+  // - "les eq" fuzzy matching "less eq" (2 tokens) beats "eq" exactly matching "eq" (1 token)
   const isExactMatch = matchedKey !== undefined && 
     ngram.text.toLowerCase() === matchedKey.toLowerCase();
-  const exactMatchBonus = isExactMatch ? 3000 : 0;
+  // Scale exact match bonus by coverage: exact match on 1 of 2 tokens = 1500, on 2 of 2 = 3000
+  const exactMatchBonus = isExactMatch ? Math.round(3000 * coverageRatio) : 0;
   
   const adjustedScore = baseScore + coverageBonus + completenessBonus + fullQueryBonus + exactMatchBonus;
   
@@ -762,11 +815,35 @@ export function createFuzzyFilter(
     // Strategy 2: Has tokens - search with n-grams
     else {
       // Track best matches to avoid duplicates (keep best score)
-      const columnScores = new Map<string, ScoreBreakdown>();
-      type OpScoreEntry = { breakdown: ScoreBreakdown; operator: Operator; forType?: DataType; matchedAlias?: string };
+      // Each entry includes the ngram for position info and match indexes for highlighting
+      type ColScoreEntry = { 
+        breakdown: ScoreBreakdown; 
+        ngram: NgramWithMeta; 
+        matchedTarget: string; 
+        matchIndexes?: readonly number[]; 
+      };
+      const columnScores = new Map<string, ColScoreEntry>();
+      type OpScoreEntry = { 
+        breakdown: ScoreBreakdown; 
+        operator: Operator; 
+        forType?: DataType; 
+        matchedAlias?: string;
+        ngram: NgramWithMeta;
+        matchedTarget: string;
+        matchIndexes?: readonly number[];
+      };
       const operatorScores = new Map<string, OpScoreEntry>();
-      type ValMatch = { value: { value: string; columnId: ColumnId; rowCount: number }; score: number };
-      const valueScores = new Map<string, { breakdown: ScoreBreakdown; match: ValMatch }>();
+      type ValMatch = { value: { value: string; columnId: ColumnId; rowCount: number }; score: number; indexes?: readonly number[] };
+      // Track which source token text matched each value - this prevents token reuse for variadic operators
+      type ValScoreEntry = { 
+        breakdown: ScoreBreakdown; 
+        match: ValMatch; 
+        sourceTokenText: string;
+        ngram: NgramWithMeta;
+        matchedTarget: string;
+        matchIndexes?: readonly number[];
+      };
+      const valueScores = new Map<string, ValScoreEntry>();
       const seenValues = new Set<string>(); // For the second pass
 
       // Search each n-gram against all tries
@@ -782,8 +859,13 @@ export function createFuzzyFilter(
             match.key // Pass matched key for exact match detection
           );
           const existing = columnScores.get(key);
-          if (!existing || breakdown.adjustedScore > existing.adjustedScore) {
-            columnScores.set(key, breakdown);
+          if (!existing || breakdown.adjustedScore > existing.breakdown.adjustedScore) {
+            columnScores.set(key, { 
+              breakdown, 
+              ngram, 
+              matchedTarget: match.value.name,
+              matchIndexes: match.indexes,
+            });
           }
         }
 
@@ -812,7 +894,10 @@ export function createFuzzyFilter(
               breakdown, 
               operator: opEntry.operator,
               matchedAlias: match.key, // Track the actual alias that was matched
-              forType: opEntry.forType 
+              forType: opEntry.forType,
+              ngram,
+              matchedTarget: match.key,
+              matchIndexes: match.indexes,
             });
           }
         }
@@ -835,9 +920,58 @@ export function createFuzzyFilter(
           );
           const existing = valueScores.get(key);
           if (!existing || breakdown.adjustedScore > existing.breakdown.adjustedScore) {
-            valueScores.set(key, { breakdown, match });
+            // Store the source token text to track which token matched this value
+            valueScores.set(key, { 
+              breakdown, 
+              match: { ...match, indexes: match.indexes }, 
+              sourceTokenText: ngram.text,
+              ngram,
+              matchedTarget: match.value.value,
+              matchIndexes: match.indexes,
+            });
           }
         }
+      }
+
+      // Filter out operator matches when a higher-scoring operator match overlaps with their tokens.
+      // This handles cases like "not equal" where:
+      // - "equal" matches "eq" operator
+      // - "not equal" matches "neq" operator (better match, more tokens)
+      // We should prefer "neq" and remove "eq" from consideration.
+      const operatorsToRemove = new Set<string>();
+      for (const [keyA, entryA] of operatorScores) {
+        for (const [keyB, entryB] of operatorScores) {
+          if (keyA === keyB) continue;
+          
+          // Check if ngrams overlap
+          const ngramA = entryA.ngram;
+          const ngramB = entryB.ngram;
+          const overlaps = !(ngramA.inputEnd <= ngramB.inputStart || ngramB.inputEnd <= ngramA.inputStart);
+          
+          if (overlaps) {
+            // If one is a proper superset of the other in terms of token coverage,
+            // prefer the one with more tokens (more complete interpretation)
+            if (ngramA.tokenCount > ngramB.tokenCount && entryA.breakdown.adjustedScore >= entryB.breakdown.adjustedScore * 0.8) {
+              // A uses more tokens and has a reasonable score - remove B
+              operatorsToRemove.add(keyB);
+            } else if (ngramB.tokenCount > ngramA.tokenCount && entryB.breakdown.adjustedScore >= entryA.breakdown.adjustedScore * 0.8) {
+              // B uses more tokens and has a reasonable score - remove A
+              operatorsToRemove.add(keyA);
+            } else if (ngramA.tokenCount === ngramB.tokenCount) {
+              // Same token count - prefer higher score
+              if (entryA.breakdown.adjustedScore > entryB.breakdown.adjustedScore) {
+                operatorsToRemove.add(keyB);
+              } else if (entryB.breakdown.adjustedScore > entryA.breakdown.adjustedScore) {
+                operatorsToRemove.add(keyA);
+              }
+            }
+          }
+        }
+      }
+      
+      // Remove the filtered operators
+      for (const key of operatorsToRemove) {
+        operatorScores.delete(key);
       }
 
       // Check if the full query might be a date expression
@@ -930,10 +1064,11 @@ export function createFuzzyFilter(
       const detectedValues = detectValueTokens(tokens, usedForColumn);
       
       // Column suggestions with argument-aware scoring
-      for (const [colId, breakdown] of columnScores) {
+      for (const [colId, colScoreEntry] of columnScores) {
         const col = getColumnById(colId);
         if (!col) continue;
         
+        const { breakdown: colBreakdown, ngram: colNgram, matchedTarget: colMatchedTarget, matchIndexes: colMatchIndexes } = colScoreEntry;
         const ops = getOperatorsForType(col.type);
         
         // Get compatible values for this column type, filtered by context availability
@@ -1006,9 +1141,37 @@ export function createFuzzyFilter(
               suggestionArgs = [toArgValue(compatibleValues[0]!)];
             }
             
+            // Check if this operator was also matched in the input
+            const generalKey = op.id;
+            const typedKey = `${op.id}:${col.type}`;
+            const opMatch = operatorScores.get(typedKey) ?? operatorScores.get(generalKey);
+            
             // Calculate argument coverage bonus
             const argumentCoverageBonus = Math.round((valuesUsed / compatibleValues.length) * 1500);
-            const adjustedScore = breakdown.adjustedScore + argumentCoverageBonus;
+            // Include operator score if the operator was also matched in the input
+            const operatorBonus = opMatch ? opMatch.breakdown.adjustedScore : 0;
+            const adjustedScore = colBreakdown.adjustedScore + argumentCoverageBonus + operatorBonus;
+            
+            // Build match metadata for highlighting
+            const matchMeta: MatchMetadata = {
+              column: {
+                inputStart: colNgram.inputStart,
+                inputEnd: colNgram.inputEnd,
+                inputText: colNgram.text,
+                matchedTarget: colMatchedTarget,
+                matchIndexes: colMatchIndexes,
+                score: colBreakdown.rawScore,
+              },
+              // Include operator match metadata if the operator was matched
+              operator: opMatch?.ngram ? {
+                inputStart: opMatch.ngram.inputStart,
+                inputEnd: opMatch.ngram.inputEnd,
+                inputText: opMatch.ngram.text,
+                matchedTarget: opMatch.matchedTarget ?? opMatch.matchedAlias ?? op.id,
+                matchIndexes: opMatch.matchIndexes,
+                score: opMatch.breakdown.rawScore,
+              } : undefined,
+            };
             
             suggestions.push(createSuggestion(
               col, 
@@ -1016,8 +1179,10 @@ export function createFuzzyFilter(
               suggestionArgs, 
               adjustedScore, 
               undefined, 
-              undefined, 
-              contextRowIndices
+              opMatch?.matchedAlias, 
+              contextRowIndices,
+              matchMeta,
+              tokens
             ));
           }
         } else if (compatibleValues.length === 1) {
@@ -1029,8 +1194,36 @@ export function createFuzzyFilter(
             const opInfo = getOperator(op.id);
             if (!opInfo.requiresArgument) continue;
             
+            // Check if this operator was also matched in the input
+            const generalKey = op.id;
+            const typedKey = `${op.id}:${col.type}`;
+            const opMatch = operatorScores.get(typedKey) ?? operatorScores.get(generalKey);
+            
             // Full coverage bonus since only 1 value
-            const adjustedScore = breakdown.adjustedScore + 1500;
+            // Include operator score if the operator was also matched in the input
+            const operatorBonus = opMatch ? opMatch.breakdown.adjustedScore : 0;
+            const adjustedScore = colBreakdown.adjustedScore + 1500 + operatorBonus;
+            
+            // Build match metadata for highlighting
+            const matchMeta: MatchMetadata = {
+              column: {
+                inputStart: colNgram.inputStart,
+                inputEnd: colNgram.inputEnd,
+                inputText: colNgram.text,
+                matchedTarget: colMatchedTarget,
+                matchIndexes: colMatchIndexes,
+                score: colBreakdown.rawScore,
+              },
+              // Include operator match metadata if the operator was matched
+              operator: opMatch?.ngram ? {
+                inputStart: opMatch.ngram.inputStart,
+                inputEnd: opMatch.ngram.inputEnd,
+                inputText: opMatch.ngram.text,
+                matchedTarget: opMatch.matchedTarget ?? opMatch.matchedAlias ?? op.id,
+                matchIndexes: opMatch.matchIndexes,
+                score: opMatch.breakdown.rawScore,
+              } : undefined,
+            };
             
             suggestions.push(createSuggestion(
               col, 
@@ -1038,15 +1231,24 @@ export function createFuzzyFilter(
               [argValue], 
               adjustedScore, 
               undefined, 
-              undefined, 
-              contextRowIndices
+              opMatch?.matchedAlias, 
+              contextRowIndices,
+              matchMeta,
+              tokens
             ));
           }
         } else {
           // No compatible values detected - check for no-argument operators
           // First, check if any no-argument operators for this column were matched in operatorScores
           const noArgOps = ops.filter(op => !getOperator(op.id).requiresArgument);
-          const matchedNoArgOps: Array<{ opId: Operator; opBreakdown: ScoreBreakdown; matchedAlias?: string }> = [];
+          const matchedNoArgOps: Array<{ 
+            opId: Operator; 
+            opBreakdown: ScoreBreakdown; 
+            matchedAlias?: string;
+            opNgram?: NgramWithMeta;
+            opMatchedTarget?: string;
+            opMatchIndexes?: readonly number[];
+          }> = [];
           
           for (const op of noArgOps) {
             // Check if this operator was matched (with or without type restriction)
@@ -1062,29 +1264,76 @@ export function createFuzzyFilter(
                 opId: op.id, 
                 opBreakdown: match.breakdown,
                 matchedAlias: match.matchedAlias,
+                opNgram: match.ngram,
+                opMatchedTarget: match.matchedTarget,
+                opMatchIndexes: match.matchIndexes,
               });
             }
           }
           
           // If we have matched no-argument operators, give them a combined score + completeness bonus
           if (matchedNoArgOps.length > 0) {
-            for (const { opId, opBreakdown, matchedAlias } of matchedNoArgOps) {
+            for (const { opId, opBreakdown, matchedAlias, opNgram, opMatchedTarget, opMatchIndexes } of matchedNoArgOps) {
               // Combine column + operator scores, plus completeness bonus
               // Similar to argument coverage bonus (1500), we give a completeness bonus for no-arg operators
-              const combinedScore = breakdown.adjustedScore + opBreakdown.adjustedScore + 1500;
-              suggestions.push(createSuggestion(col, opId, undefined, combinedScore, undefined, matchedAlias, contextRowIndices));
+              const combinedScore = colBreakdown.adjustedScore + opBreakdown.adjustedScore + 1500;
+              
+              // Build match metadata for highlighting (both column and operator matched)
+              const matchMeta: MatchMetadata = {
+                column: {
+                  inputStart: colNgram.inputStart,
+                  inputEnd: colNgram.inputEnd,
+                  inputText: colNgram.text,
+                  matchedTarget: colMatchedTarget,
+                  matchIndexes: colMatchIndexes,
+                  score: colBreakdown.rawScore,
+                },
+                operator: opNgram ? {
+                  inputStart: opNgram.inputStart,
+                  inputEnd: opNgram.inputEnd,
+                  inputText: opNgram.text,
+                  matchedTarget: opMatchedTarget ?? matchedAlias ?? opId,
+                  matchIndexes: opMatchIndexes,
+                  score: opBreakdown.rawScore,
+                } : undefined,
+              };
+              
+              suggestions.push(createSuggestion(col, opId, undefined, combinedScore, undefined, matchedAlias, contextRowIndices, matchMeta, tokens));
             }
             
             // Also add other operators with just column score (lower priority)
             for (const op of ops.slice(0, 3)) {
               // Skip if already added as matched no-arg operator
               if (matchedNoArgOps.some(m => m.opId === op.id)) continue;
-              suggestions.push(createSuggestion(col, op.id, undefined, breakdown, undefined, undefined, contextRowIndices));
+              
+              const matchMeta: MatchMetadata = {
+                column: {
+                  inputStart: colNgram.inputStart,
+                  inputEnd: colNgram.inputEnd,
+                  inputText: colNgram.text,
+                  matchedTarget: colMatchedTarget,
+                  matchIndexes: colMatchIndexes,
+                  score: colBreakdown.rawScore,
+                },
+              };
+              
+              suggestions.push(createSuggestion(col, op.id, undefined, colBreakdown, undefined, undefined, contextRowIndices, matchMeta, tokens));
             }
           } else {
             // Fall back to default behavior - suggest top operators with just column score
             for (const op of ops.slice(0, 3)) {
-              suggestions.push(createSuggestion(col, op.id, undefined, breakdown, undefined, undefined, contextRowIndices));
+              const matchMeta: MatchMetadata = {
+                column: {
+                  inputStart: colNgram.inputStart,
+                  inputEnd: colNgram.inputEnd,
+                  inputText: colNgram.text,
+                  matchedTarget: colMatchedTarget,
+                  matchIndexes: colMatchIndexes,
+                  score: colBreakdown.rawScore,
+                },
+              };
+              
+              suggestions.push(createSuggestion(col, op.id, undefined, colBreakdown, undefined, undefined, contextRowIndices, matchMeta, tokens));
             }
           }
         }
@@ -1135,7 +1384,7 @@ export function createFuzzyFilter(
         }
       };
       
-      for (const [_key, { breakdown: opBreakdown, operator, forType, matchedAlias }] of operatorScores) {
+      for (const [_key, { breakdown: opBreakdown, operator, forType, matchedAlias, ngram: opNgram, matchedTarget: opMatchedTarget, matchIndexes: opMatchIndexes }] of operatorScores) {
         const opInfo = getOperator(operator);
         for (const col of getColumns(state.schema!)) {
           // Skip if this is a type-specific alias that doesn't match the column type
@@ -1143,21 +1392,63 @@ export function createFuzzyFilter(
           
           if (opInfo.supportedTypes.includes(col.type)) {
             // Check if this column was also matched in columnScores
-            const colScoreEntry = columnScores.get(col.id as string);
+            const colMatchEntry = columnScores.get(col.id as string);
             
-            if (colScoreEntry && !opInfo.requiresArgument) {
+            if (colMatchEntry && !opInfo.requiresArgument) {
               // Both column and no-argument operator matched - use combined score
               // Note: This creates a potential duplicate with the column suggestions path above,
               // but deduplication later will keep the higher-scored one
-              const combinedScore = colScoreEntry.adjustedScore + opBreakdown.adjustedScore + 1500;
-              suggestions.push(createSuggestion(col, operator, undefined, combinedScore, undefined, matchedAlias, contextRowIndices));
-            } else if (colScoreEntry && opInfo.requiresArgument) {
+              const combinedScore = colMatchEntry.breakdown.adjustedScore + opBreakdown.adjustedScore + 1500;
+              
+              // Build match metadata for highlighting (both column and operator matched)
+              const matchMeta: MatchMetadata = {
+                column: {
+                  inputStart: colMatchEntry.ngram.inputStart,
+                  inputEnd: colMatchEntry.ngram.inputEnd,
+                  inputText: colMatchEntry.ngram.text,
+                  matchedTarget: colMatchEntry.matchedTarget,
+                  matchIndexes: colMatchEntry.matchIndexes,
+                  score: colMatchEntry.breakdown.rawScore,
+                },
+                operator: {
+                  inputStart: opNgram.inputStart,
+                  inputEnd: opNgram.inputEnd,
+                  inputText: opNgram.text,
+                  matchedTarget: opMatchedTarget,
+                  matchIndexes: opMatchIndexes,
+                  score: opBreakdown.rawScore,
+                },
+              };
+              
+              suggestions.push(createSuggestion(col, operator, undefined, combinedScore, undefined, matchedAlias, contextRowIndices, matchMeta, tokens));
+            } else if (colMatchEntry && opInfo.requiresArgument) {
               // Both column and operator matched, but operator requires arguments
               // This handles cases like "status notin" where both slots are filled
               // Combine column + operator scores with a bonus for matching both
-              const combinedScore = colScoreEntry.adjustedScore + opBreakdown.adjustedScore + 1500;
-              suggestions.push(createSuggestion(col, operator, undefined, combinedScore, undefined, matchedAlias, contextRowIndices));
-            } else if (opInfo.requiresArgument && !colScoreEntry) {
+              const combinedScore = colMatchEntry.breakdown.adjustedScore + opBreakdown.adjustedScore + 1500;
+              
+              // Build match metadata for highlighting (both column and operator matched)
+              const matchMeta: MatchMetadata = {
+                column: {
+                  inputStart: colMatchEntry.ngram.inputStart,
+                  inputEnd: colMatchEntry.ngram.inputEnd,
+                  inputText: colMatchEntry.ngram.text,
+                  matchedTarget: colMatchEntry.matchedTarget,
+                  matchIndexes: colMatchEntry.matchIndexes,
+                  score: colMatchEntry.breakdown.rawScore,
+                },
+                operator: {
+                  inputStart: opNgram.inputStart,
+                  inputEnd: opNgram.inputEnd,
+                  inputText: opNgram.text,
+                  matchedTarget: opMatchedTarget,
+                  matchIndexes: opMatchIndexes,
+                  score: opBreakdown.rawScore,
+                },
+              };
+              
+              suggestions.push(createSuggestion(col, operator, undefined, combinedScore, undefined, matchedAlias, contextRowIndices, matchMeta, tokens));
+            } else if (opInfo.requiresArgument && !colMatchEntry) {
               // Operator matched but no column matched - check for compatible detected values
               // Get compatible values for this column type, filtered by context availability
               const compatibleValues: (number | Date)[] = col.type === DataType.NUMBER 
@@ -1216,37 +1507,169 @@ export function createFuzzyFilter(
                   // Calculate argument coverage bonus
                   const argumentCoverageBonus = Math.round((valuesUsed / compatibleValues.length) * 1500);
                   const adjustedScore = opBreakdown.adjustedScore + argumentCoverageBonus;
-                  suggestions.push(createSuggestion(col, operator, suggestionArgs, adjustedScore, undefined, matchedAlias, contextRowIndices));
+                  
+                  // Build match metadata for highlighting (operator matched)
+                  const matchMeta: MatchMetadata = {
+                    operator: {
+                      inputStart: opNgram.inputStart,
+                      inputEnd: opNgram.inputEnd,
+                      inputText: opNgram.text,
+                      matchedTarget: opMatchedTarget,
+                      matchIndexes: opMatchIndexes,
+                      score: opBreakdown.rawScore,
+                    },
+                  };
+                  
+                  suggestions.push(createSuggestion(col, operator, suggestionArgs, adjustedScore, undefined, matchedAlias, contextRowIndices, matchMeta, tokens));
                 }
               }
               
               // Also create incomplete suggestion (for cases where user wants to specify different values)
-              suggestions.push(createSuggestion(col, operator, undefined, opBreakdown.adjustedScore, undefined, matchedAlias, contextRowIndices));
+              const opOnlyMeta: MatchMetadata = {
+                operator: {
+                  inputStart: opNgram.inputStart,
+                  inputEnd: opNgram.inputEnd,
+                  inputText: opNgram.text,
+                  matchedTarget: opMatchedTarget,
+                  matchIndexes: opMatchIndexes,
+                  score: opBreakdown.rawScore,
+                },
+              };
+              suggestions.push(createSuggestion(col, operator, undefined, opBreakdown.adjustedScore, undefined, matchedAlias, contextRowIndices, opOnlyMeta, tokens));
             } else {
               // Only operator matched (with column match but requires argument, or no column match and no values)
-              suggestions.push(createSuggestion(col, operator, undefined, opBreakdown.adjustedScore, undefined, matchedAlias, contextRowIndices));
+              const opOnlyMeta: MatchMetadata = {
+                operator: {
+                  inputStart: opNgram.inputStart,
+                  inputEnd: opNgram.inputEnd,
+                  inputText: opNgram.text,
+                  matchedTarget: opMatchedTarget,
+                  matchIndexes: opMatchIndexes,
+                  score: opBreakdown.rawScore,
+                },
+              };
+              suggestions.push(createSuggestion(col, operator, undefined, opBreakdown.adjustedScore, undefined, matchedAlias, contextRowIndices, opOnlyMeta, tokens));
             }
           }
         }
       }
 
       // Value suggestions
-      for (const [_key, { breakdown, match }] of valueScores) {
+      for (const [_key, { breakdown, match, ngram: valNgram, matchedTarget: valMatchedTarget, matchIndexes: valMatchIndexes }] of valueScores) {
         const col = getColumnById(match.value.columnId);
         if (col) {
           // When there's a filter context, don't use pre-indexed rowCount - compute dynamically
           const rowCount = contextRowIndices !== null 
             ? undefined  // Will be computed by createSuggestion using context
             : match.value.rowCount;
+          
+          // Check if this value's column also has a matching column score
+          // and if there's a matching "eq" operator score.
+          // If so, this value suggestion matches more of the query and should score higher.
+          const colEntry = columnScores.get(col.id);
+          const opEntry = operatorScores.get("eq");
+          
+          // Check if the value's ngram matches a NON-EQ operator better than the value itself.
+          // This handles cases like "not equals" where the ngram should be interpreted as
+          // the "neq" operator, not as a fuzzy value match boosted by the "eq" operator.
+          // If another operator has a higher-scoring match on an overlapping/same ngram,
+          // we should NOT boost this value suggestion with the eq operator bonus.
+          let anotherOpMatchesBetter = false;
+          for (const [, opScoreEntry] of operatorScores) {
+            // Skip the eq operator itself
+            if (opScoreEntry.operator === "eq") continue;
+            
+            // Check if this operator's ngram overlaps with the value's ngram
+            const opNgram = opScoreEntry.ngram;
+            const valueNgram = valNgram;
+            
+            // Ngrams overlap if they share any character positions in the original input
+            const overlaps = !(opNgram.inputEnd <= valueNgram.inputStart || valueNgram.inputEnd <= opNgram.inputStart);
+            
+            if (overlaps) {
+              // If the operator match is significantly better than the value match,
+              // the ngram was likely intended for the operator, not the value
+              const opScore = opScoreEntry.breakdown.adjustedScore;
+              const valueScore = breakdown.adjustedScore;
+              
+              // If operator scored higher, don't boost value with eq
+              if (opScore > valueScore) {
+                anotherOpMatchesBetter = true;
+                break;
+              }
+            }
+          }
+          
+          // Determine which operator to use for this value suggestion.
+          // Instead of always using "eq", use the best matching operator from operatorScores
+          // that supports string arguments and is compatible with the column type.
+          let bestOpForValue: Operator = "eq";
+          let bestOpEntry: OpScoreEntry | undefined = opEntry;
+          
+          // Find the best operator in operatorScores that:
+          // 1. Supports the column's type
+          // 2. Requires an argument (so it makes sense with a value)
+          for (const [, opScoreEntry] of operatorScores) {
+            const opInfo = getOperator(opScoreEntry.operator);
+            if (opInfo.supportedTypes.includes(col.type) && opInfo.requiresArgument) {
+              if (!bestOpEntry || opScoreEntry.breakdown.adjustedScore > bestOpEntry.breakdown.adjustedScore) {
+                bestOpEntry = opScoreEntry;
+                bestOpForValue = opScoreEntry.operator;
+              }
+            }
+          }
+          
+          // Calculate combined score when column and operator also matched
+          let finalScore = breakdown.adjustedScore;
+          if (!anotherOpMatchesBetter && (colEntry || bestOpEntry)) {
+            // Bonus for matching additional components beyond just the value
+            // This ensures "Status eq Open" for query "status equa open" scores higher
+            // than "Status eq (...)" which only matches column+operator
+            const colBonus = colEntry ? colEntry.breakdown.adjustedScore : 0;
+            const opBonus = bestOpEntry ? bestOpEntry.breakdown.adjustedScore : 0;
+            // Add a base bonus for having all components matched + coverage bonuses
+            finalScore = breakdown.adjustedScore + colBonus + opBonus;
+          }
+          
+          // Build match metadata for highlighting (value matched)
+          const matchMeta: MatchMetadata = {
+            column: colEntry ? {
+              inputStart: colEntry.ngram.inputStart,
+              inputEnd: colEntry.ngram.inputEnd,
+              inputText: colEntry.ngram.text,
+              matchedTarget: colEntry.matchedTarget,
+              matchIndexes: colEntry.matchIndexes,
+              score: colEntry.breakdown.rawScore,
+            } : undefined,
+            operator: bestOpEntry ? {
+              inputStart: bestOpEntry.ngram.inputStart,
+              inputEnd: bestOpEntry.ngram.inputEnd,
+              inputText: bestOpEntry.ngram.text,
+              matchedTarget: bestOpEntry.matchedTarget,
+              matchIndexes: bestOpEntry.matchIndexes,
+              score: bestOpEntry.breakdown.rawScore,
+            } : undefined,
+            values: [{
+              inputStart: valNgram.inputStart,
+              inputEnd: valNgram.inputEnd,
+              inputText: valNgram.text,
+              matchedTarget: valMatchedTarget,
+              matchIndexes: valMatchIndexes,
+              score: breakdown.rawScore,
+            }],
+          };
+          
           suggestions.push(
             createSuggestion(
               col,
-              "eq",
+              bestOpForValue,
               [{ kind: "string", value: match.value.value }],
-              breakdown,
+              finalScore,
               rowCount,
-              undefined,
-              contextRowIndices
+              bestOpEntry?.matchedAlias,
+              contextRowIndices,
+              matchMeta,
+              tokens
             )
           );
         }
@@ -1316,7 +1739,9 @@ export function createFuzzyFilter(
                         match.score + parsed.column.match.score,
                         rowCount,
                         undefined,
-                        contextRowIndices
+                        contextRowIndices,
+                        undefined,
+                        tokens
                       )
                     );
                   }
@@ -1397,7 +1822,9 @@ export function createFuzzyFilter(
                         combinedScore,
                         undefined,
                         undefined,
-                        contextRowIndices
+                        contextRowIndices,
+                        undefined,
+                        tokens
                       )
                     );
                   }
@@ -1434,7 +1861,9 @@ export function createFuzzyFilter(
                           combinedScore,
                           rowCount,
                           undefined,
-                          contextRowIndices
+                          contextRowIndices,
+                          undefined,
+                          tokens
                         )
                       );
                     }
@@ -1467,7 +1896,9 @@ export function createFuzzyFilter(
                       parsed.column.match.score,
                       rowCount,
                       undefined,
-                      contextRowIndices
+                      contextRowIndices,
+                      undefined,
+                      tokens
                     )
                   );
                 }
@@ -1484,7 +1915,9 @@ export function createFuzzyFilter(
               parsed.column.match.score + parsed.operator.match.score,
               undefined,
               undefined,
-              contextRowIndices
+              contextRowIndices,
+              undefined,
+              tokens
             )
           );
         }
@@ -1499,17 +1932,51 @@ export function createFuzzyFilter(
       const hasColumnMatches = columnScores.size > 0;
       const hasOperatorMatches = operatorScores.size > 0;
       
+      // DEBUG: Uncomment to trace why Strategy 3 might not run
+      // console.log(`[Strategy 3] hasColumnMatches=${hasColumnMatches}, hasOperatorMatches=${hasOperatorMatches}, tokens=${tokens.length}`);
+      // console.log(`[Strategy 3] columnScores:`, [...columnScores.keys()]);
+      // console.log(`[Strategy 3] operatorScores:`, [...operatorScores.keys()]);
+      
       if (!hasColumnMatches && !hasOperatorMatches && tokens.length >= 1) {
         // Detect all potential argument values from tokens
         const allDetectedValues = detectValueTokens(tokens, new Set());
         
-        // Also check which tokens matched indexed string values
+        // For variadic operators, we need best-match-per-token logic:
+        // Each token should contribute at most ONE value (the best match for that token).
+        // This prevents "hello world" from matching 5 "Hello*" values via the "hello" token.
+        
+        // Step 1: Group value matches by source token
+        const valuesBySourceToken = new Map<string, Map<ColumnId, { value: string; score: number }[]>>();
+        for (const [_key, { match, breakdown, sourceTokenText }] of valueScores) {
+          if (!valuesBySourceToken.has(sourceTokenText)) {
+            valuesBySourceToken.set(sourceTokenText, new Map());
+          }
+          const tokenMap = valuesBySourceToken.get(sourceTokenText)!;
+          if (!tokenMap.has(match.value.columnId)) {
+            tokenMap.set(match.value.columnId, []);
+          }
+          tokenMap.get(match.value.columnId)!.push({ 
+            value: match.value.value, 
+            score: breakdown.adjustedScore 
+          });
+        }
+        
+        // Step 2: For each token, keep only the best match per column
+        // stringValueMatches will contain at most one value per source token per column
         const stringValueMatches: Map<ColumnId, string[]> = new Map();
-        for (const [_key, { match }] of valueScores) {
-          const existing = stringValueMatches.get(match.value.columnId) || [];
-          if (!existing.includes(match.value.value)) {
-            existing.push(match.value.value);
-            stringValueMatches.set(match.value.columnId, existing);
+        for (const [_sourceToken, columnMatches] of valuesBySourceToken) {
+          for (const [columnId, matches] of columnMatches) {
+            // Sort by score descending, take the best
+            matches.sort((a, b) => b.score - a.score);
+            const bestMatch = matches[0];
+            if (bestMatch) {
+              const existing = stringValueMatches.get(columnId) || [];
+              // Avoid duplicates if the same value was matched by different tokens
+              if (!existing.includes(bestMatch.value)) {
+                existing.push(bestMatch.value);
+                stringValueMatches.set(columnId, existing);
+              }
+            }
           }
         }
         
@@ -1707,6 +2174,9 @@ export function createFuzzyFilter(
           
           const baseScore = 1500;
           
+          // DEBUG: Uncomment to trace value matches
+          // console.log(`[Strategy 3] Column ${columnId} has ${values.length} values from ${tokens.length} tokens:`, values);
+          
           if (values.length >= 2) {
             // Multiple values matched for same column: suggest "in" operator
             const ops = getOperatorsForType(col.type);
@@ -1772,7 +2242,9 @@ export function createFuzzyFilter(
     scoreOrBreakdown: number | ScoreBreakdown,
     resultCount?: number,
     matchedAlias?: string,
-    contextRowIndices: Set<number> | null = null
+    contextRowIndices: Set<number> | null = null,
+    matchMetadata?: MatchMetadata,
+    queryTokens?: Token[]
   ): FilterSuggestion {
     const opInfo = getOperator(operator);
     
@@ -1813,17 +2285,120 @@ export function createFuzzyFilter(
 
     // Handle both plain score and breakdown
     const isBreakdown = typeof scoreOrBreakdown === "object";
-    const score = isBreakdown ? scoreOrBreakdown.adjustedScore : scoreOrBreakdown;
+    let score = isBreakdown ? scoreOrBreakdown.adjustedScore : scoreOrBreakdown;
+    
+    // Calculate token coverage bonus
+    // Using more tokens from the query should give a small bonus (tiebreaker)
+    // This is proportional and capped so it doesn't override match quality
+    // Max bonus: 500 (for 100% coverage), scaled linearly
+    if (queryTokens && queryTokens.length > 0 && matchMetadata) {
+      const coveredTokenIndices = new Set<number>();
+      
+      // Helper to mark tokens as covered based on character range
+      const markCoveredTokens = (inputStart: number, inputEnd: number) => {
+        for (let i = 0; i < queryTokens.length; i++) {
+          const token = queryTokens[i]!;
+          // A token is covered if its range overlaps with the match range
+          if (token.start < inputEnd && token.end > inputStart) {
+            coveredTokenIndices.add(i);
+          }
+        }
+      };
+      
+      // Mark tokens covered by column match
+      if (matchMetadata.column) {
+        markCoveredTokens(matchMetadata.column.inputStart, matchMetadata.column.inputEnd);
+      }
+      
+      // Mark tokens covered by operator match
+      if (matchMetadata.operator) {
+        markCoveredTokens(matchMetadata.operator.inputStart, matchMetadata.operator.inputEnd);
+      }
+      
+      // Mark tokens covered by value matches
+      if (matchMetadata.values) {
+        for (const val of matchMetadata.values) {
+          markCoveredTokens(val.inputStart, val.inputEnd);
+        }
+      }
+      
+      // For suggestions with detected numeric/date values (not string values from index),
+      // mark the value tokens as covered if we have arguments
+      if (args && args.length > 0) {
+        for (const arg of args) {
+          if (arg.kind === "number" || arg.kind === "date") {
+            // Find the token that matches this value
+            const valueStr = arg.kind === "number" ? String(arg.value) : "";
+            for (let i = 0; i < queryTokens.length; i++) {
+              const token = queryTokens[i]!;
+              // Check if this token represents the numeric value
+              if (arg.kind === "number" && token.text === valueStr) {
+                coveredTokenIndices.add(i);
+              }
+              // For dates, check if the token could be part of a date expression
+              if (arg.kind === "date" && !isNaN(parseFloat(token.text))) {
+                coveredTokenIndices.add(i);
+              }
+            }
+          }
+        }
+      }
+      
+      // Calculate token coverage bonus (proportional, max 500 for full coverage)
+      // This acts as a tiebreaker - using more tokens is slightly better
+      const coverageRatio = coveredTokenIndices.size / queryTokens.length;
+      const tokenCoverageBonus = Math.round(coverageRatio * 500);
+      score += tokenCoverageBonus;
+    }
+    
     const scoreBreakdown = isBreakdown
       ? {
           rawScore: scoreOrBreakdown.rawScore,
           coverageBonus: scoreOrBreakdown.coverageBonus,
           completenessBonus: scoreOrBreakdown.completenessBonus,
           fullQueryBonus: scoreOrBreakdown.fullQueryBonus,
+          exactMatchBonus: scoreOrBreakdown.exactMatchBonus,
           tokenCount: scoreOrBreakdown.tokenCount,
           totalTokens: scoreOrBreakdown.totalTokens,
         }
       : undefined;
+
+    // Build queryMatches array from match metadata
+    const queryMatches: QueryMatch[] = [];
+    if (matchMetadata) {
+      if (matchMetadata.column) {
+        queryMatches.push({
+          inputRange: { start: matchMetadata.column.inputStart, end: matchMetadata.column.inputEnd },
+          inputText: matchMetadata.column.inputText,
+          matchType: "column",
+          matchedTarget: matchMetadata.column.matchedTarget,
+          matchedCharIndexes: matchMetadata.column.matchIndexes ? [...matchMetadata.column.matchIndexes] : undefined,
+          score: matchMetadata.column.score,
+        });
+      }
+      if (matchMetadata.operator) {
+        queryMatches.push({
+          inputRange: { start: matchMetadata.operator.inputStart, end: matchMetadata.operator.inputEnd },
+          inputText: matchMetadata.operator.inputText,
+          matchType: "operator",
+          matchedTarget: matchMetadata.operator.matchedTarget,
+          matchedCharIndexes: matchMetadata.operator.matchIndexes ? [...matchMetadata.operator.matchIndexes] : undefined,
+          score: matchMetadata.operator.score,
+        });
+      }
+      if (matchMetadata.values) {
+        for (const val of matchMetadata.values) {
+          queryMatches.push({
+            inputRange: { start: val.inputStart, end: val.inputEnd },
+            inputText: val.inputText,
+            matchType: "value",
+            matchedTarget: val.matchedTarget,
+            matchedCharIndexes: val.matchIndexes ? [...val.matchIndexes] : undefined,
+            score: val.score,
+          });
+        }
+      }
+    }
 
     return {
       id: `${column.id}:${operator}:${valueText}`,
@@ -1852,6 +2427,7 @@ export function createFuzzyFilter(
       completionText,
       cursorPositionAfter: completionText.length,
       category: score === 0 ? "exact" : scoreBreakdown?.rawScore === 0 ? "exact" : "fuzzy",
+      queryMatches: queryMatches.length > 0 ? queryMatches : undefined,
     };
   }
 

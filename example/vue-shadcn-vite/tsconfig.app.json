@@ -2,14 +2,18 @@
   "extends": "@vue/tsconfig/tsconfig.dom.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
       "fuzzyfilter": ["../../packages/fuzzyfilter/src/index.ts"],
       "vue-fuzzy-filter": ["../../packages/vue-fuzzy-filter/src/index.ts"],
-      "@fuzzyfilter/sample-data": ["../../packages/sample-data/src/index.ts"]
+      "@fuzzyfilter/sample-data": ["../../packages/sample-data/src/index.ts"],
+      "lucide-operators": ["../../packages/lucide-operators/src/index.ts"],
+      "lucide-operators-vue": ["../../packages/lucide-operators-vue/src/index.ts"],
+      "lucide-operators/assets/*": ["../../packages/lucide-operators/assets/*"]
     },
+    "skipLibCheck": true,
 
     /* Linting */
     "strict": true,
@@ -19,5 +23,9 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue"
+  ]
 }
