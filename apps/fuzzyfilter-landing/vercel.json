@@ -1,5 +1,4 @@
 {
-  "buildCommand": "turbo run build --filter=fuzzyfilter-landing",
   "outputDirectory": "dist",
   "framework": "vite"
 }
