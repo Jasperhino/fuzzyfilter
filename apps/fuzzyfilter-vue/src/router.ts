@@ -21,6 +21,6 @@ const routes = [
 ]
 
 export const router = createRouter({
-  history: createWebHistory('/vue/'),
+  history: createWebHistory(),
   routes,
 })

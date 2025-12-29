@@ -1,23 +1,5 @@
 {
   "buildCommand": "turbo run build --filter=fuzzyfilter-landing",
   "outputDirectory": "dist",
-  "framework": "vite",
-  "rewrites": [
-    {
-      "source": "/vue",
-      "destination": "https://fuzzyfilter-vue.vercel.app/"
-    },
-    {
-      "source": "/vue/:match*",
-      "destination": "https://fuzzyfilter-vue.vercel.app/:match*"
-    },
-    {
-      "source": "/react",
-      "destination": "https://fuzzyfilter-react.vercel.app/"
-    },
-    {
-      "source": "/react/:match*",
-      "destination": "https://fuzzyfilter-react.vercel.app/:match*"
-    }
-  ]
+  "framework": "vite"
 }

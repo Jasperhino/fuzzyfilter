@@ -8,12 +8,14 @@ function App() {
       // Check if we're on localhost (development)
       if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return app === 'react' 
-          ? 'http://localhost:5173/react/'
-          : 'http://localhost:5174/vue/'
+          ? 'http://localhost:5174'
+          : 'http://localhost:5175'
       }
       
-      // In production, use path-based routing
-      return `/${app}/`
+      // In production, use separate Vercel domains
+      return app === 'react'
+        ? 'https://fuzzyfilter-react.vercel.app'
+        : 'https://fuzzyfilter-vue.vercel.app'
     }
     return '#'
   }
