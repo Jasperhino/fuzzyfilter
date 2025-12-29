@@ -1,7 +1,6 @@
 import { createApp } from "vue"
-import { router } from "./router"
 import "./style.css"
-import RootLayout from "./RootLayout.vue"
+import DemoPage from "./components/DemoPage.vue"
 import { tryLoadAndStartRecorder } from "@alwaysmeticulous/recorder-loader"
 
 /**
@@ -28,8 +27,7 @@ async function startApp(): Promise<void> {
   }
 
   // Initialize app after the Meticulous recorder is ready
-  const app = createApp(RootLayout)
-  app.use(router)
+  const app = createApp(DemoPage)
   app.mount("#app")
 }
 

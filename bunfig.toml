@@ -3,4 +3,7 @@
 [test]
 # Only discover tests in packages/fuzzyfilter (excludes Playwright e2e tests)
 # E2E tests should be run via `bun test:e2e` which uses playwright directly
+# Setting root to ./packages/fuzzyfilter prevents Bun from picking up Playwright .spec.ts files
+# in packages/e2e-tests when running `bun test` from the root
+root = "./packages/fuzzyfilter"
 

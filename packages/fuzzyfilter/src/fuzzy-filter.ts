@@ -155,7 +155,7 @@ function generateNgrams(tokens: Token[]): NgramWithMeta[] {
  */
 interface DetectedValues {
   numbers: { token: Token; value: number; index: number }[];
-  dates: { token: Token; value: Date; index: number }[];
+  dates: { token: Token; value: Date; index: number; parsed?: ParsedDate }[];
 }
 
 /**
@@ -2033,6 +2033,20 @@ export function createFuzzyFilter(
       for (const [_key, { breakdown, match, ngram: valNgram, matchedTarget: valMatchedTarget, matchIndexes: valMatchIndexes }] of valueScores) {
         const col = getColumnById(match.value.columnId);
         if (col) {
+          // Filter values based on context if available
+          if (contextAvailableValues) {
+            const available = contextAvailableValues.get(col.id);
+            if (col.type === DataType.STRING || col.type === DataType.ENUM) {
+              if (!available?.strings.has(match.value.value)) continue;
+            } else if (col.type === DataType.NUMBER) {
+              if (!available?.numbers.has(Number(match.value.value))) continue;
+            } else if (col.type === DataType.DATE) {
+              // For dates, check if the value exists in context
+              const dateValue = new Date(String(match.value.value));
+              if (!isNaN(dateValue.getTime()) && !available?.dates.has(dateValue.getTime())) continue;
+            }
+          }
+          
           // When there's a filter context, don't use pre-indexed rowCount - compute dynamically
           const rowCount = contextRowIndices !== null 
             ? undefined  // Will be computed by createSuggestion using context
@@ -2147,6 +2161,80 @@ export function createFuzzyFilter(
               tokens
             )
           );
+        }
+      }
+
+      // If we have a column match (with or without operator), handle date columns specially
+      if (parsed.column) {
+        const col = parsed.column.match.column;
+        
+        // Get remaining tokens after column (and operator if present) as potential value
+        const colTokenIdx = tokens.indexOf(parsed.column.token);
+        const opTokenIdx = parsed.operator ? tokens.indexOf(parsed.operator.token) : -1;
+        const valueTokens = tokens.filter(
+          (_, i) => i !== colTokenIdx && i !== opTokenIdx
+        );
+
+        // Handle date columns specially - check for date ranges even without explicit operator
+        if (col.type === DataType.DATE && valueTokens.length > 0) {
+          const valueQuery = valueTokens.map((t) => t.text).join(" ");
+          const parsedDate = parseDate(valueQuery);
+          
+          if (parsedDate && parsedDate.isRange && parsedDate.rangeStart && parsedDate.rangeEnd) {
+            // Date range detected - suggest "between" operator even if not explicitly in query
+            const betweenOp = "between";
+            const betweenOpInfo = getOperator(betweenOp);
+            
+            // Build match metadata
+            const colToken = parsed.column!.token;
+            const valueStart = valueTokens[0]?.start ?? 0;
+            const valueEnd = valueTokens[valueTokens.length - 1]?.end ?? valueQuery.length;
+            
+            const dateMatchMeta: MatchMetadata = {
+              column: {
+                inputStart: colToken.start,
+                inputEnd: colToken.end,
+                inputText: colToken.text,
+                matchedTarget: col.name,
+                score: parsed.column!.match.score,
+              },
+              // No operator match since "between" wasn't in the query
+              values: [
+                {
+                  inputStart: valueStart,
+                  inputEnd: valueEnd,
+                  inputText: valueQuery,
+                  matchedTarget: formatDateForDisplay(parsedDate.rangeStart!),
+                  score: 0,
+                },
+                {
+                  inputStart: valueStart,
+                  inputEnd: valueEnd,
+                  inputText: valueQuery,
+                  matchedTarget: formatDateForDisplay(parsedDate.rangeEnd!),
+                  score: 0,
+                },
+              ],
+            };
+            
+            // Add between suggestion for date range
+            const key = `${col.id}:${betweenOp}:date:${parsedDate.rangeStart!.toISOString()}-${parsedDate.rangeEnd!.toISOString()}`;
+            if (!seenValues.has(key)) {
+              seenValues.add(key);
+              suggestions.push(
+                createDateSuggestion(
+                  col,
+                  betweenOp,
+                  parsedDate,
+                  4000, // High score for date range detection
+                  countForDateFilter(col.id, betweenOp, parsedDate, contextRowIndices),
+                  undefined,
+                  contextRowIndices,
+                  dateMatchMeta
+                )
+              );
+            }
+          }
         }
       }
 

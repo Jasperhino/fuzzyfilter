@@ -12,6 +12,7 @@ import { createFuzzyFilter, getOperator, type CompiledFilter, type FilterSuggest
 import { TASK_SCHEMA, COLUMN_IDS, generateLargeDataset } from "@fuzzyfilter/sample-data"
 import DataTypeIcon from "./DataTypeIcon.vue"
 import ColumnInfoPopover from "./ColumnInfoPopover.vue"
+import QueryVisualization from "./QueryVisualization.vue"
 import {
   FilterIcon,
   CheckIcon,
@@ -438,12 +439,24 @@ function getMatchForType(suggestion: FilterSuggestion, matchType: "column" | "op
 }
 
 /**
- * Check if an argument value was matched in the query
+ * Get the query match for a specific argument value
+ * For multiple arguments (in/not in), match by index first, then fall back to string matching
  */
-function isArgMatched(suggestion: FilterSuggestion, argText: string): boolean {
-  if (!suggestion.queryMatches) return false
+function getArgMatch(suggestion: FilterSuggestion, argText: string, argIndex: number): QueryMatch | undefined {
+  if (!suggestion.queryMatches) return undefined
   const valueMatches = suggestion.queryMatches.filter(m => m.matchType === "value")
-  return valueMatches.some(m => m.matchedTarget === argText)
+  
+  // Try to match by index first (for in/not in operators with multiple args)
+  if (argIndex < valueMatches.length) {
+    const indexMatch = valueMatches[argIndex]
+    // Verify it matches the text (safety check)
+    if (indexMatch && indexMatch.matchedTarget === argText) {
+      return indexMatch
+    }
+  }
+  
+  // Fall back to string matching (for single args or when index doesn't match)
+  return valueMatches.find(m => m.matchedTarget === argText)
 }
 
 /**
@@ -545,6 +558,13 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
         </button>
       </div>
 
+      <!-- Query visualization above combobox - always render to prevent layout jumping -->
+      <QueryVisualization
+        :query="query"
+        :matches="inputQueryMatches"
+        :suggestion="highlightedSuggestion ?? undefined"
+      />
+
       <!-- Combobox with colored input overlay -->
       <div class="relative">
         <div class="flex items-center gap-2 px-3 py-2 bg-background rounded-lg border border-input focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 transition-all relative">
@@ -613,26 +633,20 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
             >
               <!-- Suggestion column - left aligned, grows to push score/results right -->
               <div class="flex items-center gap-1.5 min-w-0 flex-1">
-                <span class="font-medium text-foreground truncate">
-                  <template v-for="(seg, segIdx) in getTextHighlightSegments(suggestion.parts.column.text, getMatchForType(suggestion, 'column')?.matchedCharIndexes)" :key="segIdx">
-                    <span v-if="seg.highlighted" class="font-bold">{{ seg.text }}</span>
-                    <span v-else>{{ seg.text }}</span>
-                  </template>
+                <span class="font-medium text-foreground truncate whitespace-pre">
+                  <template v-for="(seg, segIdx) in getTextHighlightSegments(suggestion.parts.column.text, getMatchForType(suggestion, 'column')?.matchedCharIndexes)" :key="segIdx"><span v-if="seg.highlighted" class="font-bold">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template>
                 </span>
-                <span class="shrink-0 h-4 px-1 rounded inline-flex items-center bg-muted text-muted-foreground text-[10px]">
-                  <template v-for="(seg, segIdx) in getTextHighlightSegments(suggestion.parts.operator.matchedAlias ?? suggestion.parts.operator.text, getMatchForType(suggestion, 'operator')?.matchedCharIndexes)" :key="segIdx">
-                    <span v-if="seg.highlighted" class="font-bold">{{ seg.text }}</span>
-                    <span v-else>{{ seg.text }}</span>
-                  </template>
+                <span class="shrink-0 h-4 px-1 rounded inline-flex items-center bg-muted text-muted-foreground text-[10px] whitespace-pre">
+                  <template v-for="(seg, segIdx) in getTextHighlightSegments(suggestion.parts.operator.matchedAlias ?? suggestion.parts.operator.text, getMatchForType(suggestion, 'operator')?.matchedCharIndexes)" :key="segIdx"><span v-if="seg.highlighted" class="font-bold">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template>
                 </span>
-                <!-- Render existing arguments - bold if matched, use displayText with ellipsis for long values -->
+                <!-- Render existing arguments - use character-level highlighting -->
                 <span 
                   v-for="(arg, i) in suggestion.parts.arguments" 
                   :key="i"
-                  :class="['shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground', isArgMatched(suggestion, arg.text) ? 'font-bold' : '']"
+                  class="shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground max-w-[200px] truncate"
                   :title="arg.displayText ? arg.text : undefined"
                 >
-                  {{ arg.displayText ?? arg.text }}
+                  <span class="whitespace-pre"><template v-for="(seg, segIdx) in getTextHighlightSegments(arg.text, getArgMatch(suggestion, arg.text, i)?.matchedCharIndexes)" :key="segIdx"><span v-if="seg.highlighted" class="font-bold">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template></span>
                 </span>
                 <!-- Render placeholders for missing arguments -->
                 <span 

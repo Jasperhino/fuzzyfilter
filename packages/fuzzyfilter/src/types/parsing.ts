@@ -65,7 +65,6 @@ export interface ColumnClassificationMatch {
 export interface OperatorClassificationMatch {
   operator: Operator;
   score: number;
-  matchedOn: "id" | "label" | "alias" | "symbol";
 }
 
 /**
@@ -163,13 +162,6 @@ export interface DateParseOptions {
   forwardDate?: boolean;
 }
 
-// ============================================================================
-// PARSER INTERFACE
-// ============================================================================
-
-/**
- * The main parser interface
- */
 export interface Parser {
   /** Tokenize raw input */
   tokenize(input: string): TokenizeResult;
@@ -182,7 +174,4 @@ export interface Parser {
 
   /** Parse a date expression */
   parseDate(input: string, options?: DateParseOptions): ParsedDate | null;
-
-  /** Try to parse a number (with unit support) */
-  parseNumber(input: string): { value: number; unit?: string } | null;
 }

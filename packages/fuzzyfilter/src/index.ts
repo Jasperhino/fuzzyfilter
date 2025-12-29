@@ -148,7 +148,7 @@ export {
  * });
  * ```
  */
-export { createFuzzyFilter } from "./fuzzy-filter.ts";
+export { createFuzzyFilter } from "./fuzzy-filter/index.ts";
 
 // ============================================================================
 // UTILITIES

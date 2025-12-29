@@ -3,6 +3,7 @@
     "*.svg": "default"
   },
   "cSpell.words": [
-    "fuzzyfilter"
+    "fuzzyfilter",
+    "ngram"
   ]
 }
