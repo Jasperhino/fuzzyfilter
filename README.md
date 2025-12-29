@@ -134,15 +134,15 @@ filter.setSchema({ columns });
 
 FuzzyFilter supports a comprehensive set of operators:
 
-| Category | Operators | Applicable Types |
-|----------|-----------|------------------|
-| Equality | `eq`, `neq`, `eqIgnoreCase`, `neqIgnoreCase` | All types |
-| Comparison | `lt`, `lte`, `gt`, `gte` | number, date |
-| Set Membership | `in`, `nin` | All types |
-| Pattern Matching | `contains`, `notContains`, `startsWith`, `endsWith` | string |
-| Nullability | `isEmpty`, `isNotEmpty` | All types |
-| Boolean | `isTrue`, `isFalse` | boolean |
-| Date | `before`, `after`, `between` | date |
+| Category         | Operators                                           | Applicable Types |
+| ---------------- | --------------------------------------------------- | ---------------- |
+| Equality         | `eq`, `neq`, `eqIgnoreCase`, `neqIgnoreCase`        | All types        |
+| Comparison       | `lt`, `lte`, `gt`, `gte`                            | number, date     |
+| Set Membership   | `in`, `nin`                                         | All types        |
+| Pattern Matching | `contains`, `notContains`, `startsWith`, `endsWith` | string           |
+| Nullability      | `isEmpty`, `isNotEmpty`                             | All types        |
+| Boolean          | `isTrue`, `isFalse`                                 | boolean          |
+| Date             | `before`, `after`, `between`                        | date             |
 
 ### Suggestions
 
@@ -448,8 +448,8 @@ bun install
 # Run tests
 bun test
 
-# Run example
-cd example/shadcn-vite && bun dev
+# Deploy
+bun run deploy
 ```
 
 ## License

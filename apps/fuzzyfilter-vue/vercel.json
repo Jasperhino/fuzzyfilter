@@ -1,5 +1,5 @@
 {
-  "buildCommand": "turbo run build --filter=fuzzyfilter-vue",
+  "buildCommand": "bun run build",
   "outputDirectory": "dist",
   "framework": "vite"
 }
