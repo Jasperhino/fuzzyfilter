@@ -1,8 +1,0 @@
-{
-  "buildCommand": "bunx turbo run build --filter=fuzzyfilter-landing --filter=fuzzyfilter-vue --filter=fuzzyfilter-react",
-  "devCommand": "bunx turbo run dev",
-  "installCommand": "bun install",
-  "framework": null,
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD ./",
-  "outputDirectory": ".vercel-output"
-}
