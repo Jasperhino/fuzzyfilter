@@ -114,3 +114,31 @@ export type {
 } from "./api.ts";
 
 export { DEFAULT_CONFIG } from "./api.ts";
+
+// Telemetry types (Wide Events)
+export type {
+  EventOutcome,
+  WideEvent,
+  WideEventBase,
+  WideEventBuilder,
+  WideEventCallback,
+  TelemetryConfig,
+  TelemetryCollector,
+  IndexProgress,
+  IndexDataAsyncOptions,
+  // Specific event types
+  SetSchemaEvent,
+  IndexDataEvent,
+  SuggestEvent,
+  CompileEvent,
+  DataMutationEvent,
+  // Context types
+  SchemaContext,
+  DataContext,
+  QueryContext,
+  SuggestionResultContext,
+  IndexingContext,
+  ProgressContext,
+} from "../telemetry/index.ts";
+
+export { DEFAULT_TELEMETRY_CONFIG } from "../telemetry/index.ts";

@@ -334,7 +334,7 @@ function getScoreDisplay(segment: TokenSegment): { text: string; class: string; 
 <template>
   <!-- Always render container with fixed height to prevent layout jumping -->
   <div
-    class="flex flex-col gap-0.5 px-3 py-2 bg-muted/30 rounded-md border border-border/50 font-mono text-sm min-h-[5.5rem] min-w-0"
+    class="flex flex-col gap-0.5 px-3 py-2 bg-muted/30 rounded-md border border-border/50 font-mono text-sm min-h-[6rem] min-w-0"
   >
     <template v-if="visibleSegments.length > 0">
       <!-- Token row -->

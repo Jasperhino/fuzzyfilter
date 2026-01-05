@@ -11,6 +11,8 @@ import type {
   FuzzyFilter,
   FilterSuggestion,
   CompiledFilter,
+  WideEvent,
+  IndexProgress,
 } from "fuzzyfilter";
 
 /**
@@ -37,7 +39,7 @@ export interface UseFuzzyFilterReturn {
   suggestionsQuery: string;
   /** Current suggestions */
   suggestions: FilterSuggestion[];
-  /** Loading state */
+  /** Loading state for suggestions */
   isLoading: boolean;
   /** Error state */
   error: Error | null;
@@ -55,6 +57,30 @@ export interface UseFuzzyFilterReturn {
   applySuggestion: () => void;
   /** Reset all state */
   reset: () => void;
+
+  // -------------------------------------------------------------------------
+  // New: Indexing state
+  // -------------------------------------------------------------------------
+
+  /** True while async indexing is in progress */
+  isIndexing: boolean;
+  /** Progress of current indexing operation */
+  indexProgress: IndexProgress | null;
+  /** Telemetry wide events (only when benchmark: true on FuzzyFilter) */
+  telemetryEvents: WideEvent[];
+
+  // -------------------------------------------------------------------------
+  // New: Data mutation methods
+  // -------------------------------------------------------------------------
+
+  /** Add a new row and re-index */
+  addRow: (row: Record<string, unknown>) => void;
+  /** Delete a row by index and re-index */
+  deleteRow: (index: number) => void;
+  /** Trigger async re-indexing of current data */
+  reindex: () => Promise<void>;
+  /** Get current data array */
+  getData: () => Array<Record<string, unknown>>;
 }
 
 /**
@@ -126,6 +152,22 @@ export interface UseFuzzyFilterReturn {
  * });
  * // Suggestion counts now reflect the subset of data matching appliedFilters
  * ```
+ *
+ * @example With async indexing and data mutations
+ * ```tsx
+ * const { isIndexing, indexProgress, addRow, deleteRow } = useFuzzyFilter(filter);
+ *
+ * // Show indexing indicator
+ * if (isIndexing) {
+ *   return <div>Indexing... {indexProgress?.percentage}%</div>;
+ * }
+ *
+ * // Add a new row
+ * addRow({ status: "Open", assignee: "New Person" });
+ *
+ * // Delete row at index 5
+ * deleteRow(5);
+ * ```
  */
 export function useFuzzyFilter(
   filter: FuzzyFilter,
@@ -146,6 +188,11 @@ export function useFuzzyFilter(
   const [error, setError] = useState<Error | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
+  // New: Indexing state
+  const [isIndexing, setIsIndexing] = useState(false);
+  const [indexProgress, setIndexProgress] = useState<IndexProgress | null>(null);
+  const [telemetryEvents, setTelemetryEvents] = useState<WideEvent[]>([]);
+
   // Refs for cleanup
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const abortRef = useRef<AbortController | undefined>(undefined);
@@ -154,6 +201,16 @@ export function useFuzzyFilter(
   const selectedSuggestion = useMemo(() => {
     return suggestions[selectedIndex] ?? null;
   }, [suggestions, selectedIndex]);
+
+  /**
+   * Update telemetry events from the filter
+   */
+  const updateTelemetryEvents = useCallback(() => {
+    const telemetry = filter.getTelemetry();
+    if (telemetry) {
+      setTelemetryEvents(telemetry.getEvents());
+    }
+  }, [filter]);
 
   /**
    * Fetch suggestions from the filter
@@ -173,6 +230,7 @@ export function useFuzzyFilter(
         setSuggestions(response.suggestions);
         setSuggestionsQuery(q);
         setSelectedIndex(0);
+        updateTelemetryEvents();
       } catch (err) {
         if (err instanceof Error && err.name !== "AbortError") {
           setError(err);
@@ -181,7 +239,7 @@ export function useFuzzyFilter(
         setIsLoading(false);
       }
     },
-    [filter, filterContext]
+    [filter, filterContext, updateTelemetryEvents]
   );
 
   // Fetch suggestions when query or filterContext changes (with debounce)
@@ -262,6 +320,62 @@ export function useFuzzyFilter(
     setIsLoading(false);
   }, []);
 
+  /**
+   * Add a row to the data
+   */
+  const addRow = useCallback(
+    (row: Record<string, unknown>) => {
+      filter.addRow(row);
+      updateTelemetryEvents();
+      // Refetch suggestions to update counts
+      fetchSuggestions(query);
+    },
+    [filter, query, fetchSuggestions, updateTelemetryEvents]
+  );
+
+  /**
+   * Delete a row by index
+   */
+  const deleteRow = useCallback(
+    (index: number) => {
+      filter.removeRow(index);
+      updateTelemetryEvents();
+      // Refetch suggestions to update counts
+      fetchSuggestions(query);
+    },
+    [filter, query, fetchSuggestions, updateTelemetryEvents]
+  );
+
+  /**
+   * Trigger async re-indexing
+   */
+  const reindex = useCallback(async () => {
+    const data = filter.getData();
+    setIsIndexing(true);
+    setIndexProgress(null);
+
+    try {
+      await filter.indexDataAsync(data, {
+        onProgress: (progress) => {
+          setIndexProgress(progress);
+        },
+      });
+      updateTelemetryEvents();
+      // Refetch suggestions after reindex
+      fetchSuggestions(query);
+    } finally {
+      setIsIndexing(false);
+      setIndexProgress(null);
+    }
+  }, [filter, query, fetchSuggestions, updateTelemetryEvents]);
+
+  /**
+   * Get current data
+   */
+  const getData = useCallback(() => {
+    return filter.getData();
+  }, [filter]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -285,6 +399,13 @@ export function useFuzzyFilter(
     navigateSuggestions,
     applySuggestion,
     reset,
+    // New
+    isIndexing,
+    indexProgress,
+    telemetryEvents,
+    addRow,
+    deleteRow,
+    reindex,
+    getData,
   };
 }
-

@@ -324,3 +324,32 @@ export {
   /** English (default) translations */
   en,
 } from "./i18n/locales/index.ts";
+
+// ============================================================================
+// TELEMETRY EXPORTS
+// ============================================================================
+
+/**
+ * Telemetry/benchmarking utilities.
+ *
+ * Enable telemetry by setting `benchmark: true` in the FuzzyFilter config.
+ *
+ * @example
+ * ```typescript
+ * import { createFuzzyFilter } from "fuzzyfilter";
+ *
+ * const filter = createFuzzyFilter({ benchmark: true });
+ * filter.setSchema(mySchema);
+ * filter.indexData(myData);
+ *
+ * // Get telemetry spans
+ * const telemetry = filter.getTelemetry();
+ * console.log(telemetry?.getSpans());
+ * ```
+ */
+export {
+  /** Create a standalone telemetry collector */
+  createTelemetryCollector,
+  /** A no-op telemetry collector for when benchmarking is disabled */
+  NULL_TELEMETRY_COLLECTOR,
+} from "./telemetry/index.ts";

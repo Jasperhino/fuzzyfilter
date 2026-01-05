@@ -9,7 +9,7 @@ import { ref, onMounted, computed, watch } from "vue"
 import { useVirtualizer } from "@tanstack/vue-virtual"
 import { useFuzzyFilter } from "vue-fuzzy-filter"
 import { createFuzzyFilter, getOperator, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch, createVueI18nProvider } from "fuzzyfilter"
-import { TASK_SCHEMA, COLUMN_IDS, generateLargeDataset } from "@fuzzyfilter/sample-data"
+import { TASK_SCHEMA, COLUMN_IDS, generateLargeDataset, generateSingleTask, type Task as TaskRow } from "@fuzzyfilter/sample-data"
 import { useI18n } from "vue-i18n"
 import { i18n } from "@/i18n"
 import DataTypeIcon from "./DataTypeIcon.vue"
@@ -20,11 +20,18 @@ import {
   CheckIcon,
   XIcon,
   SearchIcon,
+  Loader2Icon,
+  PlusIcon,
+  Trash2Icon,
 } from "lucide-operators-vue"
 import { cn } from "@/lib/utils"
+import { attachAxiomExporter } from "@/lib/axiom-telemetry"
 
 // Generate 10,000 rows with a fixed seed for consistency
-const LARGE_DATASET = generateLargeDataset(10000, 42)
+const INITIAL_DATASET = generateLargeDataset(10000, 42)
+
+// Version counter to trigger reactivity when data changes
+const dataVersion = ref(0)
 
 // Row height for virtual scroll
 const ROW_HEIGHT = 48
@@ -34,16 +41,25 @@ const i18nComposer = useI18n()
 const { locale, t } = i18nComposer
 
 // Create filter instance with i18n
-// Use the actual i18n instance (from createI18n) for the provider, not the useI18n() composer
+// Set benchmark: true to enable telemetry spans (accessible via filter.getTelemetry())
 const filter = createFuzzyFilter({ 
   maxSuggestions: 12,
   i18nProvider: createVueI18nProvider(i18n),
+  benchmark: true, // Enable to see telemetry spans via window.__filter.getTelemetry()
 })
+
+// Expose filter globally for debugging
+// Access in console: window.__filter.getTelemetry()?.getSpans()
+;(window as unknown as { __filter: typeof filter }).__filter = filter
 
 // Initialize schema and data
 onMounted(() => {
   filter.setSchema(TASK_SCHEMA)
-  filter.indexData(LARGE_DATASET)
+  filter.indexData(INITIAL_DATASET)
+  
+  // Attach Axiom telemetry exporter if configured
+  // Set VITE_AXIOM_API_KEY and VITE_AXIOM_DATASET environment variables to enable
+  attachAxiomExporter(filter.getTelemetry())
 })
 
 // Compile applied filters for context (reactive) - defined before composable
@@ -78,10 +94,42 @@ const {
   navigateSuggestions,
   selectSuggestion,
   setQuery,
+  isIndexing,
+  indexProgress,
+  addRow: hookAddRow,
+  deleteRow: hookDeleteRow,
+  getData,
 } = useFuzzyFilter(filter, {
   debounceMs: 150,
   filterContext: compiledFiltersForContext,
 })
+
+// Selected row for deletion
+const selectedRowIndex = ref<number | null>(null)
+
+// Add a new random row using faker
+function handleAddRow() {
+  const currentData = getData() as TaskRow[]
+  const newId = currentData.length > 0 
+    ? Math.max(...currentData.map(r => r.id)) + 1 
+    : 1
+  const newTask = generateSingleTask(newId)
+  hookAddRow(newTask)
+  dataVersion.value++
+}
+
+// Delete the selected row
+function handleDeleteRow() {
+  if (selectedRowIndex.value === null) return
+  hookDeleteRow(selectedRowIndex.value)
+  dataVersion.value++
+  selectedRowIndex.value = null
+}
+
+// Handle row click for selection
+function handleRowClick(index: number) {
+  selectedRowIndex.value = selectedRowIndex.value === index ? null : index
+}
 
 // Refetch suggestions when language changes
 // This ensures suggestions update with new translations immediately
@@ -126,7 +174,10 @@ const scrollContainerRef = ref<HTMLDivElement | null>(null)
 
 // Filtered data
 const filteredData = computed(() => {
-  if (appliedFilters.value.length === 0) return LARGE_DATASET
+  // Access dataVersion to create reactive dependency
+  void dataVersion.value
+  const currentData = getData() as TaskRow[]
+  if (appliedFilters.value.length === 0) return currentData
   
   const compiledFilters: CompiledFilter[] = []
   for (const f of appliedFilters.value) {
@@ -147,7 +198,7 @@ const filteredData = computed(() => {
     }
   }
   
-  return LARGE_DATASET.filter((row) =>
+  return currentData.filter((row) =>
     compiledFilters.every((cf) => cf.predicate(row))
   )
 })
@@ -613,6 +664,11 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
             <span class="flex-1">{{ t("app.ui.suggestion") }}</span>
             <span class="w-10 shrink-0">{{ t("app.ui.score") }}</span>
             <span class="w-14 shrink-0">{{ t("app.ui.results") }}</span>
+            <!-- Indexing indicator -->
+            <span v-if="isIndexing" class="flex items-center gap-1 text-primary shrink-0">
+              <Loader2Icon class="size-3 animate-spin" />
+              <span>{{ indexProgress ? `${indexProgress.percentage}%` : '' }}</span>
+            </span>
           </div>
           <div class="max-h-80 overflow-y-auto p-1">
             <div
@@ -715,19 +771,42 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
       </button>
     </div>
 
-    <!-- Filter summary above table -->
-    <div class="flex justify-end mb-2">
+    <!-- Menu bar with actions and summary -->
+    <div class="flex items-center justify-between mb-2">
+      <!-- Action buttons -->
+      <div class="flex items-center gap-2">
+        <button
+          @click="handleAddRow"
+          class="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          :title="t('app.ui.addRow')"
+        >
+          <PlusIcon class="size-4" />
+          {{ t('app.ui.addRow') }}
+        </button>
+        
+        <button
+          v-if="selectedRowIndex !== null"
+          @click="handleDeleteRow"
+          class="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-destructive text-destructive-foreground text-xs font-medium hover:bg-destructive/90 transition-colors focus:outline-none focus:ring-2 focus:ring-destructive focus:ring-offset-2 animate-in fade-in zoom-in-95 duration-200"
+          :title="t('app.ui.deleteRow')"
+        >
+          <Trash2Icon class="size-4" />
+          {{ t('app.ui.deleteRow') }}
+        </button>
+      </div>
+
+      <!-- Filter summary -->
       <span class="text-xs text-muted-foreground">
         {{
           appliedFilters.length > 0
             ? t("app.ui.filterSummary", {
                 filterCount: appliedFilters.length,
                 filteredCount: formatNumber(filteredData.length),
-                totalCount: formatNumber(LARGE_DATASET.length),
+                totalCount: formatNumber(getData().length),
               })
             : t("app.ui.itemCount", {
                 filteredCount: formatNumber(filteredData.length),
-                totalCount: formatNumber(LARGE_DATASET.length),
+                totalCount: formatNumber(getData().length),
               })
         }}
       </span>
@@ -739,126 +818,128 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
         ref="scrollContainerRef"
         class="flex-1 overflow-auto min-h-0 isolate"
       >
-        <table class="w-full">
-          <thead class="sticky top-0 z-10 bg-muted">
-            <tr class="border-b">
-              <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-                <ColumnInfoPopover v-if="statusColumn" :column="statusColumn">
-                  <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="statusColumn.type" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.status") }}</span>
-                  </div>
-                </ColumnInfoPopover>
-              </th>
-              <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-                <ColumnInfoPopover v-if="assigneeColumn" :column="assigneeColumn">
-                  <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="assigneeColumn.type" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.assignee") }}</span>
-                  </div>
-                </ColumnInfoPopover>
-              </th>
-              <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-                <ColumnInfoPopover v-if="priorityColumn" :column="priorityColumn">
-                  <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="priorityColumn.type" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.priority") }}</span>
-                  </div>
-                </ColumnInfoPopover>
-              </th>
-              <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-                <ColumnInfoPopover v-if="departmentColumn" :column="departmentColumn">
-                  <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="departmentColumn.type" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.department") }}</span>
-                  </div>
-                </ColumnInfoPopover>
-              </th>
-              <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-                <ColumnInfoPopover v-if="createdColumn" :column="createdColumn">
-                  <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="createdColumn.type" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.created") }}</span>
-                  </div>
-                </ColumnInfoPopover>
-              </th>
-              <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-                <ColumnInfoPopover v-if="isBlockedColumn" :column="isBlockedColumn">
-                  <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="isBlockedColumn.type" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.isBlocked") }}</span>
-                  </div>
-                </ColumnInfoPopover>
-              </th>
-              <th class="px-3 py-3 text-left font-normal">
-                <ColumnInfoPopover v-if="commentsColumn" :column="commentsColumn">
-                  <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="commentsColumn.type" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.comments") }}</span>
-                  </div>
-                </ColumnInfoPopover>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <!-- Empty state -->
-            <tr v-if="filteredData.length === 0">
-              <td colspan="7">
-                <div class="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                  <FilterIcon class="size-10 mb-3 opacity-40" />
-                  <p class="text-sm font-medium">{{ t("app.ui.noRowsTitle") }}</p>
-                  <p class="text-xs mt-1">{{ t("app.ui.noRowsHint") }}</p>
+      <table class="w-full">
+        <thead class="sticky top-0 z-10 bg-muted">
+          <tr class="border-b">
+            <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+              <ColumnInfoPopover v-if="statusColumn" :column="statusColumn">
+                <div class="flex items-center gap-1">
+                  <DataTypeIcon :type="statusColumn.type" size="size-3" class="shrink-0" />
+                  <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.status") }}</span>
+                </div>
+              </ColumnInfoPopover>
+            </th>
+            <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+              <ColumnInfoPopover v-if="assigneeColumn" :column="assigneeColumn">
+                <div class="flex items-center gap-1">
+                  <DataTypeIcon :type="assigneeColumn.type" size="size-3" class="shrink-0" />
+                  <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.assignee") }}</span>
+                </div>
+              </ColumnInfoPopover>
+            </th>
+            <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+              <ColumnInfoPopover v-if="priorityColumn" :column="priorityColumn">
+                <div class="flex items-center gap-1">
+                  <DataTypeIcon :type="priorityColumn.type" size="size-3" class="shrink-0" />
+                  <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.priority") }}</span>
+                </div>
+              </ColumnInfoPopover>
+            </th>
+            <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+              <ColumnInfoPopover v-if="departmentColumn" :column="departmentColumn">
+                <div class="flex items-center gap-1">
+                  <DataTypeIcon :type="departmentColumn.type" size="size-3" class="shrink-0" />
+                  <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.department") }}</span>
+                </div>
+              </ColumnInfoPopover>
+            </th>
+            <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+              <ColumnInfoPopover v-if="createdColumn" :column="createdColumn">
+                <div class="flex items-center gap-1">
+                  <DataTypeIcon :type="createdColumn.type" size="size-3" class="shrink-0" />
+                  <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.created") }}</span>
+                </div>
+              </ColumnInfoPopover>
+            </th>
+            <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+              <ColumnInfoPopover v-if="isBlockedColumn" :column="isBlockedColumn">
+                <div class="flex items-center gap-1">
+                  <DataTypeIcon :type="isBlockedColumn.type" size="size-3" class="shrink-0" />
+                  <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.isBlocked") }}</span>
+                </div>
+              </ColumnInfoPopover>
+            </th>
+            <th class="px-3 py-3 text-left font-normal">
+              <ColumnInfoPopover v-if="commentsColumn" :column="commentsColumn">
+                <div class="flex items-center gap-1">
+                  <DataTypeIcon :type="commentsColumn.type" size="size-3" class="shrink-0" />
+                  <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.comments") }}</span>
+                </div>
+              </ColumnInfoPopover>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Empty state -->
+          <tr v-if="filteredData.length === 0">
+            <td colspan="7">
+              <div class="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <FilterIcon class="size-10 mb-3 opacity-40" />
+                <p class="text-sm font-medium">{{ t("app.ui.noRowsTitle") }}</p>
+                <p class="text-xs mt-1">{{ t("app.ui.noRowsHint") }}</p>
+              </div>
+            </td>
+          </tr>
+          <!-- Virtual scroll rows -->
+          <template v-else>
+            <!-- Spacer row to account for virtual scroll offset -->
+            <tr :style="{ height: `${virtualizer.getVirtualItems()[0]?.start ?? 0}px` }" />
+            <tr
+              v-for="virtualRow in virtualizer.getVirtualItems()"
+              :key="getRow(virtualRow.index).id"
+              :class="cn(
+                'border-b transition-colors h-12 cursor-pointer hover:bg-accent/50',
+                appliedFilters.length > 0 ? 'bg-primary/5' : '',
+                selectedRowIndex === virtualRow.index ? 'bg-primary/20 ring-2 ring-primary ring-inset' : '',
+                getRow(virtualRow.index).id % 2 !== 0 ? 'bg-muted/30' : ''
+              )"
+              @click="handleRowClick(virtualRow.index)"
+            >
+              <td class="px-3 py-2 whitespace-nowrap h-12">
+                <span :class="cn(
+                  'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                  statusVariants[getRow(virtualRow.index).status]?.bg ?? 'bg-muted',
+                  statusVariants[getRow(virtualRow.index).status]?.text ?? 'text-muted-foreground'
+                )">
+                  {{ translateStatus(getRow(virtualRow.index).status) }}
+                </span>
+              </td>
+              <td class="px-3 py-2 font-medium whitespace-nowrap h-12">{{ getRow(virtualRow.index).assignee }}</td>
+              <td class="px-3 py-2 whitespace-nowrap h-12">
+                <div class="flex items-center gap-1">
+                  <div :class="cn('size-2 rounded-full', priorityColors[getRow(virtualRow.index).priority - 1] ?? priorityColors[0])" />
+                  <span class="text-sm tabular-nums">{{ getRow(virtualRow.index).priority }}</span>
                 </div>
               </td>
+              <td class="px-3 py-2 text-muted-foreground whitespace-nowrap h-12">{{ translateDepartment(getRow(virtualRow.index).department) }}</td>
+              <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">{{ getRow(virtualRow.index).created }}</td>
+              <td class="px-3 py-2 text-center whitespace-nowrap h-12">
+                <XIcon v-if="getRow(virtualRow.index).isBlocked" class="size-4 text-rose-500 mx-auto" />
+                <CheckIcon v-else class="size-4 text-emerald-500 mx-auto" />
+              </td>
+              <td class="px-3 py-2 text-muted-foreground text-sm h-12 max-w-xs" :title="getRow(virtualRow.index).comments">
+                <span class="block truncate">
+                  <template v-if="getRow(virtualRow.index).comments">{{ getRow(virtualRow.index).comments }}</template>
+                  <span v-else class="text-muted-foreground/50 italic">{{ t("app.ui.noComments") }}</span>
+                </span>
+              </td>
             </tr>
-            <!-- Virtual scroll rows -->
-            <template v-else>
-              <!-- Spacer row to account for virtual scroll offset -->
-              <tr :style="{ height: `${virtualizer.getVirtualItems()[0]?.start ?? 0}px` }" />
-              <tr
-                v-for="virtualRow in virtualizer.getVirtualItems()"
-                :key="getRow(virtualRow.index).id"
-                :class="cn(
-                  'border-b transition-colors h-12',
-                  appliedFilters.length > 0 ? 'bg-primary/5' : '',
-                  getRow(virtualRow.index).id % 2 !== 0 ? 'bg-muted/30' : ''
-                )"
-              >
-                <td class="px-3 py-2 whitespace-nowrap h-12">
-                  <span :class="cn(
-                    'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
-                    statusVariants[getRow(virtualRow.index).status]?.bg ?? 'bg-muted',
-                    statusVariants[getRow(virtualRow.index).status]?.text ?? 'text-muted-foreground'
-                  )">
-                    {{ translateStatus(getRow(virtualRow.index).status) }}
-                  </span>
-                </td>
-                <td class="px-3 py-2 font-medium whitespace-nowrap h-12">{{ getRow(virtualRow.index).assignee }}</td>
-                <td class="px-3 py-2 whitespace-nowrap h-12">
-                  <div class="flex items-center gap-1">
-                    <div :class="cn('size-2 rounded-full', priorityColors[getRow(virtualRow.index).priority - 1] ?? priorityColors[0])" />
-                    <span class="text-sm tabular-nums">{{ getRow(virtualRow.index).priority }}</span>
-                  </div>
-                </td>
-                <td class="px-3 py-2 text-muted-foreground whitespace-nowrap h-12">{{ translateDepartment(getRow(virtualRow.index).department) }}</td>
-                <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">{{ getRow(virtualRow.index).created }}</td>
-                <td class="px-3 py-2 text-center whitespace-nowrap h-12">
-                  <XIcon v-if="getRow(virtualRow.index).isBlocked" class="size-4 text-rose-500 mx-auto" />
-                  <CheckIcon v-else class="size-4 text-emerald-500 mx-auto" />
-                </td>
-                <td class="px-3 py-2 text-muted-foreground text-sm h-12 max-w-xs" :title="getRow(virtualRow.index).comments">
-                  <span class="block truncate">
-                    <template v-if="getRow(virtualRow.index).comments">{{ getRow(virtualRow.index).comments }}</template>
-                    <span v-else class="text-muted-foreground/50 italic">{{ t("app.ui.noComments") }}</span>
-                  </span>
-                </td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-        <!-- Padding element to ensure proper scroll height -->
-        <div v-if="filteredData.length > 0" :style="{ height: `${virtualizer.getTotalSize() - (virtualizer.getVirtualItems()[virtualizer.getVirtualItems().length - 1]?.end ?? 0)}px` }" />
-      </div>
+          </template>
+        </tbody>
+      </table>
+      <!-- Padding element to ensure proper scroll height -->
+      <div v-if="filteredData.length > 0" :style="{ height: `${virtualizer.getTotalSize() - (virtualizer.getVirtualItems()[virtualizer.getVirtualItems().length - 1]?.end ?? 0)}px` }" />
+    </div>
     </div>
   </div>
 </template>

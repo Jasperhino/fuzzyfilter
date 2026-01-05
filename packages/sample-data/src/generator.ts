@@ -207,4 +207,37 @@ export function createSeededGenerator(
   return (count = 50) => generateTasks({ count, seed });
 }
 
+/**
+ * Generate a single task with a given ID.
+ *
+ * Useful for dynamically adding rows to an existing dataset.
+ * Uses current timestamp as seed for unique random data each time.
+ *
+ * @param id - The unique ID for the task
+ * @param options - Optional generator options (seed, dateRange, etc.)
+ * @returns A single generated task
+ *
+ * @example
+ * ```typescript
+ * // Generate a new task with the next available ID
+ * const newTask = generateSingleTask(currentData.length + 1);
+ *
+ * // Generate with a specific seed for reproducibility
+ * const seededTask = generateSingleTask(100, { seed: 12345 });
+ * ```
+ */
+export function generateSingleTask(
+  id: number,
+  options: GeneratorOptions = {}
+): Task {
+  // Use current timestamp as default seed for unique data
+  if (options.seed === undefined) {
+    faker.seed(Date.now() + Math.random());
+  } else {
+    faker.seed(options.seed);
+  }
+
+  return generateTask(id, options);
+}
+
 

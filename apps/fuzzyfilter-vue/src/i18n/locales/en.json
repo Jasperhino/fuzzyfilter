@@ -49,7 +49,15 @@
     "apiDocs": "API Documentation",
     "operators": "Operators",
     "usage": "Usage",
-    "dataTypes": "Data Types"
+    "dataTypes": "Data Types",
+    "indexing": "Indexing...",
+    "indexingProgress": "Indexing {percentage}%",
+    "addRow": "Add row",
+    "deleteRow": "Delete row",
+    "addingRow": "Adding...",
+    "deletingRow": "Deleting...",
+    "rowAdded": "Row added",
+    "rowDeleted": "Row deleted"
   },
   "table": {
     "headers": {

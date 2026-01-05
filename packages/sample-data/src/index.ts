@@ -15,6 +15,7 @@ export {
   generateTasks,
   generateLargeDataset,
   createSeededGenerator,
+  generateSingleTask,
   type GeneratorOptions,
 } from "./generator.ts";
 

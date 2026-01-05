@@ -20,6 +20,12 @@ import type {
   CountOptions,
 } from "./results.ts";
 import type { I18nProvider } from "./i18n.ts";
+import type {
+  TelemetryCollector,
+  TelemetryConfig,
+  IndexProgress,
+  IndexDataAsyncOptions,
+} from "../telemetry/index.ts";
 
 // ============================================================================
 // MAIN FUZZY FILTER INTERFACE
@@ -58,6 +64,19 @@ export interface FuzzyFilterConfig {
 
   /** Optional i18n provider for translations. If not provided, uses default English provider. */
   i18nProvider?: I18nProvider;
+
+  /**
+   * Enable benchmark/telemetry mode.
+   * When true, operations are instrumented with timing spans.
+   * @default false
+   */
+  benchmark?: boolean;
+
+  /**
+   * Telemetry configuration options.
+   * Only used when benchmark is true.
+   */
+  telemetryOptions?: Partial<TelemetryConfig>;
 }
 
 /**
@@ -196,7 +215,7 @@ export interface FuzzyFilter {
   // -------------------------------------------------------------------------
 
   /**
-   * Indexes a dataset for searching and counting.
+   * Indexes a dataset for searching and counting (synchronous).
    *
    * This builds internal data structures (tries, bitmaps) that enable fast
    * fuzzy searching and result counting. Call this after setting the schema.
@@ -212,6 +231,31 @@ export interface FuzzyFilter {
    * ```
    */
   indexData(data: Array<Record<string, unknown>>): void;
+
+  /**
+   * Indexes a dataset asynchronously with UI yielding.
+   *
+   * Uses requestIdleCallback (or setTimeout fallback) to process data in chunks,
+   * allowing the UI to remain responsive during large dataset indexing.
+   *
+   * @param data - Array of row objects
+   * @param options - Async indexing options
+   * @returns Promise that resolves when indexing is complete
+   *
+   * @example
+   * ```typescript
+   * await filter.indexDataAsync(largeDataset, {
+   *   chunkSize: 100,
+   *   onProgress: (progress) => {
+   *     console.log(`Indexing: ${progress.percentage}%`);
+   *   },
+   * });
+   * ```
+   */
+  indexDataAsync(
+    data: Array<Record<string, unknown>>,
+    options?: IndexDataAsyncOptions
+  ): Promise<void>;
 
   /**
    * Updates the index incrementally for changed rows.
@@ -237,6 +281,49 @@ export interface FuzzyFilter {
       newData?: Record<string, unknown>;
     }>
   ): void;
+
+  /**
+   * Adds a single row and updates the index.
+   *
+   * @param row - The row data to add
+   *
+   * @example
+   * ```typescript
+   * filter.addRow({ status: "Open", priority: 3, assignee: "Charlie" });
+   * ```
+   */
+  addRow(row: Record<string, unknown>): void;
+
+  /**
+   * Removes a row by index and updates the index.
+   *
+   * @param index - The index of the row to remove
+   *
+   * @example
+   * ```typescript
+   * filter.removeRow(5);
+   * ```
+   */
+  removeRow(index: number): void;
+
+  /**
+   * Removes rows matching a predicate and updates the index.
+   *
+   * @param predicate - Function that returns true for rows to remove
+   *
+   * @example
+   * ```typescript
+   * filter.removeRows((row) => row.status === "Deleted");
+   * ```
+   */
+  removeRows(predicate: (row: Record<string, unknown>) => boolean): void;
+
+  /**
+   * Gets the current data array.
+   *
+   * @returns The indexed data array
+   */
+  getData(): Array<Record<string, unknown>>;
 
   /**
    * Clears all indexed data.
@@ -432,6 +519,38 @@ export interface FuzzyFilter {
    * Call this when you're done with the filter to clean up memory.
    */
   destroy(): void;
+
+  // -------------------------------------------------------------------------
+  // Telemetry
+  // -------------------------------------------------------------------------
+
+  /**
+   * Gets the telemetry collector for accessing wide events.
+   *
+   * Wide Events follow the "Canonical Log Lines" pattern - each operation emits
+   * one comprehensive event with all context needed for debugging.
+   *
+   * Only available when `benchmark: true` is set in config.
+   *
+   * @returns The telemetry collector, or null if benchmarking is disabled
+   *
+   * @example
+   * ```typescript
+   * const filter = createFuzzyFilter({ benchmark: true });
+   * // ... perform operations
+   * const telemetry = filter.getTelemetry();
+   * 
+   * // Get all events
+   * console.log(telemetry?.getEvents());
+   * 
+   * // Get events by operation type
+   * console.log(telemetry?.getEventsByOperation("suggest"));
+   * 
+   * // Get summary statistics
+   * console.log(telemetry?.getSummary());
+   * ```
+   */
+  getTelemetry(): TelemetryCollector | null;
 }
 
 // ============================================================================

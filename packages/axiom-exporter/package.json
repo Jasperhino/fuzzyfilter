@@ -1,0 +1,42 @@
+{
+  "name": "@fuzzyfilter/axiom-exporter",
+  "version": "0.1.0",
+  "description": "Axiom exporter for FuzzyFilter telemetry events",
+  "type": "module",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@axiomhq/js": "^1.0.0"
+  },
+  "peerDependencies": {
+    "fuzzyfilter": "workspace:*"
+  },
+  "devDependencies": {
+    "fuzzyfilter": "workspace:*"
+  },
+  "keywords": [
+    "axiom",
+    "telemetry",
+    "fuzzy",
+    "filter",
+    "observability",
+    "benchmarking"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/fuzzyfilter",
+    "directory": "packages/axiom-exporter"
+  },
+  "license": "MIT",
+  "packageManager": "bun@1.3.5"
+}
