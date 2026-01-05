@@ -2,7 +2,8 @@
  * N-gram generation for multi-word phrase matching
  */
 
-import type { Token, NgramWithMeta } from "../types.ts";
+import type { Token } from "../../types/index.ts";
+import type { NgramWithMeta } from "../types.ts";
 
 /**
  * Generate n-grams from tokens for matching multi-word phrases

@@ -60,7 +60,7 @@ export function createI18nextProvider(
       
       // If translation returns an array, use it
       if (Array.isArray(translated) && translated.length > 0) {
-        return translated;
+        return translated.map(String);
       }
       
       // Fallback to empty array if translation not found
@@ -73,7 +73,7 @@ export function createI18nextProvider(
       
       // If translation returns an array, use it
       if (Array.isArray(translated) && translated.length > 0) {
-        return translated;
+        return translated.map(String);
       }
       
       // Fallback to empty array if translation not found

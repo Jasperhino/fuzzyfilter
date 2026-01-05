@@ -44,7 +44,8 @@ const { locale, t } = i18nComposer
 // Set benchmark: true to enable telemetry spans (accessible via filter.getTelemetry())
 const filter = createFuzzyFilter({ 
   maxSuggestions: 12,
-  i18nProvider: createVueI18nProvider(i18n),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  i18nProvider: createVueI18nProvider(i18n as any),
   benchmark: true, // Enable to see telemetry spans via window.__filter.getTelemetry()
 })
 

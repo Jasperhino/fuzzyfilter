@@ -69,11 +69,14 @@ export function createVueI18nProvider(
     }
   };
 
+  // Cast t function to avoid union type compatibility issues
+  const t = i18nInstance.global.t as (key: string) => unknown;
+
   return {
     getOperatorLabel: (operatorId: Operator): string => {
       const key = getKey(`operators.${operatorId}.label`);
       try {
-        const translated = i18nInstance.global.t(key);
+        const translated = t(key);
         // If translation returns the key itself, it means translation not found
         return translated !== key ? String(translated) : operatorId;
       } catch {
@@ -112,7 +115,7 @@ export function createVueI18nProvider(
       // Use the app namespace for column/value translations
       const appKey = `app.${key}`;
       try {
-        const translated = i18nInstance.global.t(appKey);
+        const translated = t(appKey);
         // If translation returns the key itself, it means translation not found
         if (translated === appKey) {
           return undefined;

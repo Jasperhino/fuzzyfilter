@@ -246,7 +246,7 @@ export function createSuggestion(
 
   // Format value text based on arguments
   let valueText = "";
-  const argumentParts: { text: string; displayText?: string; displayMatchedIndexes?: number[]; highlight?: boolean }[] = [];
+  const argumentParts: { text: string; displayText?: string; displayMatchedIndexes?: number[]; highlight?: boolean; originalText?: string }[] = [];
 
   if (args && args.length > 0) {
     // Format values for display, translating enum values if needed

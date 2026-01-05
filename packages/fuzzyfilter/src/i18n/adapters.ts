@@ -88,7 +88,7 @@ export function createI18nextAdapter(
       if (typeof result === "string") {
         return [result];
       }
-      return defaultValue;
+      return [...defaultValue];
     },
 
     getWordSet(wordSetKey: WordSetKey): string[] {
@@ -104,7 +104,7 @@ export function createI18nextAdapter(
       if (typeof result === "string") {
         return [result];
       }
-      return defaultValue;
+      return [...defaultValue];
     },
 
     onChange(callback: () => void): () => void {
@@ -186,7 +186,7 @@ export function createVueI18nAdapter(
         // Handle comma-separated string
         return result.split(",").map(s => s.trim()).filter(Boolean);
       }
-      return getOperator(operatorId).aliases;
+      return [...getOperator(operatorId).aliases];
     },
 
     getWordSet(wordSetKey: WordSetKey): string[] {
@@ -199,7 +199,7 @@ export function createVueI18nAdapter(
         // Handle comma-separated string
         return result.split(",").map(s => s.trim()).filter(Boolean);
       }
-      return WORD_SETS[wordSetKey];
+      return [...WORD_SETS[wordSetKey]];
     },
   };
 }

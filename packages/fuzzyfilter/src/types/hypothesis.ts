@@ -82,6 +82,10 @@ export interface ScoringWeights {
   operator: number;
   /** Weight for arguments match score */
   arguments: number;
+  /** Bonus for components appearing in natural order */
+  orderBonus?: number;
+  /** Bonus for completeness */
+  completenessBonus?: number;
 }
 
 /**

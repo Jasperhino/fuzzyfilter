@@ -1,5 +1,44 @@
 {
-  "buildCommand": "mintlify build",
-  "outputDirectory": ".mintlify/output",
-  "installCommand": "npm install mintlify@latest"
+  "rewrites": [
+    {
+      "source": "/_mintlify/:path*",
+      "destination": "https://fuzzyfilter.mintlify.app/_mintlify/:path*"
+    },
+    {
+      "source": "/api/request",
+      "destination": "https://fuzzyfilter.mintlify.app/_mintlify/api/request"
+    },
+    {
+      "source": "/",
+      "destination": "https://fuzzyfilter.mintlify.app/"
+    },
+    {
+      "source": "/llms.txt",
+      "destination": "https://fuzzyfilter.mintlify.app/llms.txt"
+    },
+    {
+      "source": "/llms-full.txt",
+      "destination": "https://fuzzyfilter.mintlify.app/llms-full.txt"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "https://fuzzyfilter.mintlify.app/sitemap.xml"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "https://fuzzyfilter.mintlify.app/robots.txt"
+    },
+    {
+      "source": "/mcp",
+      "destination": "https://fuzzyfilter.mintlify.app/mcp"
+    },
+    {
+      "source": "/:path*",
+      "destination": "https://fuzzyfilter.mintlify.app/:path*"
+    },
+    {
+      "source": "/mintlify-assets/:path+",
+      "destination": "https://fuzzyfilter.mintlify.app/mintlify-assets/:path+"
+    }
+  ]
 }

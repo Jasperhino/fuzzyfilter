@@ -14,6 +14,9 @@ import * as chrono from "chrono-node";
 import type { ParsingResult, ParsedResult, Refiner, ParsingContext, Chrono } from "chrono-node";
 import type { ParsedDate, DateParseOptions } from "./types/parsing.ts";
 
+// Re-export types for consumers
+export type { ParsedDate, DateParseOptions } from "./types/parsing.ts";
+
 /**
  * Supported date parsing locales.
  * Maps to chrono-node's built-in language parsers.

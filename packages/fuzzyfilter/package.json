@@ -50,6 +50,8 @@
   "devDependencies": {
     "@fuzzyfilter/axiom-exporter": "workspace:*",
     "@fuzzyfilter/sample-data": "workspace:*",
+    "i18next": "^23.15.0",
+    "vue-i18n": "^9.14.0",
     "mitata": "^1.0.10"
   },
   "peerDependencies": {
