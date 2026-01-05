@@ -90,7 +90,8 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
     const { tokens, valueScores, contextAvailableValues, contextRowIndices } = context;
 
     // Detect all potential argument values from tokens
-    const allDetectedValues = detectValueTokens(tokens, new Set());
+    const locale = context.i18nProvider?.getLocale?.();
+    const allDetectedValues = detectValueTokens(tokens, new Set(), locale);
 
     // Collect ALL value matches per column with their ngram positions
     const allMatchesByColumn = new Map<
@@ -373,7 +374,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
               const sorted = [...nonRangeDates]
                 .slice(0, 2)
                 .sort((a, b) => a.value.getTime() - b.value.getTime());
-              suggestionArgs = sorted.map((v) => toHypothesisValue(v.value));
+              suggestionArgs = sorted.map((v) => toHypothesisValue(v.value, v.parsed));
               valueMatchEntries = sorted.map((v) => ({
                 inputStart: v.token.start,
                 inputEnd: v.token.end,
@@ -383,7 +384,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
               }));
             } else {
               valuesUsed = nonRangeDates.length;
-              suggestionArgs = nonRangeDates.map((v) => toHypothesisValue(v.value));
+              suggestionArgs = nonRangeDates.map((v) => toHypothesisValue(v.value, v.parsed));
               valueMatchEntries = nonRangeDates.map((v) => ({
                 inputStart: v.token.start,
                 inputEnd: v.token.end,
@@ -395,7 +396,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
           } else if (opInfo.requiresArgument) {
             valuesUsed = 1;
             const firstVal = nonRangeDates[0]!;
-            suggestionArgs = [toHypothesisValue(firstVal.value)];
+            suggestionArgs = [toHypothesisValue(firstVal.value, firstVal.parsed)];
             valueMatchEntries = [{
               inputStart: firstVal.token.start,
               inputEnd: firstVal.token.end,
@@ -451,7 +452,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
             createSuggestion(
               col,
               op.id,
-              [toHypothesisValue(dateVal)],
+              [toHypothesisValue(dateVal, dateEntry.parsed)],
               baseScore * 1.0, // Full coverage
               undefined,
               undefined,

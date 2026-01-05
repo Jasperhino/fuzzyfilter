@@ -302,10 +302,23 @@ export function createSuggestion(
       // Use match indexes from metadata if available
       // If the match was against the translated value, the indexes are already correct for the translated text
       const truncateResult = truncateWithEllipsis(val, valueMatch?.matchIndexes);
+      
+      // For date arguments, include the original parsed text (e.g., "gestern")
+      // This helps users understand what input led to this date suggestion
+      let originalText: string | undefined;
+      if (originalArg?.kind === "date" && originalArg.parsed?.text) {
+        // Only include if it differs from the formatted date (e.g., "gestern" vs "Jan 4, 2026")
+        // No need to show "Jan 4, 2026 (Jan 4, 2026)"
+        if (originalArg.parsed.text.toLowerCase() !== val.toLowerCase()) {
+          originalText = originalArg.parsed.text;
+        }
+      }
+      
       argumentParts.push({ 
         text: val, // Use translated value for display
         displayText: truncateResult?.displayText,
         displayMatchedIndexes: truncateResult?.adjustedIndexes,
+        originalText,
       });
     }
   }
@@ -499,12 +512,17 @@ export function createDateSuggestion(
 
   // For range operators, parts.arguments should have two separate entries
   // so the UI renders [date1] [date2] instead of [date1 - date2]
+  // Include the original text (e.g., "gestern") so the UI can show what input led to this date
+  const originalText = parsedDate.text && parsedDate.text.toLowerCase() !== displayDate.toLowerCase() 
+    ? parsedDate.text 
+    : undefined;
+  
   const argumentParts = isRangeOperator
     ? [
-        { text: formatDateForDisplay(parsedDate.rangeStart!) },
-        { text: formatDateForDisplay(parsedDate.rangeEnd!) },
+        { text: formatDateForDisplay(parsedDate.rangeStart!), originalText },
+        { text: formatDateForDisplay(parsedDate.rangeEnd!), originalText },
       ]
-    : [{ text: displayDate }];
+    : [{ text: displayDate, originalText }];
 
   // Calculate query explanation score using the centralized scorer
   let finalScore: number;

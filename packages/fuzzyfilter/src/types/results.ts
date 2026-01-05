@@ -67,6 +67,7 @@ export interface FilterSuggestion {
      * - `text`: Full value (used for completion and actual filter)
      * - `displayText`: Truncated text with ellipsis for long values (optional)
      * - `displayMatchedIndexes`: Character indexes relative to displayText for highlighting (optional)
+     * - `originalText`: Original input text that was parsed (e.g., "gestern" for a German date)
      */
     arguments?: { 
       /** Full value text */
@@ -76,6 +77,8 @@ export interface FilterSuggestion {
       /** Character indexes relative to displayText for highlighting (when displayText is used) */
       displayMatchedIndexes?: number[];
       highlight?: boolean;
+      /** Original input text that was parsed (e.g., "gestern" for dates). Used for showing what matched. */
+      originalText?: string;
     }[];
   };
 

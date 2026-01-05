@@ -246,17 +246,19 @@ class DateParseCache {
   }
 
   /**
-   * Generates a cache key that includes the day to handle date-relative expressions.
+   * Generates a cache key that includes the day and locale to handle date-relative expressions.
    * Cache is invalidated daily since "today" means different things on different days.
+   * Locale is included since "gestern" only works with German locale, not English.
    */
-  private getCacheKey(input: string, referenceDate?: Date): string {
+  private getCacheKey(input: string, referenceDate?: Date, locale?: string): string {
     const date = referenceDate ?? new Date();
     const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-    return `${input.toLowerCase().trim()}:${dayKey}`;
+    const localeKey = locale?.toLowerCase().split("-")[0] ?? "en";
+    return `${input.toLowerCase().trim()}:${dayKey}:${localeKey}`;
   }
 
-  get(input: string, referenceDate?: Date): ParsedDate | null | undefined {
-    const key = this.getCacheKey(input, referenceDate);
+  get(input: string, referenceDate?: Date, locale?: string): ParsedDate | null | undefined {
+    const key = this.getCacheKey(input, referenceDate, locale);
     const entry = this.cache.get(key);
 
     if (!entry) return undefined;
@@ -274,8 +276,8 @@ class DateParseCache {
     return entry.result;
   }
 
-  set(input: string, result: ParsedDate | null, referenceDate?: Date): void {
-    const key = this.getCacheKey(input, referenceDate);
+  set(input: string, result: ParsedDate | null, referenceDate?: Date, locale?: string): void {
+    const key = this.getCacheKey(input, referenceDate, locale);
 
     // Evict oldest entries if at capacity
     if (this.cache.size >= this.maxSize) {
@@ -478,9 +480,9 @@ export function parseDate(input: string, options?: DateParseOptions): ParsedDate
   const locale = (options?.locale?.toLowerCase().split("-")[0] ?? "en") as DateLocale;
 
   // Check cache first (only for standard options)
-  // Include locale in cache key consideration
+  // Include locale in cache key to ensure locale-specific parsing
   if (!options?.forwardDate) {
-    const cached = dateParseCache.get(input, referenceDate);
+    const cached = dateParseCache.get(input, referenceDate, locale);
     if (cached !== undefined) {
       return cached;
     }
@@ -496,7 +498,7 @@ export function parseDate(input: string, options?: DateParseOptions): ParsedDate
 
   // Cache the result (only for standard options)
   if (!options?.forwardDate) {
-    dateParseCache.set(input, result, referenceDate);
+    dateParseCache.set(input, result, referenceDate, locale);
   }
 
   return result;

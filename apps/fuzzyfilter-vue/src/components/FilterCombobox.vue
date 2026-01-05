@@ -93,15 +93,21 @@ watch(
     // This causes the composable to refetch suggestions with the new translations
     if (newLocale !== prevLocaleRef.value) {
       prevLocaleRef.value = newLocale
-      // Only refetch if there's a current query
-      if (query.value && query.value.trim()) {
-        // Force a refetch by clearing and restoring the query
-        // This ensures the composable detects a change and refetches with new translations
-        const currentQuery = query.value.trim()
+      const currentQuery = query.value.trim()
+      
+      // Force a refetch by temporarily changing the query
+      // For empty queries, set a temporary value then clear it
+      // For non-empty queries, clear then restore
+      if (currentQuery) {
         setQuery("")
-        // Restore the original query after a brief delay to allow the refetch
         setTimeout(() => {
           setQuery(currentQuery)
+        }, 10)
+      } else {
+        // For empty queries, use a temporary marker to force a refetch
+        setQuery("\x00") // Null character - triggers change detection
+        setTimeout(() => {
+          setQuery("")
         }, 10)
       }
     }
@@ -637,6 +643,8 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                   :title="arg.displayText ? arg.text : undefined"
                 >
                   <span class="whitespace-pre"><template v-for="(seg, segIdx) in getTextHighlightSegments(arg.displayText ?? arg.text, arg.displayMatchedIndexes ?? getArgMatch(suggestion, arg.text, i)?.matchedCharIndexes)" :key="segIdx"><span v-if="seg.highlighted" class="font-bold">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template></span>
+                  <!-- Show original parsed text (e.g., "gestern") when available - fully highlighted since it's the matched input -->
+                  <span v-if="arg.originalText" class="ml-1"><span class="text-muted-foreground/60">(</span><span class="font-bold">{{ arg.originalText }}</span><span class="text-muted-foreground/60">)</span></span>
                 </span>
                 <!-- Render placeholders for missing arguments -->
                 <span 
@@ -690,7 +698,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
           class="shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground"
           :title="arg.displayText ? arg.text : undefined"
         >
-          {{ arg.displayText ?? arg.text }}
+          {{ arg.displayText ?? arg.text }}<span v-if="arg.originalText" class="ml-1"><span class="text-muted-foreground/60">(</span><span class="font-bold">{{ arg.originalText }}</span><span class="text-muted-foreground/60">)</span></span>
         </span>
         <button
           @click="removeFilter(f.id)"

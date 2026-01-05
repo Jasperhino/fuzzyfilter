@@ -74,7 +74,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     // Detect value tokens for argument-aware scoring
     // First, find which tokens are likely used for column matching
     const usedForColumn = this.detectUsedTokensForColumns(columnScores, tokens);
-    const detectedValues = detectValueTokens(tokens, usedForColumn);
+    const locale = context.i18nProvider?.getLocale?.();
+    const detectedValues = detectValueTokens(tokens, usedForColumn, locale);
 
     // 1. Column suggestions with argument-aware scoring
     suggestions.push(...        this.generateColumnSuggestions(
@@ -89,7 +90,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
 
     // 2. Operator suggestions
     const usedForOperator = this.detectUsedTokensForOperators(operatorScores, tokens, context.i18nProvider);
-    const operatorDetectedValues = detectValueTokens(tokens, usedForOperator);
+    const operatorDetectedValues = detectValueTokens(tokens, usedForOperator, locale);
     suggestions.push(...this.generateOperatorSuggestions(
       operatorScores,
       columnScores,

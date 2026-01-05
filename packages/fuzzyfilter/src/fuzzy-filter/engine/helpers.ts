@@ -12,11 +12,13 @@ import { parseDate, type ParsedDate } from "../../date-parser.ts";
  *
  * @param tokens - The tokens to analyze
  * @param usedTokenIndices - Set of token indices already used for other purposes
+ * @param locale - Optional locale for date parsing (e.g., "de" for German "gestern")
  * @returns Detected numeric and date values
  */
 export function detectValueTokens(
   tokens: Token[],
-  usedTokenIndices: Set<number>
+  usedTokenIndices: Set<number>,
+  locale?: string
 ): DetectedValues {
   const result: DetectedValues = {
     numbers: [],
@@ -37,7 +39,7 @@ export function detectValueTokens(
       
       const dateTokens = tokens.slice(start, end);
       const dateText = dateTokens.map(t => t.text).join(" ");
-      const parsedDate = parseDate(dateText);
+      const parsedDate = parseDate(dateText, { locale });
       
       if (parsedDate) {
         // Found a date expression spanning multiple tokens
@@ -81,7 +83,7 @@ export function detectValueTokens(
     }
 
     // Check if it's a single-token date expression (already checked multi-token above)
-    const parsedDate = parseDate(token.text);
+    const parsedDate = parseDate(token.text, { locale });
     if (parsedDate) {
       result.dates.push({ token, value: parsedDate.date, index: i, parsed: parsedDate });
     }
@@ -138,18 +140,20 @@ export function selectNonOverlappingMatches(
  * Unified helper to avoid repeated inline definitions.
  *
  * @param val - The value to convert (string, number, Date, or boolean)
+ * @param parsed - Optional parsed date info to preserve original text (e.g., "gestern")
  * @returns A HypothesisValueType representing the value
  */
-export function toHypothesisValue(val: unknown): HypothesisValueType {
+export function toHypothesisValue(val: unknown, parsed?: ParsedDate): HypothesisValueType {
   if (typeof val === "number") {
     return { kind: "number", value: val };
   }
   if (val instanceof Date) {
-    const dateText = val.toISOString();
+    // If we have parsed date info with original text, use it; otherwise fall back to ISO string
+    const dateText = parsed?.text ?? val.toISOString();
     return {
       kind: "date",
       value: val,
-      parsed: {
+      parsed: parsed ?? {
         text: dateText,
         date: val,
         isRange: false,
