@@ -97,12 +97,13 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
       import("../../types/index.ts").ColumnId,
       PositionedValueMatch[]
     >();
-    for (const [_key, { match, breakdown, ngram, matchIndexes }] of valueScores) {
+    for (const [_key, { match, breakdown, ngram, matchIndexes, matchedTarget }] of valueScores) {
       if (!allMatchesByColumn.has(match.value.columnId)) {
         allMatchesByColumn.set(match.value.columnId, []);
       }
       allMatchesByColumn.get(match.value.columnId)!.push({
-        value: match.value.value,
+        value: match.value.value, // Original value for filtering
+        displayValue: matchedTarget, // Translated value for display
         score: breakdown.adjustedScore,
         ngram,
         matchIndexes,
@@ -489,7 +490,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
         inputStart: v.ngram.inputStart,
         inputEnd: v.ngram.inputEnd,
         inputText: v.ngram.text,
-        matchedTarget: v.value,
+        matchedTarget: v.displayValue, // Use translated value for display
         matchIndexes: v.matchIndexes,
         score: v.score,
       })),
@@ -534,12 +535,13 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
       import("../../types/index.ts").ColumnId,
       PositionedValueMatch[]
     >();
-    for (const [_key, { match, breakdown, ngram: valNgram, matchIndexes }] of valueScores) {
+    for (const [_key, { match, breakdown, ngram: valNgram, matchIndexes, matchedTarget }] of valueScores) {
       if (!allValueMatchesByColumn.has(match.value.columnId)) {
         allValueMatchesByColumn.set(match.value.columnId, []);
       }
       allValueMatchesByColumn.get(match.value.columnId)!.push({
-        value: match.value.value,
+        value: match.value.value, // Original value for filtering
+        displayValue: matchedTarget, // Translated value for display
         score: breakdown.adjustedScore,
         ngram: valNgram,
         matchIndexes,
@@ -599,7 +601,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
               inputStart: v.ngram.inputStart,
               inputEnd: v.ngram.inputEnd,
               inputText: v.ngram.text,
-              matchedTarget: v.value,
+              matchedTarget: v.displayValue, // Use translated value for display
               matchIndexes: v.matchIndexes,
               score: v.score,
             })),
@@ -645,12 +647,13 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
       import("../../types/index.ts").ColumnId,
       PositionedValueMatch[]
     >();
-    for (const [_key, { match, breakdown, ngram: valNgram, matchIndexes }] of valueScores) {
+    for (const [_key, { match, breakdown, ngram: valNgram, matchIndexes, matchedTarget }] of valueScores) {
       if (!allValueMatchesByColumnForOp.has(match.value.columnId)) {
         allValueMatchesByColumnForOp.set(match.value.columnId, []);
       }
       allValueMatchesByColumnForOp.get(match.value.columnId)!.push({
-        value: match.value.value,
+        value: match.value.value, // Original value for filtering
+        displayValue: matchedTarget, // Translated value for display
         score: breakdown.adjustedScore,
         ngram: valNgram,
         matchIndexes,
@@ -719,7 +722,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
               inputStart: v.ngram.inputStart,
               inputEnd: v.ngram.inputEnd,
               inputText: v.ngram.text,
-              matchedTarget: v.value,
+              matchedTarget: v.displayValue, // Use translated value for display
               matchIndexes: v.matchIndexes,
               score: v.score,
             })),

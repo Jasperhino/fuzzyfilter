@@ -93,6 +93,10 @@ export function createI18nextProvider(
       return String(translated);
     },
 
+    getLocale: (): string | undefined => {
+      return i18nInstance.language;
+    },
+
     onChange: (callback: () => void): (() => void) => {
       // Subscribe to i18next language change events
       const handler = () => {

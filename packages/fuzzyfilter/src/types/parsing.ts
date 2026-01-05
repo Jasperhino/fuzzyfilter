@@ -160,6 +160,8 @@ export interface DateParseOptions {
   timezone?: string;
   /** Prefer future dates? */
   forwardDate?: boolean;
+  /** Locale for date parsing (e.g., "de", "fr", "es"). Defaults to "en". */
+  locale?: string;
 }
 
 export interface Parser {

@@ -140,7 +140,10 @@ export interface DetectedValues {
  * Used for non-overlapping assignment of ngrams to values.
  */
 export interface PositionedValueMatch {
+  /** The original value (used for filtering) */
   value: string;
+  /** The display value (matched key, e.g., translated value like "Technik") */
+  displayValue: string;
   score: number;
   ngram: NgramWithMeta;
   matchIndexes?: readonly number[];

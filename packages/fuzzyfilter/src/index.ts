@@ -213,13 +213,16 @@ export {
   parseDate,
   /** Detect all date expressions in a string with positions */
   detectDateExpressions,
-  /** Common date phrases for suggestions */
+  /** Common date phrases for suggestions (English) */
   COMMON_DATE_SUGGESTIONS,
+  /** Get date suggestions for a specific locale */
+  getDateSuggestionsForLocale,
   /** Format a date for display */
   formatDateForDisplay,
   /** Quick check if text might contain a date expression */
   mightBeDateExpression,
 } from "./date-parser.ts";
+export type { DateLocale } from "./date-parser.ts";
 
 // ============================================================================
 // I18N EXPORTS

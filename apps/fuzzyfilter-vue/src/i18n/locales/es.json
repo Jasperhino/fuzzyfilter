@@ -43,6 +43,8 @@
     "score": "Puntuación",
     "results": "# Resultados",
     "tasks": "Tareas",
+    "filterSummary": "{filterCount} filtros aplicados, {filteredCount}/{totalCount} elementos",
+    "itemCount": "{filteredCount}/{totalCount} elementos",
     "noComments": "Sin comentarios",
     "apiDocs": "Documentación API",
     "operators": "Operadores",
@@ -59,5 +61,11 @@
       "isBlocked": "Bloqueado",
       "comments": "Comentarios"
     }
+  },
+  "languages": {
+    "en": "English",
+    "es": "Español",
+    "fr": "Français",
+    "de": "Deutsch"
   }
 }

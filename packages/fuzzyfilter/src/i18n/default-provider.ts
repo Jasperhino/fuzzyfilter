@@ -38,6 +38,10 @@ export function createDefaultEnglishProvider(): I18nProvider {
       return [...WORD_SETS[wordSetKey]];
     },
 
+    getLocale(): string {
+      return "en";
+    },
+
     // No onChange callback - English translations are static
   };
 }

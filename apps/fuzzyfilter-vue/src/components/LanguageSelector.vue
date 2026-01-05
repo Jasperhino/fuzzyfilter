@@ -15,14 +15,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const LANGUAGES = [
-  { code: "en", label: "English" },
-  { code: "es", label: "Español" },
-  { code: "fr", label: "Français" },
-  { code: "de", label: "Deutsch" },
-] as const;
+/** Available language codes */
+const LANGUAGE_CODES = ["en", "es", "fr", "de"] as const;
 
-const { locale } = useI18n();
+const { t, locale } = useI18n();
 
 const currentLocale = computed({
   get: () => locale.value,
@@ -35,16 +31,16 @@ const currentLocale = computed({
 <template>
   <Select v-model="currentLocale">
     <SelectTrigger class="w-[140px]">
-      <SelectValue placeholder="Select language" />
+      <SelectValue :placeholder="t('app.ui.selectLanguage')" />
     </SelectTrigger>
     <SelectContent>
       <SelectItem
-        v-for="lang in LANGUAGES"
-        :key="lang.code"
-        :value="lang.code"
-        :text="lang.label"
+        v-for="code in LANGUAGE_CODES"
+        :key="code"
+        :value="code"
+        :text="t(`app.languages.${code}`)"
       >
-        {{ lang.label }}
+        {{ t(`app.languages.${code}`) }}
       </SelectItem>
     </SelectContent>
   </Select>

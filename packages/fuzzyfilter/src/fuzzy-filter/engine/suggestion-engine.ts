@@ -143,11 +143,15 @@ function buildStrategyContext(options: BuildContextOptions): StrategyContext {
     for (const match of valMatches) {
       const key = `${match.value.columnId}:${match.value.value}`;
       
-      // NEW: Use smart scoring
+      // Use the matched key for display (e.g., "Technik" when user types in German)
+      // but keep the original value for filtering (e.g., "Engineering")
+      const matchedKey = match.key;
+      
+      // NEW: Use smart scoring with the matched key (what the user is matching against)
       const score = calculateSmartScore(
         match.score,
         match.indexes,
-        match.value.value
+        matchedKey
       );
       
       // Filter noise immediately
@@ -169,7 +173,8 @@ function buildStrategyContext(options: BuildContextOptions): StrategyContext {
           match: { ...match, indexes: match.indexes },
           sourceTokenText: ngram.text,
           ngram,
-          matchedTarget: match.value.value,
+          // Use the matched key (translated value) for display, not the stored original value
+          matchedTarget: matchedKey,
           matchIndexes: match.indexes,
         });
       }
@@ -221,7 +226,7 @@ function buildStrategyContext(options: BuildContextOptions): StrategyContext {
   for (const key of operatorsToRemove) {
     operatorScores.delete(key);
   }
-
+  
   return {
     query: options.query,
     parsed,

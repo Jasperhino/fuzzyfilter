@@ -95,14 +95,14 @@ watch(
       prevLocaleRef.value = newLocale
       // Only refetch if there's a current query
       if (query.value && query.value.trim()) {
-        // Trigger refetch by temporarily appending a character and removing it
-        // This ensures the composable detects a change and refetches
-        const currentQuery = query.value
-        setQuery(currentQuery + " ")
+        // Force a refetch by clearing and restoring the query
+        // This ensures the composable detects a change and refetches with new translations
+        const currentQuery = query.value.trim()
+        setQuery("")
         // Restore the original query after a brief delay to allow the refetch
         setTimeout(() => {
-          setQuery(currentQuery.trim())
-        }, 50)
+          setQuery(currentQuery)
+        }, 10)
       }
     }
   }
@@ -166,8 +166,11 @@ function handleSelect(index: number) {
       if (!appliedFilters.value.some((f) => f.id === suggestion.id)) {
         appliedFilters.value = [...appliedFilters.value, suggestion]
       }
+      // Clear the combobox input and close dropdown
       query.value = ""
       isOpen.value = false
+      // Reset hover state
+      hoveredIndex.value = null
     } else {
       // Continue typing with the completion text
       query.value = suggestion.completionText
@@ -307,6 +310,38 @@ const statusVariants: Record<string, { bg: string; text: string }> = {
   "In Progress": { bg: "bg-amber-500/15", text: "text-amber-600" },
   "Closed": { bg: "bg-slate-500/15", text: "text-slate-500" },
   "Blocked": { bg: "bg-rose-500/15", text: "text-rose-600" },
+}
+
+/**
+ * Maps enum data values to translation keys
+ */
+const STATUS_TRANSLATION_KEYS: Record<string, string> = {
+  "Open": "app.values.status.open",
+  "In Progress": "app.values.status.inProgress",
+  "Closed": "app.values.status.closed",
+  "Blocked": "app.values.status.blocked",
+}
+
+const DEPARTMENT_TRANSLATION_KEYS: Record<string, string> = {
+  "Engineering": "app.values.department.engineering",
+  "Design": "app.values.department.design",
+  "Product": "app.values.department.product",
+}
+
+/**
+ * Get translated status text
+ */
+function translateStatus(status: string): string {
+  const key = STATUS_TRANSLATION_KEYS[status]
+  return key ? t(key) : status
+}
+
+/**
+ * Get translated department text
+ */
+function translateDepartment(department: string): string {
+  const key = DEPARTMENT_TRANSLATION_KEYS[department]
+  return key ? t(key) : department
 }
 
 // Priority colors
@@ -672,16 +707,21 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
       </button>
     </div>
 
-    <!-- Results summary -->
-    <div class="flex items-center justify-between">
-      <h3 class="text-sm font-medium">
-        {{ t("app.ui.tasks") }}
-        <span class="text-muted-foreground font-normal">
-          ({{ formatNumber(filteredData.length) }} / {{ formatNumber(LARGE_DATASET.length) }})
-        </span>
-      </h3>
-      <span v-if="appliedFilters.length > 0" class="text-xs text-muted-foreground">
-        {{ t("app.ui.filtersApplied", { count: appliedFilters.length }) }}
+    <!-- Filter summary above table -->
+    <div class="flex justify-end mb-2">
+      <span class="text-xs text-muted-foreground">
+        {{
+          appliedFilters.length > 0
+            ? t("app.ui.filterSummary", {
+                filterCount: appliedFilters.length,
+                filteredCount: formatNumber(filteredData.length),
+                totalCount: formatNumber(LARGE_DATASET.length),
+              })
+            : t("app.ui.itemCount", {
+                filteredCount: formatNumber(filteredData.length),
+                totalCount: formatNumber(LARGE_DATASET.length),
+              })
+        }}
       </span>
     </div>
 
@@ -782,7 +822,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                     statusVariants[getRow(virtualRow.index).status]?.bg ?? 'bg-muted',
                     statusVariants[getRow(virtualRow.index).status]?.text ?? 'text-muted-foreground'
                   )">
-                    {{ getRow(virtualRow.index).status }}
+                    {{ translateStatus(getRow(virtualRow.index).status) }}
                   </span>
                 </td>
                 <td class="px-3 py-2 font-medium whitespace-nowrap h-12">{{ getRow(virtualRow.index).assignee }}</td>
@@ -792,7 +832,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                     <span class="text-sm tabular-nums">{{ getRow(virtualRow.index).priority }}</span>
                   </div>
                 </td>
-                <td class="px-3 py-2 text-muted-foreground whitespace-nowrap h-12">{{ getRow(virtualRow.index).department }}</td>
+                <td class="px-3 py-2 text-muted-foreground whitespace-nowrap h-12">{{ translateDepartment(getRow(virtualRow.index).department) }}</td>
                 <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">{{ getRow(virtualRow.index).created }}</td>
                 <td class="px-3 py-2 text-center whitespace-nowrap h-12">
                   <XIcon v-if="getRow(virtualRow.index).isBlocked" class="size-4 text-rose-500 mx-auto" />

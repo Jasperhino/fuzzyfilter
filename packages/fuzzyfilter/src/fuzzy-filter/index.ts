@@ -94,8 +94,62 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     if (this.i18nProvider.onChange) {
       this.unsubscribeLanguageChange = this.i18nProvider.onChange(() => {
         this.rebuildOperatorTrie();
+        this.rebuildColumnTrie();
+        this.rebuildValueTrieTranslations();
         this.state.contextCache.clear();
       });
+    }
+  }
+
+  /**
+   * Rebuilds the value trie translations when language changes.
+   * Re-indexes data to include new translated enum values.
+   */
+  private rebuildValueTrieTranslations(): void {
+    if (this.state.data.length > 0) {
+      // Re-index data to rebuild value trie with new translations
+      this.indexData(this.state.data);
+    }
+  }
+  
+  /**
+   * Rebuilds the column trie using the current I18nProvider.
+   * Includes both static names/aliases and translated names from i18n keys.
+   */
+  private rebuildColumnTrie(): void {
+    if (!this.state.schema) return;
+    
+    // Clear existing column trie
+    this.state.columnTrie.clear();
+    
+    for (const col of getColumns(this.state.schema)) {
+      // Insert static column name
+      this.state.columnTrie.insert(col.name, col);
+      
+      // Insert static aliases
+      if (col.aliases) {
+        for (const alias of col.aliases) {
+          this.state.columnTrie.insert(alias, col);
+        }
+      }
+      
+      // Insert translated column name if available
+      if (col.nameKey && this.i18nProvider.translate) {
+        const translatedName = this.i18nProvider.translate(col.nameKey);
+        if (translatedName && translatedName !== col.name) {
+          this.state.columnTrie.insert(translatedName, col);
+        }
+      }
+      
+      // Insert translated aliases if available
+      if (col.aliasKeys && this.i18nProvider.translate) {
+        for (const aliasKey of col.aliasKeys) {
+          const translatedAlias = this.i18nProvider.translate(aliasKey);
+          if (translatedAlias) {
+            this.state.columnTrie.insert(translatedAlias, col);
+          }
+        }
+      }
     }
   }
 
@@ -182,6 +236,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       if (this.i18nProvider.onChange) {
         this.unsubscribeLanguageChange = this.i18nProvider.onChange(() => {
           this.rebuildOperatorTrie();
+          this.rebuildColumnTrie();
           this.state.contextCache.clear();
         });
       }
@@ -196,16 +251,8 @@ export class FuzzyFilterImpl implements FuzzyFilter {
   setSchema(schema: SchemaInput): void {
     this.state.schema = buildSchema(schema);
 
-    // Rebuild column trie
-    this.state.columnTrie = createTrie();
-    for (const col of getColumns(this.state.schema)) {
-      this.state.columnTrie.insert(col.name, col);
-      if (col.aliases) {
-        for (const alias of col.aliases) {
-          this.state.columnTrie.insert(alias, col);
-        }
-      }
-    }
+    // Rebuild column trie with translated names
+    this.rebuildColumnTrie();
 
     // Re-index data if we have it
     if (this.state.data.length > 0) {
@@ -274,6 +321,45 @@ export class FuzzyFilterImpl implements FuzzyFilter {
           columnId: col.id,
           rowCount: count,
         });
+      }
+    }
+    
+    // Add translated enum values to the trie
+    this.addTranslatedValuesToTrie();
+  }
+  
+  /**
+   * Adds translated enum values to the value trie.
+   * This allows fuzzy searching by translated value names.
+   */
+  private addTranslatedValuesToTrie(): void {
+    if (!this.state.schema || !this.i18nProvider.translate) return;
+    
+    for (const col of getColumns(this.state.schema)) {
+      // Handle enum columns with translated value keys
+      if (col.type === DataType.ENUM && "valueKeys" in col && col.valueKeys) {
+        const enumCol = col as import("../types/index.ts").EnumColumnDefinition;
+        
+        for (let i = 0; i < enumCol.values.length; i++) {
+          const originalValue = enumCol.values[i]!;
+          const valueKey = enumCol.valueKeys[i];
+          
+          if (valueKey) {
+            const translatedValue = this.i18nProvider.translate(valueKey);
+            if (translatedValue && translatedValue !== originalValue) {
+              // Insert translated value pointing to the original value
+              // Check if original value exists in trie to get its count
+              const existingEntry = this.state.valueTrie.lookup(originalValue);
+              const rowCount = existingEntry?.rowCount ?? 0;
+              
+              this.state.valueTrie.insert(translatedValue, {
+                value: originalValue, // Store original value for filter creation
+                columnId: col.id,
+                rowCount,
+              });
+            }
+          }
+        }
       }
     }
   }

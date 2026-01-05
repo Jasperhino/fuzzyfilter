@@ -5,12 +5,20 @@
  * Adds custom logic to merge consecutive dates like "yesterday today" into ranges
  * and to treat expressions like "last week" as date ranges.
  *
+ * Supports multiple locales through chrono-node's built-in language support.
+ *
  * @module fuzzyfilter/date-parser
  */
 
 import * as chrono from "chrono-node";
-import type { ParsingResult, ParsedResult, Refiner, ParsingContext } from "chrono-node";
+import type { ParsingResult, ParsedResult, Refiner, ParsingContext, Chrono } from "chrono-node";
 import type { ParsedDate, DateParseOptions } from "./types/parsing.ts";
+
+/**
+ * Supported date parsing locales.
+ * Maps to chrono-node's built-in language parsers.
+ */
+export type DateLocale = "en" | "de" | "fr" | "es" | "nl" | "ja" | "pt";
 
 // ============================================================================
 // CUSTOM CHRONO REFINER
@@ -98,17 +106,45 @@ function canMerge(text: string, current: ParsingResult, next: ParsingResult): bo
 }
 
 // ============================================================================
-// CUSTOM CHRONO INSTANCE
+// CUSTOM CHRONO INSTANCES (per locale)
 // ============================================================================
 
 /**
- * Custom chrono instance with date range merging support.
+ * Creates a custom chrono instance with date range merging support for a locale.
  */
-const customChrono = (() => {
-  const custom = chrono.casual.clone();
+function createCustomChrono(baseChrono: Chrono): Chrono {
+  const custom = baseChrono.clone();
   custom.refiners.push(mergeConsecutiveDatesRefiner);
   return custom;
-})();
+}
+
+/**
+ * Locale-specific chrono instances with date range merging support.
+ * Uses chrono-node's built-in locale parsers.
+ */
+const chronoByLocale: Record<DateLocale, Chrono> = {
+  en: createCustomChrono(chrono.en.casual),
+  de: createCustomChrono(chrono.de.casual),
+  fr: createCustomChrono(chrono.fr.casual),
+  es: createCustomChrono(chrono.es.casual),
+  nl: createCustomChrono(chrono.nl.casual),
+  ja: createCustomChrono(chrono.ja.casual),
+  pt: createCustomChrono(chrono.pt.casual),
+};
+
+/**
+ * Get the chrono instance for a specific locale.
+ * Falls back to English if locale not supported.
+ */
+function getChronoForLocale(locale?: DateLocale): Chrono {
+  if (locale && locale in chronoByLocale) {
+    return chronoByLocale[locale];
+  }
+  return chronoByLocale.en;
+}
+
+// Keep backward compatibility
+const customChrono = chronoByLocale.en;
 
 // ============================================================================
 // IMPLIED RANGE PATTERNS
@@ -268,6 +304,7 @@ const dateParseCache = new DateParseCache();
 
 /**
  * Common date expressions to suggest for date columns.
+ * These are the English defaults.
  */
 export const COMMON_DATE_SUGGESTIONS = [
   { text: "today", label: "Today" },
@@ -279,6 +316,95 @@ export const COMMON_DATE_SUGGESTIONS = [
   { text: "this month", label: "This month" },
   { text: "this year", label: "This year" },
 ] as const;
+
+/**
+ * Locale-specific date suggestions.
+ * Keys match what chrono-node understands for each locale.
+ */
+const DATE_SUGGESTIONS_BY_LOCALE: Record<DateLocale, Array<{ text: string; label: string }>> = {
+  en: [
+    { text: "today", label: "Today" },
+    { text: "yesterday", label: "Yesterday" },
+    { text: "tomorrow", label: "Tomorrow" },
+    { text: "last week", label: "Last 7 days" },
+    { text: "last month", label: "Last 30 days" },
+    { text: "this week", label: "This week" },
+    { text: "this month", label: "This month" },
+    { text: "this year", label: "This year" },
+  ],
+  de: [
+    { text: "heute", label: "Heute" },
+    { text: "gestern", label: "Gestern" },
+    { text: "morgen", label: "Morgen" },
+    { text: "letzte Woche", label: "Letzte 7 Tage" },
+    { text: "letzten Monat", label: "Letzte 30 Tage" },
+    { text: "diese Woche", label: "Diese Woche" },
+    { text: "diesen Monat", label: "Diesen Monat" },
+    { text: "dieses Jahr", label: "Dieses Jahr" },
+  ],
+  fr: [
+    { text: "aujourd'hui", label: "Aujourd'hui" },
+    { text: "hier", label: "Hier" },
+    { text: "demain", label: "Demain" },
+    { text: "la semaine dernière", label: "7 derniers jours" },
+    { text: "le mois dernier", label: "30 derniers jours" },
+    { text: "cette semaine", label: "Cette semaine" },
+    { text: "ce mois", label: "Ce mois" },
+    { text: "cette année", label: "Cette année" },
+  ],
+  es: [
+    { text: "hoy", label: "Hoy" },
+    { text: "ayer", label: "Ayer" },
+    { text: "mañana", label: "Mañana" },
+    { text: "la semana pasada", label: "Últimos 7 días" },
+    { text: "el mes pasado", label: "Últimos 30 días" },
+    { text: "esta semana", label: "Esta semana" },
+    { text: "este mes", label: "Este mes" },
+    { text: "este año", label: "Este año" },
+  ],
+  nl: [
+    { text: "vandaag", label: "Vandaag" },
+    { text: "gisteren", label: "Gisteren" },
+    { text: "morgen", label: "Morgen" },
+    { text: "vorige week", label: "Afgelopen 7 dagen" },
+    { text: "vorige maand", label: "Afgelopen 30 dagen" },
+    { text: "deze week", label: "Deze week" },
+    { text: "deze maand", label: "Deze maand" },
+    { text: "dit jaar", label: "Dit jaar" },
+  ],
+  ja: [
+    { text: "今日", label: "今日" },
+    { text: "昨日", label: "昨日" },
+    { text: "明日", label: "明日" },
+    { text: "先週", label: "先週" },
+    { text: "先月", label: "先月" },
+    { text: "今週", label: "今週" },
+    { text: "今月", label: "今月" },
+    { text: "今年", label: "今年" },
+  ],
+  pt: [
+    { text: "hoje", label: "Hoje" },
+    { text: "ontem", label: "Ontem" },
+    { text: "amanhã", label: "Amanhã" },
+    { text: "semana passada", label: "Últimos 7 dias" },
+    { text: "mês passado", label: "Últimos 30 dias" },
+    { text: "esta semana", label: "Esta semana" },
+    { text: "este mês", label: "Este mês" },
+    { text: "este ano", label: "Este ano" },
+  ],
+};
+
+/**
+ * Get common date suggestions for a specific locale.
+ * Falls back to English if locale not supported.
+ * 
+ * @param locale - The locale code (e.g., "de", "fr", "es")
+ * @returns Array of date suggestions with text and label
+ */
+export function getDateSuggestionsForLocale(locale?: DateLocale | string): Array<{ text: string; label: string }> {
+  const normalizedLocale = (locale?.toLowerCase().split("-")[0] ?? "en") as DateLocale;
+  return DATE_SUGGESTIONS_BY_LOCALE[normalizedLocale] ?? DATE_SUGGESTIONS_BY_LOCALE.en;
+}
 
 /**
  * A detected date expression with position information.
@@ -325,15 +451,19 @@ function toParsedDate(result: ParsedResult, referenceDate: Date): ParsedDate {
  * Parse a natural language date expression into a ParsedDate.
  *
  * Uses chrono-node with our custom refiner that merges consecutive dates.
+ * Supports multiple locales through chrono-node's built-in language parsers.
  *
  * @param input - The text to parse for date expressions
- * @param options - Optional parsing configuration
+ * @param options - Optional parsing configuration (includes locale)
  * @returns ParsedDate if a date was found, null otherwise
  *
  * @example
  * ```typescript
  * parseDate("yesterday today");
  * // → { date: Date, rangeStart: Date, rangeEnd: Date, isRange: true, text: "yesterday today" }
+ *
+ * parseDate("gestern", { locale: "de" });
+ * // → { date: Date, isRange: false, text: "gestern" }
  *
  * parseDate("last week");
  * // → { date: Date, rangeStart: Date, rangeEnd: Date, isRange: true, text: "last week" }
@@ -345,8 +475,10 @@ export function parseDate(input: string, options?: DateParseOptions): ParsedDate
   }
 
   const referenceDate = options?.referenceDate ?? new Date();
+  const locale = (options?.locale?.toLowerCase().split("-")[0] ?? "en") as DateLocale;
 
   // Check cache first (only for standard options)
+  // Include locale in cache key consideration
   if (!options?.forwardDate) {
     const cached = dateParseCache.get(input, referenceDate);
     if (cached !== undefined) {
@@ -354,7 +486,9 @@ export function parseDate(input: string, options?: DateParseOptions): ParsedDate
     }
   }
 
-  const results = customChrono.parse(input, referenceDate, {
+  // Use locale-specific chrono parser
+  const chronoInstance = getChronoForLocale(locale);
+  const results = chronoInstance.parse(input, referenceDate, {
     forwardDate: options?.forwardDate ?? false,
   });
 

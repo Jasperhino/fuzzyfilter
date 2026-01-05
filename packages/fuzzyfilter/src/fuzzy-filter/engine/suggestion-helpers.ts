@@ -249,12 +249,31 @@ export function createSuggestion(
   const argumentParts: { text: string; displayText?: string; displayMatchedIndexes?: number[]; highlight?: boolean }[] = [];
 
   if (args && args.length > 0) {
+    // Format values for display, translating enum values if needed
     const formattedValues = args
-      .map((arg) => {
-        if (arg.kind === "string") return arg.value;
+      .map((arg, index) => {
+        if (arg.kind === "string") {
+          // Check if this is an enum value that should be translated
+          if (column.type === "enum" && "values" in column && "valueKeys" in column) {
+            const enumCol = column as EnumColumnDefinition;
+            const valueIndex = enumCol.values.indexOf(arg.value);
+            if (valueIndex >= 0) {
+              // Use translated label for display
+              return getTranslatedEnumValueLabel(enumCol, valueIndex, i18nProvider);
+            }
+          }
+          return arg.value;
+        }
         if (arg.kind === "number") return String(arg.value);
         if (arg.kind === "date") return formatDateForDisplay(arg.value);
-        if (arg.kind === "boolean") return String(arg.value);
+        if (arg.kind === "boolean") {
+          // Check if this is a boolean column that should be translated
+          if (column.type === "boolean" && "trueLabelKey" in column) {
+            const boolCol = column as BooleanColumnDefinition;
+            return getTranslatedBooleanLabel(boolCol, arg.value, i18nProvider);
+          }
+          return String(arg.value);
+        }
         return "";
       })
       .filter((v) => v !== "");
@@ -269,12 +288,22 @@ export function createSuggestion(
     // Create argument parts with truncation for long values
     // Match each formatted value to its corresponding match metadata
     for (let i = 0; i < formattedValues.length; i++) {
-      const val = formattedValues[i]!;
-      // Find the matching value in matchMetadata (if available)
-      const valueMatch = matchMetadata?.values?.find((v) => v.matchedTarget === val);
+      const val = formattedValues[i]!; // Translated value for display
+      const originalArg = args[i];
+      const originalValue = originalArg?.kind === "string" ? originalArg.value : val;
+      
+      // Find the matching value in matchMetadata
+      // matchMetadata.matchedTarget can be either the original value or the translated value
+      // depending on what the user typed
+      const valueMatch = matchMetadata?.values?.find((v) => 
+        v.matchedTarget === originalValue || v.matchedTarget === val
+      );
+      
+      // Use match indexes from metadata if available
+      // If the match was against the translated value, the indexes are already correct for the translated text
       const truncateResult = truncateWithEllipsis(val, valueMatch?.matchIndexes);
       argumentParts.push({ 
-        text: val, 
+        text: val, // Use translated value for display
         displayText: truncateResult?.displayText,
         displayMatchedIndexes: truncateResult?.adjustedIndexes,
       });

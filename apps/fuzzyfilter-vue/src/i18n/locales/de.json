@@ -43,6 +43,8 @@
     "score": "Score",
     "results": "# Ergebnisse",
     "tasks": "Aufgaben",
+    "filterSummary": "{filterCount} Filter angewendet, {filteredCount}/{totalCount} Einträge",
+    "itemCount": "{filteredCount}/{totalCount} Einträge",
     "noComments": "Keine Kommentare",
     "apiDocs": "API-Dokumentation",
     "operators": "Operatoren",
@@ -54,10 +56,16 @@
       "status": "Status",
       "assignee": "Zuständiger",
       "priority": "Priorität",
-      "department": "Abt.",
+      "department": "Abteilung",
       "created": "Erstellt",
       "isBlocked": "Blockiert",
       "comments": "Kommentare"
     }
+  },
+  "languages": {
+    "en": "English",
+    "es": "Español",
+    "fr": "Français",
+    "de": "Deutsch"
   }
 }

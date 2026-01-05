@@ -16,7 +16,7 @@ import type {
 import { getColumns, getColumn } from "../../schema-builder.ts";
 import { getOperatorsForType, getOperator } from "../../operators.ts";
 import { DataType } from "../../types/index.ts";
-import { parseDate, formatDateForDisplay, COMMON_DATE_SUGGESTIONS } from "../../date-parser.ts";
+import { parseDate, formatDateForDisplay, getDateSuggestionsForLocale } from "../../date-parser.ts";
 import { detectValueTokens, selectNonOverlappingMatches, toHypothesisValue } from "../engine/helpers.ts";
 import {
   createSuggestion,
@@ -106,7 +106,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
       columnScores,
       operatorScores,
       contextRowIndices,
-      tokens
+      tokens,
+      context.i18nProvider
     ));
 
     // 4. Column + Operator + Value combinations (from parsed input)
@@ -442,7 +443,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
           undefined,
           opMatch?.matchedAlias,
           matchMeta,
-          tokens
+          tokens,
+          i18nProvider
         )
       );
     }
@@ -543,7 +545,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
             undefined,
             matchedAlias,
             matchMeta,
-            tokens
+            tokens,
+            i18nProvider
           )
         );
       }
@@ -573,7 +576,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
             undefined,
             undefined,
             matchMeta,
-            tokens
+            tokens,
+            i18nProvider
           )
         );
       }
@@ -600,7 +604,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
             undefined,
             undefined,
             matchMeta,
-            tokens
+            tokens,
+            i18nProvider
           )
         );
       }
@@ -676,7 +681,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 undefined,
                 matchedAlias,
                 matchMeta,
-                tokens
+                tokens,
+                i18nProvider
               )
             );
           } else if (colMatchEntry && opInfo.requiresArgument) {
@@ -709,7 +715,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 undefined,
                 matchedAlias,
                 matchMeta,
-                tokens
+                tokens,
+                i18nProvider
               )
             );
           } else if (opInfo.requiresArgument && !colMatchEntry) {
@@ -791,7 +798,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                     undefined,
                     matchedAlias,
                     matchMeta,
-                    tokens
+                    tokens,
+                    i18nProvider
                   )
                 );
               }
@@ -817,7 +825,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 undefined,
                 matchedAlias,
                 opOnlyMeta,
-                tokens
+                tokens,
+                i18nProvider
               )
             );
           } else {
@@ -841,7 +850,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 undefined,
                 matchedAlias,
                 opOnlyMeta,
-                tokens
+                tokens,
+                i18nProvider
               )
             );
           }
@@ -973,7 +983,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
             rowCount,
             bestOpEntry?.matchedAlias,
             matchMeta,
-            tokens
+            tokens,
+            i18nProvider
           )
         );
       }
@@ -1031,7 +1042,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
           undefined,
           undefined,
           colOpMatchMeta,
-          tokens
+          tokens,
+          i18nProvider
         )
       );
       return suggestions;
@@ -1046,9 +1058,12 @@ export class NgramMatchStrategy implements SuggestionStrategy {
 
     // Handle date columns specially
     if (col.type === DataType.DATE) {
+      // Get locale for date parsing
+      const locale = i18nProvider?.getLocale?.() ?? "en";
+      
       if (valueTokens.length > 0) {
         const valueQuery = valueTokens.map((t) => t.text).join(" ");
-        const parsedDate = parseDate(valueQuery);
+        const parsedDate = parseDate(valueQuery, { locale });
 
         if (parsedDate) {
           const colToken = parsed.column!.token;
@@ -1142,11 +1157,13 @@ export class NgramMatchStrategy implements SuggestionStrategy {
               seenValues.add(key);
               const rowCount =
                 contextRowIndices !== null ? undefined : match.value.rowCount;
-              // Apply smart scoring for value match, normalize parsed column score
+              // Use the matched key for display (e.g., "Technik" when user types in German)
+              const matchedKey = match.key;
+              // Apply smart scoring for value match using the matched key
               const valScore = calculateSmartScore(
                 match.score,
                 match.indexes,
-                match.value.value
+                matchedKey
               );
               const colMatch = parsed.column!.match;
               
@@ -1163,7 +1180,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                   inputStart: valueTokens[0]!.start,
                   inputEnd: valueTokens[valueTokens.length - 1]!.end,
                   inputText: valueQueryNorm,
-                  matchedTarget: match.value.value,
+                  // Use matched key (translated value) for display
+                  matchedTarget: matchedKey,
                   matchIndexes: match.indexes,
                   score: match.score,
                 }],
@@ -1178,7 +1196,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                   rowCount,
                   undefined,
                   colValMatchMeta,
-                  tokens
+                  tokens,
+                  i18nProvider
                 )
               );
             }
@@ -1205,8 +1224,12 @@ export class NgramMatchStrategy implements SuggestionStrategy {
           },
         };
 
-        for (const dateSuggestion of COMMON_DATE_SUGGESTIONS) {
-          const parsedDate = parseDate(dateSuggestion.text);
+        // Get locale-specific date suggestions
+        const locale = i18nProvider?.getLocale?.() ?? "en";
+        const dateSuggestions = getDateSuggestionsForLocale(locale);
+        
+        for (const dateSuggestion of dateSuggestions) {
+          const parsedDate = parseDate(dateSuggestion.text, { locale });
           if (parsedDate) {
             const key = `${col.id}:${op}:date:${dateSuggestion.text}`;
             if (!seenValues.has(key)) {
@@ -1364,7 +1387,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                   undefined,
                   undefined,
                   matchMeta,
-                  tokens
+                  tokens,
+                  i18nProvider
                 )
               );
             }
@@ -1383,6 +1407,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
 
           for (const match of valMatches) {
             if (match.value.columnId === col.id) {
+              // Use the matched key for display (e.g., "Technik" when user types in German)
+              const matchedKey = match.key;
               // Normalize raw fuzzysort scores and apply smart scoring for value
               const colMatch = parsed.column!.match;
               const opMatch = parsed.operator?.match;
@@ -1391,7 +1417,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
               const sVal = calculateSmartScore(
                 match.score,
                 match.indexes,
-                match.value.value
+                matchedKey
               );
               
               const key = `${col.id}:${op}:${match.value.value}`;
@@ -1419,7 +1445,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                     inputStart: valueTokens[0]!.start,
                     inputEnd: valueTokens[valueTokens.length - 1]!.end,
                     inputText: valueQuery,
-                    matchedTarget: match.value.value,
+                    // Use matched key (translated value) for display
+                    matchedTarget: matchedKey,
                     matchIndexes: match.indexes,
                     score: match.score,
                   }],
@@ -1434,7 +1461,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                     rowCount,
                     undefined,
                     valueMatchMeta,
-                    tokens
+                    tokens,
+                    i18nProvider
                   )
                 );
               }
@@ -1470,7 +1498,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 rowCount,
                 undefined,
                 undefined,
-                tokens
+                tokens,
+                i18nProvider
               )
             );
           }

@@ -123,6 +123,10 @@ export function createVueI18nProvider(
       }
     },
 
+    getLocale: (): string | undefined => {
+      return getCurrentLocale();
+    },
+
     onChange: (callback: () => void): (() => void) => {
       // For vue-i18n, we watch the locale reactive value
       // Since we can't import Vue here (it's a peer dependency), we use polling

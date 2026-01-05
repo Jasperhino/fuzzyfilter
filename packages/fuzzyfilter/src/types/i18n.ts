@@ -63,6 +63,15 @@ export interface I18nProvider {
   translate?(key: string): string | undefined;
   
   /**
+   * Get the current locale/language code.
+   * 
+   * Used for locale-specific features like date parsing.
+   * 
+   * @returns Locale code (e.g., "en", "de", "fr") or undefined if not available
+   */
+  getLocale?(): string | undefined;
+  
+  /**
    * Optional: Subscribe to language change events.
    * 
    * If provided, FuzzyFilter can reactively update when language changes.
