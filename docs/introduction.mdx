@@ -1,0 +1,80 @@
+---
+title: Introduction
+description: "Intelligent filter suggestions for data tables"
+---
+
+# FuzzyFilter
+
+FuzzyFilter is a TypeScript library for building intelligent filter interfaces with natural language support. It provides fuzzy matching, instant counts, and smart suggestions for data table filtering.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Fuzzy Matching" icon="magnifying-glass">
+    Typo-tolerant search for columns, operators, and values. Type "stauts" and still find "Status".
+  </Card>
+  <Card title="Instant Counts" icon="chart-bar">
+    Real-time result counts using optimized data structures. Know how many rows match before applying a filter.
+  </Card>
+  <Card title="Natural Language Dates" icon="calendar">
+    Parse expressions like "last week", "yesterday", or "next month" automatically.
+  </Card>
+  <Card title="Type-Safe" icon="shield-check">
+    Full TypeScript support with branded types for compile-time safety.
+  </Card>
+</CardGroup>
+
+## Quick Example
+
+```typescript
+import { createFuzzyFilter, columnId } from "fuzzyfilter";
+
+// Create a filter instance
+const filter = createFuzzyFilter();
+
+// Define your schema
+filter.setSchema({
+  columns: [
+    { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed", "Pending"] },
+    { id: columnId("priority"), name: "Priority", type: "number" },
+    { id: columnId("createdAt"), name: "Created At", type: "date" },
+  ],
+});
+
+// Index your data
+filter.indexData(myData);
+
+// Get suggestions as the user types
+const suggestions = await filter.suggest("stat eq");
+// → [{ label: "Status = Open", resultCount: 5 }, ...]
+```
+
+## Framework Support
+
+FuzzyFilter works with any JavaScript framework. We provide first-class integrations for:
+
+<CardGroup cols={2}>
+  <Card title="React" icon="react" href="/react">
+    Use the `useFuzzyFilter` hook for seamless React integration.
+  </Card>
+  <Card title="Vue" icon="vuejs" href="/vue">
+    Use the `useFuzzyFilter` composable for Vue 3's Composition API.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Get started with npm, yarn, pnpm, or bun.
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build your first filter interface in 5 minutes.
+  </Card>
+  <Card title="Core API" icon="code" href="/core">
+    Explore the full API reference.
+  </Card>
+  <Card title="Guides" icon="book" href="/guides/basic-usage">
+    Learn advanced patterns and best practices.
+  </Card>
+</CardGroup>

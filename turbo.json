@@ -36,5 +36,12 @@
       ],
       "cache": false
     },
+    "docs:generate": {
+      "outputs": [
+        "../../docs/core/api/**",
+        "../../docs/react/api/**",
+        "../../docs/vue/api/**"
+      ]
+    }
   }
 }

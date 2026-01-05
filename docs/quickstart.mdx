@@ -1,0 +1,175 @@
+---
+title: Quick Start
+description: "Build your first filter interface in 5 minutes"
+---
+
+# Quick Start
+
+This guide will walk you through building a basic filter interface with FuzzyFilter.
+
+## 1. Install the packages
+
+<CodeGroup>
+
+```bash npm
+npm install fuzzyfilter
+```
+
+```bash yarn
+yarn add fuzzyfilter
+```
+
+```bash pnpm
+pnpm add fuzzyfilter
+```
+
+```bash bun
+bun add fuzzyfilter
+```
+
+</CodeGroup>
+
+For React or Vue, also install the framework-specific package:
+
+<CodeGroup>
+
+```bash React
+npm install react-fuzzy-filter
+```
+
+```bash Vue
+npm install vue-fuzzy-filter
+```
+
+</CodeGroup>
+
+## 2. Create a filter instance
+
+```typescript
+import { createFuzzyFilter, columnId } from "fuzzyfilter";
+
+const filter = createFuzzyFilter();
+```
+
+## 3. Define your schema
+
+The schema tells FuzzyFilter about your data structure:
+
+```typescript
+filter.setSchema({
+  columns: [
+    {
+      id: columnId("status"),
+      name: "Status",
+      type: "enum",
+      values: ["Open", "Closed", "In Progress", "Pending"],
+    },
+    {
+      id: columnId("priority"),
+      name: "Priority",
+      type: "number",
+    },
+    {
+      id: columnId("title"),
+      name: "Title",
+      type: "string",
+    },
+    {
+      id: columnId("createdAt"),
+      name: "Created At",
+      type: "date",
+    },
+  ],
+});
+```
+
+## 4. Index your data
+
+```typescript
+const myData = [
+  { status: "Open", priority: 1, title: "Fix login bug", createdAt: new Date() },
+  { status: "Closed", priority: 3, title: "Add dark mode", createdAt: new Date() },
+  // ... more rows
+];
+
+filter.indexData(myData);
+```
+
+## 5. Get suggestions
+
+```typescript
+const suggestions = await filter.suggest("stat eq op");
+
+// suggestions contains:
+// [
+//   { label: "Status = Open", resultCount: 5, ... },
+//   { label: "Status = Open", resultCount: 5, ... },
+// ]
+```
+
+## 6. Compile and execute filters
+
+```typescript
+// Compile from user input
+const compiled = filter.compile("status eq Open");
+
+// Use the predicate function to filter data
+const matches = myData.filter(compiled.predicate);
+```
+
+## Framework Integration
+
+### React
+
+```tsx
+import { useFuzzyFilter } from "react-fuzzy-filter";
+
+function FilterBox({ filter }) {
+  const { query, setQuery, suggestions, applySuggestion } = useFuzzyFilter(filter);
+
+  return (
+    <div>
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Type to filter..."
+      />
+      <ul>
+        {suggestions.map((s) => (
+          <li key={s.id} onClick={() => applySuggestion(s)}>
+            {s.label} ({s.resultCount} results)
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+### Vue
+
+```vue
+<script setup lang="ts">
+import { useFuzzyFilter } from "vue-fuzzy-filter";
+
+const props = defineProps<{ filter: FuzzyFilter }>();
+const { query, suggestions, applySuggestion } = useFuzzyFilter(props.filter);
+</script>
+
+<template>
+  <div>
+    <input v-model="query" placeholder="Type to filter..." />
+    <ul>
+      <li v-for="s in suggestions" :key="s.id" @click="applySuggestion(s)">
+        {{ s.label }} ({{ s.resultCount }} results)
+      </li>
+    </ul>
+  </div>
+</template>
+```
+
+## Next Steps
+
+- [Schema Definition Guide](/guides/schema-definition) - Learn about all column types and options
+- [Internationalization](/guides/i18n) - Support multiple languages
+- [Core API Reference](/core) - Full API documentation

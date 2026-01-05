@@ -1,0 +1,248 @@
+---
+title: Vue Integration
+description: "useFuzzyFilter composable for Vue 3 applications"
+---
+
+# Vue Integration
+
+The `vue-fuzzy-filter` package provides a Vue 3 composable for building filter interfaces with FuzzyFilter.
+
+## Installation
+
+```bash
+npm install fuzzyfilter vue-fuzzy-filter
+```
+
+## useFuzzyFilter Composable
+
+The main export is the `useFuzzyFilter` composable which provides reactive state management using Vue's Composition API.
+
+### Basic Usage
+
+```vue
+<script setup lang="ts">
+import { useFuzzyFilter } from "vue-fuzzy-filter";
+import { createFuzzyFilter, columnId } from "fuzzyfilter";
+
+// Create and configure the filter
+const filter = createFuzzyFilter();
+filter.setSchema({
+  columns: [
+    { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
+    { id: columnId("priority"), name: "Priority", type: "number" },
+  ],
+});
+filter.indexData(myData);
+
+const {
+  query,
+  suggestions,
+  selectedIndex,
+  applySuggestion,
+  isLoading,
+} = useFuzzyFilter(filter);
+</script>
+
+<template>
+  <div>
+    <input v-model="query" placeholder="Type to filter..." />
+    <span v-if="isLoading">Loading...</span>
+    <ul>
+      <li
+        v-for="(suggestion, index) in suggestions"
+        :key="suggestion.id"
+        :class="{ selected: index === selectedIndex }"
+        @click="applySuggestion(suggestion)"
+      >
+        {{ suggestion.label }}
+        <span class="count">({{ suggestion.resultCount }})</span>
+      </li>
+    </ul>
+  </div>
+</template>
+```
+
+### With Keyboard Navigation
+
+```vue
+<script setup lang="ts">
+import { useFuzzyFilter } from "vue-fuzzy-filter";
+
+const { query, suggestions, selectedIndex, applySuggestion } = useFuzzyFilter(filter);
+
+function handleKeyDown(e: KeyboardEvent) {
+  switch (e.key) {
+    case "ArrowDown":
+      e.preventDefault();
+      selectedIndex.value = Math.min(selectedIndex.value + 1, suggestions.value.length - 1);
+      break;
+    case "ArrowUp":
+      e.preventDefault();
+      selectedIndex.value = Math.max(selectedIndex.value - 1, 0);
+      break;
+    case "Enter":
+      e.preventDefault();
+      if (suggestions.value[selectedIndex.value]) {
+        applySuggestion(suggestions.value[selectedIndex.value]);
+      }
+      break;
+  }
+}
+</script>
+
+<template>
+  <input v-model="query" @keydown="handleKeyDown" />
+</template>
+```
+
+## Composable Options
+
+```typescript
+interface UseFuzzyFilterOptions {
+  /** Initial query string */
+  initialQuery?: string;
+
+  /** Debounce delay in milliseconds (default: 150) */
+  debounceMs?: number;
+
+  /** Callback when a suggestion is applied */
+  onApply?: (suggestion: FilterSuggestion) => void;
+
+  /** Callback when the query changes */
+  onQueryChange?: (query: string) => void;
+}
+```
+
+### Example with Options
+
+```vue
+<script setup lang="ts">
+const { query, suggestions } = useFuzzyFilter(filter, {
+  initialQuery: "status eq",
+  debounceMs: 200,
+  onApply: (suggestion) => {
+    console.log("Applied:", suggestion.label);
+  },
+  onQueryChange: (query) => {
+    // Track analytics, update URL, etc.
+  },
+});
+</script>
+```
+
+## Return Value
+
+The composable returns an object with the following reactive properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `query` | `Ref<string>` | Current query string (v-model compatible) |
+| `suggestions` | `Ref<FilterSuggestion[]>` | Current suggestions |
+| `selectedIndex` | `Ref<number>` | Currently selected suggestion index |
+| `applySuggestion` | `(suggestion: FilterSuggestion) => void` | Apply a suggestion |
+| `isLoading` | `Ref<boolean>` | Whether suggestions are being generated |
+| `compiledFilter` | `Ref<CompiledFilter \| null>` | The compiled filter if query is complete |
+
+## TypeScript
+
+The composable is fully typed. Import types as needed:
+
+```typescript
+import type {
+  UseFuzzyFilterOptions,
+  UseFuzzyFilterReturn,
+  FilterSuggestion,
+} from "vue-fuzzy-filter";
+```
+
+## Best Practices
+
+### 1. Create Filter in Setup
+
+Create the FuzzyFilter instance in your setup function or as a singleton:
+
+```vue
+<script setup lang="ts">
+import { computed, watch } from "vue";
+import { useFuzzyFilter } from "vue-fuzzy-filter";
+import { createFuzzyFilter, columnId } from "fuzzyfilter";
+
+const props = defineProps<{
+  data: Record<string, any>[];
+}>();
+
+// Create filter once
+const filter = createFuzzyFilter();
+filter.setSchema({
+  columns: [
+    { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
+  ],
+});
+
+// Re-index when data changes
+watch(() => props.data, (newData) => {
+  filter.indexData(newData);
+}, { immediate: true });
+
+const { query, suggestions } = useFuzzyFilter(filter);
+</script>
+```
+
+### 2. Use with vue-i18n
+
+```vue
+<script setup lang="ts">
+import { useI18n } from "vue-i18n";
+import { createVueI18nProvider } from "fuzzyfilter/i18n/adapters/vue-i18n";
+
+const i18n = useI18n();
+const provider = createVueI18nProvider(i18n);
+
+const filter = createFuzzyFilter({ i18nProvider: provider });
+</script>
+```
+
+### 3. Handle Loading States
+
+```vue
+<template>
+  <div>
+    <input v-model="query" />
+    <div v-if="isLoading">
+      <Spinner />
+    </div>
+    <SuggestionList v-else :suggestions="suggestions" />
+  </div>
+</template>
+```
+
+### 4. Provide/Inject Pattern
+
+For sharing a filter across components:
+
+```vue
+<!-- Parent component -->
+<script setup lang="ts">
+import { provide } from "vue";
+import { createFuzzyFilter } from "fuzzyfilter";
+
+const filter = createFuzzyFilter();
+// ... configure filter
+
+provide("fuzzyFilter", filter);
+</script>
+
+<!-- Child component -->
+<script setup lang="ts">
+import { inject } from "vue";
+import { useFuzzyFilter } from "vue-fuzzy-filter";
+import type { FuzzyFilter } from "fuzzyfilter";
+
+const filter = inject<FuzzyFilter>("fuzzyFilter")!;
+const { query, suggestions } = useFuzzyFilter(filter);
+</script>
+```
+
+<Note>
+This page provides usage documentation. Detailed API reference is generated from TSDoc comments.
+</Note>

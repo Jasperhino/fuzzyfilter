@@ -1,0 +1,265 @@
+---
+title: Schema Definition
+description: "Learn about column types, options, and schema configuration"
+---
+
+# Schema Definition
+
+This guide explains how to define schemas for FuzzyFilter, including all column types and their options.
+
+## Column Types
+
+FuzzyFilter supports five column types:
+
+### String Columns
+
+For free-text fields:
+
+```typescript
+{
+  id: columnId("title"),
+  name: "Title",
+  type: "string",
+}
+```
+
+**Supported operators**: `eq`, `neq`, `contains`, `notcontains`, `startsWith`, `endsWith`, `isempty`, `isnotempty`
+
+### Number Columns
+
+For numeric fields:
+
+```typescript
+{
+  id: columnId("priority"),
+  name: "Priority",
+  type: "number",
+}
+```
+
+**Supported operators**: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `between`, `isempty`, `isnotempty`
+
+### Date Columns
+
+For date/datetime fields:
+
+```typescript
+{
+  id: columnId("createdAt"),
+  name: "Created At",
+  type: "date",
+}
+```
+
+**Supported operators**: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `between`, `isempty`, `isnotempty`
+
+Date columns automatically support natural language expressions like "today", "last week", etc.
+
+### Enum Columns
+
+For fields with a known set of values:
+
+```typescript
+{
+  id: columnId("status"),
+  name: "Status",
+  type: "enum",
+  values: ["Open", "Closed", "In Progress", "Pending"],
+}
+```
+
+**Supported operators**: `eq`, `neq`, `in`, `notin`, `contains`, `notcontains`, `isempty`, `isnotempty`
+
+The `values` array is required for enum columns and enables value suggestions with counts.
+
+### Boolean Columns
+
+For true/false fields:
+
+```typescript
+{
+  id: columnId("isActive"),
+  name: "Active",
+  type: "boolean",
+}
+```
+
+**Supported operators**: `eq`, `neq`, `isempty`, `isnotempty`
+
+Boolean columns automatically suggest `true` and `false` as values.
+
+## Column Options
+
+All column types support these optional properties:
+
+### Column Aliases
+
+Provide alternative names for fuzzy matching:
+
+```typescript
+{
+  id: columnId("createdAt"),
+  name: "Created At",
+  type: "date",
+  aliases: ["created", "creation date", "date created"],
+}
+```
+
+This allows users to type "created" or "date created" and still match the column.
+
+### Column Description
+
+Add a description for tooltips or help text:
+
+```typescript
+{
+  id: columnId("priority"),
+  name: "Priority",
+  type: "number",
+  description: "1 = highest priority, 5 = lowest",
+}
+```
+
+### Accessor Function
+
+Custom function to extract the value from a data row:
+
+```typescript
+{
+  id: columnId("fullName"),
+  name: "Full Name",
+  type: "string",
+  accessor: (row) => `${row.firstName} ${row.lastName}`,
+}
+```
+
+By default, FuzzyFilter uses the column ID as the property key.
+
+## Complete Schema Example
+
+```typescript
+import { createFuzzyFilter, columnId } from "fuzzyfilter";
+
+const filter = createFuzzyFilter();
+
+filter.setSchema({
+  columns: [
+    {
+      id: columnId("status"),
+      name: "Status",
+      type: "enum",
+      values: ["Open", "Closed", "In Progress", "Pending", "Blocked"],
+      aliases: ["state", "progress"],
+    },
+    {
+      id: columnId("priority"),
+      name: "Priority",
+      type: "number",
+      description: "1-5 scale, 1 is highest",
+      aliases: ["importance", "urgency"],
+    },
+    {
+      id: columnId("assignee"),
+      name: "Assignee",
+      type: "string",
+      aliases: ["assigned to", "owner", "responsible"],
+    },
+    {
+      id: columnId("createdAt"),
+      name: "Created At",
+      type: "date",
+      aliases: ["created", "creation date"],
+    },
+    {
+      id: columnId("dueDate"),
+      name: "Due Date",
+      type: "date",
+      aliases: ["deadline", "due"],
+    },
+    {
+      id: columnId("isBlocked"),
+      name: "Blocked",
+      type: "boolean",
+      aliases: ["stuck", "waiting"],
+    },
+    {
+      id: columnId("tags"),
+      name: "Tags",
+      type: "enum",
+      values: ["bug", "feature", "docs", "test", "refactor"],
+      aliases: ["labels", "categories"],
+    },
+  ],
+});
+```
+
+## Dynamic Values
+
+For enum columns where values come from your data:
+
+```typescript
+// Extract unique values from data
+const statuses = [...new Set(data.map(row => row.status))];
+
+filter.setSchema({
+  columns: [
+    {
+      id: columnId("status"),
+      name: "Status",
+      type: "enum",
+      values: statuses,
+    },
+  ],
+});
+```
+
+## Schema Updates
+
+You can update the schema at any time:
+
+```typescript
+// Initial schema
+filter.setSchema({ columns: [...] });
+
+// Later, update with new columns or values
+filter.setSchema({
+  columns: [
+    ...existingColumns,
+    { id: columnId("newColumn"), name: "New Column", type: "string" },
+  ],
+});
+
+// Re-index data after schema changes
+filter.indexData(data);
+```
+
+## Type Safety with ColumnId
+
+The `columnId` function creates a branded type for compile-time safety:
+
+```typescript
+import { columnId, type ColumnId } from "fuzzyfilter";
+
+const statusId: ColumnId = columnId("status");
+const priorityId: ColumnId = columnId("priority");
+
+// TypeScript ensures you use valid column IDs
+filter.compileFilter(statusId, "eq", "Open");
+```
+
+## Best Practices
+
+1. **Use descriptive names**: Column names appear in suggestions, so make them user-friendly
+2. **Add aliases**: Include common synonyms users might type
+3. **Limit enum values**: Very large enum lists can slow down suggestions
+4. **Use accessors for computed values**: Don't duplicate data in your objects
+5. **Update schema and re-index together**: Schema changes require re-indexing
+
+<CardGroup cols={2}>
+  <Card title="Basic Usage" icon="play" href="/guides/basic-usage">
+    Review the fundamentals.
+  </Card>
+  <Card title="Internationalization" icon="globe" href="/guides/i18n">
+    Support multiple languages.
+  </Card>
+</CardGroup>

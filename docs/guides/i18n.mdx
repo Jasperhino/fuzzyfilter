@@ -1,0 +1,222 @@
+---
+title: Internationalization
+description: "Support multiple languages in FuzzyFilter"
+---
+
+# Internationalization (i18n)
+
+FuzzyFilter supports internationalization through a flexible provider system. You can use built-in locales, create custom translations, or integrate with popular i18n libraries.
+
+## Built-in Locales
+
+The core package includes English translations. Additional locales are available in `@fuzzyfilter/i18n-locales`:
+
+```bash
+npm install @fuzzyfilter/i18n-locales
+```
+
+Available locales:
+- English (`en`) - included in core
+- Spanish (`es`)
+- French (`fr`)
+- German (`de`)
+
+### Using a Built-in Locale
+
+```typescript
+import { createFuzzyFilter, createObjectProvider } from "fuzzyfilter";
+import { es } from "@fuzzyfilter/i18n-locales";
+
+const spanishProvider = createObjectProvider(es);
+const filter = createFuzzyFilter({ i18nProvider: spanishProvider });
+```
+
+## Custom Translations
+
+Create a custom translation object:
+
+```typescript
+import { createFuzzyFilter, createObjectProvider } from "fuzzyfilter";
+
+const myTranslations = {
+  operators: {
+    eq: { label: "equals", aliases: ["=", "is", "equals to"] },
+    neq: { label: "not equals", aliases: ["!=", "is not", "doesn't equal"] },
+    gt: { label: "greater than", aliases: [">", "more than", "above"] },
+    gte: { label: "at least", aliases: [">=", "minimum"] },
+    lt: { label: "less than", aliases: ["<", "below", "under"] },
+    lte: { label: "at most", aliases: ["<=", "maximum"] },
+    contains: { label: "contains", aliases: ["includes", "has"] },
+    notcontains: { label: "does not contain", aliases: ["excludes"] },
+    startsWith: { label: "starts with", aliases: ["begins with"] },
+    endsWith: { label: "ends with", aliases: ["finishes with"] },
+    in: { label: "is one of", aliases: ["any of"] },
+    notin: { label: "is not one of", aliases: ["none of"] },
+    between: { label: "between", aliases: ["in range", "from...to"] },
+    isempty: { label: "is empty", aliases: ["is null", "is blank"] },
+    isnotempty: { label: "is not empty", aliases: ["has value", "is set"] },
+  },
+  wordSets: {
+    less: ["less", "smaller", "lower"],
+    greater: ["greater", "bigger", "higher", "more"],
+    than: ["than"],
+    or: ["or"],
+    equal: ["equal", "equals"],
+    to: ["to"],
+  },
+};
+
+const provider = createObjectProvider(myTranslations);
+const filter = createFuzzyFilter({ i18nProvider: provider });
+```
+
+## Integration with i18next
+
+If you're using i18next, create a provider that pulls from your i18next instance:
+
+```typescript
+import i18n from "i18next";
+import { createI18nextProvider } from "fuzzyfilter/i18n/adapters/i18next";
+import { createFuzzyFilter } from "fuzzyfilter";
+
+const provider = createI18nextProvider(i18n);
+const filter = createFuzzyFilter({ i18nProvider: provider });
+```
+
+Your i18next translations should be structured as:
+
+```json
+{
+  "fuzzyfilter": {
+    "operators": {
+      "eq": { "label": "equals", "aliases": ["=", "is"] },
+      "neq": { "label": "not equals", "aliases": ["!="] }
+    },
+    "wordSets": {
+      "less": ["less", "smaller"],
+      "than": ["than"]
+    }
+  }
+}
+```
+
+## Integration with vue-i18n
+
+For Vue applications using vue-i18n:
+
+```typescript
+import { createI18n } from "vue-i18n";
+import { createVueI18nProvider } from "fuzzyfilter/i18n/adapters/vue-i18n";
+import { createFuzzyFilter } from "fuzzyfilter";
+
+const i18n = createI18n({
+  locale: "es",
+  messages: {
+    es: {
+      fuzzyfilter: {
+        operators: {
+          eq: { label: "es igual a", aliases: ["=", "igual"] },
+          // ...
+        },
+      },
+    },
+  },
+});
+
+const provider = createVueI18nProvider(i18n);
+const filter = createFuzzyFilter({ i18nProvider: provider });
+```
+
+## Dynamic Language Switching
+
+When the user changes language, create a new provider:
+
+```typescript
+function setLanguage(locale: string) {
+  const translations = getTranslationsForLocale(locale);
+  const provider = createObjectProvider(translations);
+
+  // Create a new filter with the new provider
+  // or update the existing filter's provider
+  filter.setI18nProvider(provider);
+}
+```
+
+## Translation Structure
+
+A complete translations object has this structure:
+
+```typescript
+interface FuzzyFilterTranslations {
+  operators: {
+    [operatorId: string]: {
+      label: string;      // Display label
+      aliases: string[];  // Alternative input terms
+    };
+  };
+  wordSets: {
+    less: string[];      // Words for "less than"
+    greater: string[];   // Words for "greater than"
+    than: string[];      // "than" connector
+    or: string[];        // "or" connector
+    equal: string[];     // Words for "equal"
+    to: string[];        // "to" connector
+  };
+}
+```
+
+### Operator IDs
+
+All operator IDs that need translations:
+
+| ID | Purpose |
+|----|---------|
+| `eq` | Equals |
+| `neq` | Not equals |
+| `gt` | Greater than |
+| `gte` | Greater than or equal |
+| `lt` | Less than |
+| `lte` | Less than or equal |
+| `contains` | Contains |
+| `notcontains` | Does not contain |
+| `startsWith` | Starts with |
+| `endsWith` | Ends with |
+| `in` | In list |
+| `notin` | Not in list |
+| `between` | Between |
+| `isempty` | Is empty |
+| `isnotempty` | Is not empty |
+
+## Date Expression Locales
+
+Date parsing uses chrono-node which has its own locale support:
+
+```typescript
+import { parseDate, getDateSuggestionsForLocale } from "fuzzyfilter";
+
+// Get date suggestions in Spanish
+const spanishDateSuggestions = getDateSuggestionsForLocale("es");
+// → [{ text: "hoy", label: "Hoy" }, { text: "ayer", label: "Ayer" }, ...]
+
+// Parse dates in a specific locale
+const result = parseDate("hace dos semanas", { locale: "es" });
+```
+
+Supported date locales: `en`, `es`, `fr`, `de`, `pt`, `nl`, `ja`, `zh`
+
+## Best Practices
+
+1. **Include common aliases**: Users type in various ways, so include multiple aliases
+2. **Use natural phrasing**: Labels should read naturally in sentences
+3. **Test with real users**: Different regions may have different expectations
+4. **Consider date formats**: Date parsing and display vary by locale
+5. **Load translations lazily**: Don't bundle all locales if you only need one
+
+<CardGroup cols={2}>
+  <Card title="Basic Usage" icon="play" href="/guides/basic-usage">
+    Review the fundamentals.
+  </Card>
+  <Card title="Core API" icon="code" href="/core">
+    Full API reference.
+  </Card>
+</CardGroup>

@@ -1,0 +1,170 @@
+---
+title: Core API
+description: "FuzzyFilter core library API reference"
+---
+
+# Core API Reference
+
+The FuzzyFilter core library provides the main filtering engine with fuzzy matching, suggestion generation, and filter compilation.
+
+## Overview
+
+The core library exports:
+
+- **Factory**: `createFuzzyFilter()` - Creates a new filter instance
+- **Types**: `ColumnId`, `Operator`, `DataType`, `FuzzyFilter`, `FilterSuggestion`
+- **Operators**: Registry of all supported filter operators
+- **Date Parsing**: Natural language date parsing utilities
+- **I18n**: Internationalization providers and adapters
+- **Telemetry**: Performance monitoring utilities
+
+## Main Factory
+
+### createFuzzyFilter
+
+Creates a new FuzzyFilter instance with the specified options.
+
+```typescript
+import { createFuzzyFilter } from "fuzzyfilter";
+
+const filter = createFuzzyFilter({
+  maxSuggestions: 10,
+  debounceMs: 150,
+  benchmark: false,
+});
+```
+
+#### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxSuggestions` | `number` | `10` | Maximum number of suggestions to return |
+| `debounceMs` | `number` | `150` | Debounce delay for suggestion generation |
+| `benchmark` | `boolean` | `false` | Enable telemetry/benchmarking |
+| `i18nProvider` | `I18nProvider` | English | Custom i18n provider |
+
+## FuzzyFilter Instance Methods
+
+### setSchema
+
+Defines the schema for filtering.
+
+```typescript
+filter.setSchema({
+  columns: [
+    { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
+    { id: columnId("priority"), name: "Priority", type: "number" },
+  ],
+});
+```
+
+### indexData
+
+Indexes data for counting and filtering.
+
+```typescript
+filter.indexData(myData);
+```
+
+### suggest
+
+Generates filter suggestions based on user input.
+
+```typescript
+const suggestions = await filter.suggest("status eq");
+```
+
+### compile
+
+Compiles a filter string into a predicate function.
+
+```typescript
+const compiled = filter.compile("status eq Open");
+const matches = myData.filter(compiled.predicate);
+```
+
+### compileFilter
+
+Compiles a filter programmatically.
+
+```typescript
+const compiled = filter.compileFilter("priority", "gte", 3);
+```
+
+## Types
+
+### ColumnId
+
+A branded type for type-safe column identifiers.
+
+```typescript
+import { columnId } from "fuzzyfilter";
+
+const statusId = columnId("status"); // ColumnId type
+```
+
+### Operators
+
+All supported filter operators:
+
+| Operator | Description | Supported Types |
+|----------|-------------|-----------------|
+| `eq` | Equals | All |
+| `neq` | Not equals | All |
+| `gt` | Greater than | number, date |
+| `gte` | Greater than or equal | number, date |
+| `lt` | Less than | number, date |
+| `lte` | Less than or equal | number, date |
+| `contains` | Contains substring | string, enum |
+| `notcontains` | Does not contain | string, enum |
+| `startsWith` | Starts with | string |
+| `endsWith` | Ends with | string |
+| `between` | Between range | number, date |
+| `in` | In list | enum |
+| `notin` | Not in list | enum |
+| `isempty` | Is empty/null | All |
+| `isnotempty` | Is not empty/null | All |
+
+## Date Parsing
+
+Parse natural language date expressions:
+
+```typescript
+import { parseDate, COMMON_DATE_SUGGESTIONS } from "fuzzyfilter";
+
+const result = parseDate("two weeks ago");
+// → { date: Date, isRange: false, text: "two weeks ago" }
+
+const range = parseDate("last month");
+// → { date: Date, rangeStart: Date, rangeEnd: Date, isRange: true }
+```
+
+## I18n
+
+### Custom Provider
+
+```typescript
+import { createObjectProvider } from "fuzzyfilter";
+
+const spanishProvider = createObjectProvider({
+  operators: {
+    eq: { label: "es igual a", aliases: ["igual", "="] },
+  },
+});
+
+const filter = createFuzzyFilter({ i18nProvider: spanishProvider });
+```
+
+### Using Adapters
+
+```typescript
+// With i18next
+import { createI18nextProvider } from "fuzzyfilter/i18n/adapters/i18next";
+
+const provider = createI18nextProvider(i18n);
+const filter = createFuzzyFilter({ i18nProvider: provider });
+```
+
+<Note>
+This page provides an overview. Detailed API documentation for each export is generated from TSDoc comments.
+</Note>

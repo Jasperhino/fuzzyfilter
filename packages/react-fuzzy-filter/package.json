@@ -12,6 +12,9 @@
       "types": "./src/index.ts"
     }
   },
+  "scripts": {
+    "docs:generate": "bunx mint-tsdocs generate"
+  },
   "peerDependencies": {
     "fuzzyfilter": "workspace:*",
     "react": "^18 || ^19"

@@ -1,0 +1,142 @@
+---
+title: Installation
+description: "Install FuzzyFilter in your project"
+---
+
+# Installation
+
+FuzzyFilter is available on npm and can be installed with any package manager.
+
+## Core Library
+
+The core library provides all the filtering logic and can be used with any framework:
+
+<CodeGroup>
+
+```bash npm
+npm install fuzzyfilter
+```
+
+```bash yarn
+yarn add fuzzyfilter
+```
+
+```bash pnpm
+pnpm add fuzzyfilter
+```
+
+```bash bun
+bun add fuzzyfilter
+```
+
+</CodeGroup>
+
+## Framework Packages
+
+### React
+
+For React applications, install the React hook package:
+
+<CodeGroup>
+
+```bash npm
+npm install fuzzyfilter react-fuzzy-filter
+```
+
+```bash yarn
+yarn add fuzzyfilter react-fuzzy-filter
+```
+
+```bash pnpm
+pnpm add fuzzyfilter react-fuzzy-filter
+```
+
+```bash bun
+bun add fuzzyfilter react-fuzzy-filter
+```
+
+</CodeGroup>
+
+### Vue
+
+For Vue 3 applications, install the Vue composable package:
+
+<CodeGroup>
+
+```bash npm
+npm install fuzzyfilter vue-fuzzy-filter
+```
+
+```bash yarn
+yarn add fuzzyfilter vue-fuzzy-filter
+```
+
+```bash pnpm
+pnpm add fuzzyfilter vue-fuzzy-filter
+```
+
+```bash bun
+bun add fuzzyfilter vue-fuzzy-filter
+```
+
+</CodeGroup>
+
+## Additional Packages
+
+### I18n Locales
+
+For additional language support beyond English:
+
+```bash
+npm install @fuzzyfilter/i18n-locales
+```
+
+This package includes translations for:
+- Spanish (`es`)
+- French (`fr`)
+- German (`de`)
+
+### Operator Icons
+
+Custom Lucide-style icons for filter operators:
+
+```bash
+# For React
+npm install @fuzzyfilter/lucide-operators-react
+
+# For Vue
+npm install @fuzzyfilter/lucide-operators-vue
+```
+
+## Requirements
+
+- **Node.js**: 18 or later
+- **TypeScript**: 5.0 or later (optional but recommended)
+- **React**: 18 or 19 (for react-fuzzy-filter)
+- **Vue**: 3.0 or later (for vue-fuzzy-filter)
+
+## TypeScript Setup
+
+FuzzyFilter is written in TypeScript and includes type definitions. No additional `@types` packages are needed.
+
+For the best experience, ensure your `tsconfig.json` includes:
+
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "moduleResolution": "bundler"
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build your first filter interface.
+  </Card>
+  <Card title="Core API" icon="code" href="/core">
+    Explore the API reference.
+  </Card>
+</CardGroup>

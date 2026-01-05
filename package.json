@@ -18,7 +18,10 @@
     "deploy:link": "turbo run deploy:link --filter='./apps/*'",
     "deploy:landing": "turbo run deploy --filter=fuzzyfilter-landing",
     "deploy:react": "turbo run deploy --filter=fuzzyfilter-react",
-    "deploy:vue": "turbo run deploy --filter=fuzzyfilter-vue"
+    "deploy:vue": "turbo run deploy --filter=fuzzyfilter-vue",
+    "docs:generate": "turbo run docs:generate",
+    "docs:dev": "cd docs && mintlify dev",
+    "docs:build": "cd docs && mintlify build"
   },
   "workspaces": [
     "packages/*",
@@ -26,10 +29,20 @@
   ],
   "devDependencies": {
     "@types/bun": "latest",
+    "mintlify": "^4.2.257",
     "turbo": "^2.7.2"
   },
   "packageManager": "bun@1.3.5",
   "engines": {
     "node": ">=18"
+  },
+  "overrides": {
+    "@stoplight/spectral-core": "1.18.3",
+    "@stoplight/spectral-formats": "1.6.0",
+    "@stoplight/spectral-formatters": "1.3.0",
+    "@stoplight/spectral-functions": "1.7.2",
+    "@stoplight/spectral-parsers": "1.0.3",
+    "@stoplight/spectral-rulesets": "1.18.1",
+    "@stoplight/spectral-runtime": "1.1.2"
   }
 }

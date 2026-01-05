@@ -1,0 +1,10 @@
+# Mintlify build output
+.mintlify/
+
+# Node modules (if any local dependencies)
+node_modules/
+
+# Generated API docs (regenerated on build)
+core/api/
+react/api/
+vue/api/

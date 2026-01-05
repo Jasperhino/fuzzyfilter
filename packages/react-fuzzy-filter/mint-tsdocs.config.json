@@ -1,0 +1,8 @@
+{
+  "$schema": "https://unpkg.com/mint-tsdocs@0.0.8/dist/config.schema.json",
+  "input": ["src/index.ts", "src/use-fuzzy-filter.ts"],
+  "output": "../../docs/react/api",
+  "name": "React FuzzyFilter",
+  "description": "React hook API documentation",
+  "tsconfig": "tsconfig.json"
+}

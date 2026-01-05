@@ -1,0 +1,224 @@
+---
+title: React Integration
+description: "useFuzzyFilter hook for React applications"
+---
+
+# React Integration
+
+The `react-fuzzy-filter` package provides a React hook for building filter interfaces with FuzzyFilter.
+
+## Installation
+
+```bash
+npm install fuzzyfilter react-fuzzy-filter
+```
+
+## useFuzzyFilter Hook
+
+The main export is the `useFuzzyFilter` hook which provides reactive state management for filter suggestions.
+
+### Basic Usage
+
+```tsx
+import { useFuzzyFilter } from "react-fuzzy-filter";
+import { createFuzzyFilter, columnId } from "fuzzyfilter";
+
+// Create and configure the filter (outside component or with useMemo)
+const filter = createFuzzyFilter();
+filter.setSchema({
+  columns: [
+    { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
+    { id: columnId("priority"), name: "Priority", type: "number" },
+  ],
+});
+filter.indexData(myData);
+
+function FilterBox() {
+  const {
+    query,
+    setQuery,
+    suggestions,
+    selectedIndex,
+    setSelectedIndex,
+    applySuggestion,
+    isLoading,
+  } = useFuzzyFilter(filter);
+
+  return (
+    <div>
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Type to filter..."
+      />
+      {isLoading && <span>Loading...</span>}
+      <ul>
+        {suggestions.map((suggestion, index) => (
+          <li
+            key={suggestion.id}
+            onClick={() => applySuggestion(suggestion)}
+            className={index === selectedIndex ? "selected" : ""}
+          >
+            {suggestion.label}
+            <span className="count">({suggestion.resultCount})</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+### With Keyboard Navigation
+
+```tsx
+function FilterBox() {
+  const {
+    query,
+    setQuery,
+    suggestions,
+    selectedIndex,
+    setSelectedIndex,
+    applySuggestion,
+  } = useFuzzyFilter(filter);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setSelectedIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setSelectedIndex((prev) => Math.max(prev - 1, 0));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (suggestions[selectedIndex]) {
+          applySuggestion(suggestions[selectedIndex]);
+        }
+        break;
+    }
+  };
+
+  return (
+    <input
+      value={query}
+      onChange={(e) => setQuery(e.target.value)}
+      onKeyDown={handleKeyDown}
+    />
+  );
+}
+```
+
+## Hook Options
+
+```typescript
+interface UseFuzzyFilterOptions {
+  /** Initial query string */
+  initialQuery?: string;
+
+  /** Debounce delay in milliseconds (default: 150) */
+  debounceMs?: number;
+
+  /** Callback when a suggestion is applied */
+  onApply?: (suggestion: FilterSuggestion) => void;
+
+  /** Callback when the query changes */
+  onQueryChange?: (query: string) => void;
+}
+```
+
+### Example with Options
+
+```tsx
+const { query, suggestions } = useFuzzyFilter(filter, {
+  initialQuery: "status eq",
+  debounceMs: 200,
+  onApply: (suggestion) => {
+    console.log("Applied:", suggestion.label);
+  },
+  onQueryChange: (query) => {
+    // Track analytics, update URL, etc.
+  },
+});
+```
+
+## Return Value
+
+The hook returns an object with the following properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `query` | `string` | Current query string |
+| `setQuery` | `(query: string) => void` | Update the query |
+| `suggestions` | `FilterSuggestion[]` | Current suggestions |
+| `selectedIndex` | `number` | Currently selected suggestion index |
+| `setSelectedIndex` | `(index: number) => void` | Set selected index |
+| `applySuggestion` | `(suggestion: FilterSuggestion) => void` | Apply a suggestion |
+| `isLoading` | `boolean` | Whether suggestions are being generated |
+| `compiledFilter` | `CompiledFilter \| null` | The compiled filter if query is complete |
+
+## TypeScript
+
+The hook is fully typed. Import types as needed:
+
+```typescript
+import type {
+  UseFuzzyFilterOptions,
+  UseFuzzyFilterReturn,
+  FilterSuggestion,
+  CompiledFilter,
+} from "react-fuzzy-filter";
+```
+
+## Best Practices
+
+### 1. Create Filter Outside Component
+
+Create the FuzzyFilter instance outside your component or use `useMemo` to avoid recreating it on every render:
+
+```tsx
+// ✅ Good: Outside component
+const filter = createFuzzyFilter();
+
+function App() {
+  const { suggestions } = useFuzzyFilter(filter);
+}
+
+// ✅ Good: With useMemo
+function App({ schema, data }) {
+  const filter = useMemo(() => {
+    const f = createFuzzyFilter();
+    f.setSchema(schema);
+    f.indexData(data);
+    return f;
+  }, [schema, data]);
+
+  const { suggestions } = useFuzzyFilter(filter);
+}
+```
+
+### 2. Update Data When It Changes
+
+```tsx
+useEffect(() => {
+  filter.indexData(data);
+}, [data]);
+```
+
+### 3. Handle Loading States
+
+```tsx
+const { isLoading, suggestions } = useFuzzyFilter(filter);
+
+return (
+  <div>
+    {isLoading ? <Spinner /> : <SuggestionList suggestions={suggestions} />}
+  </div>
+);
+```
+
+<Note>
+This page provides usage documentation. Detailed API reference is generated from TSDoc comments.
+</Note>

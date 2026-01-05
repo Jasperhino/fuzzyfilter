@@ -61,9 +61,13 @@
       "optional": true
     }
   },
-  "keywords": ["fuzzy", "filter", "search", "suggestions", "autocomplete"],
+  "keywords": [
+    "fuzzy",
+    "filter",
+    "search",
+    "suggestions",
+    "autocomplete"
+  ],
   "license": "MIT",
   "packageManager": "bun@1.3.5"
 }
-
-

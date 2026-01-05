@@ -1,0 +1,8 @@
+{
+  "$schema": "https://unpkg.com/mint-tsdocs@0.0.8/dist/config.schema.json",
+  "input": ["src/index.ts"],
+  "output": "../../docs/core/api",
+  "name": "FuzzyFilter Core",
+  "description": "Core library API documentation",
+  "tsconfig": "tsconfig.json"
+}

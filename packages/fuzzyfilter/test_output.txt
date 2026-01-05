@@ -1,0 +1,251 @@
+fuzzyfilter test: bun test v1.3.5 (1e86cebd)
+fuzzyfilter test: 
+fuzzyfilter test: src/fuzzy-filter.test.ts:
+fuzzyfilter test: (pass) FuzzyFilter > Schema > getSchema returns the schema [2.27ms]
+fuzzyfilter test: (pass) FuzzyFilter > Schema > getColumn returns column by ID [0.90ms]
+fuzzyfilter test: (pass) FuzzyFilter > Schema > getOperatorsForColumn returns valid operators [1.08ms]
+fuzzyfilter test: (pass) FuzzyFilter > Indexing > getIndexStats returns correct counts [0.76ms]
+fuzzyfilter test: (pass) FuzzyFilter > Indexing > clearIndex empties the index [0.72ms]
+fuzzyfilter test: (pass) FuzzyFilter > Suggestions > empty query returns default suggestions [2.03ms]
+fuzzyfilter test: (pass) FuzzyFilter > Suggestions > column name query returns column suggestions [4.00ms]
+fuzzyfilter test: (pass) FuzzyFilter > Suggestions > operator query returns operator suggestions [4.73ms]
+fuzzyfilter test: (pass) FuzzyFilter > Suggestions > value query returns value suggestions [1.97ms]
+fuzzyfilter test: (pass) FuzzyFilter > Suggestions > multi-token query parses correctly [2.01ms]
+fuzzyfilter test: (pass) FuzzyFilter > Suggestions > suggestions include result counts [2.56ms]
+fuzzyfilter test: (pass) FuzzyFilter > Suggestions > responseTimeMs is tracked [0.66ms]
+fuzzyfilter test: (pass) FuzzyFilter > Parsing > parse identifies column [0.74ms]
+fuzzyfilter test: (pass) FuzzyFilter > Parsing > parse identifies operator [0.57ms]
+fuzzyfilter test: (pass) FuzzyFilter > Parsing > parse handles multi-token input [1.01ms]
+fuzzyfilter test: (pass) FuzzyFilter > Parsing > parse correctly assigns 'status notin' - column first, operator second [0.60ms]
+fuzzyfilter test: (pass) FuzzyFilter > Parsing > parse correctly assigns 'nin status' - operator first, column second [0.57ms]
+fuzzyfilter test: (pass) FuzzyFilter > Parsing > parse finds optimal assignment with 'priority between' [0.66ms]
+fuzzyfilter test: (pass) FuzzyFilter > Parsing > parse correctly assigns 'status in open' - column, operator, value [0.70ms]
+fuzzyfilter test: (pass) FuzzyFilter > Parsing > suggest 'status in open closed' should show Status in [Open, Closed] as top suggestion [3.45ms]
+fuzzyfilter test: (pass) FuzzyFilter > Parsing > suggest 'one of open closed' should show Status in [Open, Closed] (operator alias with multiple values) [1.86ms]
+fuzzyfilter test: 
+fuzzyfilter test: === Suggestions for 'hello' ===
+fuzzyfilter test:   Tags         eq         [Hello Echo          ] score=0.36000000000000004
+fuzzyfilter test:   Tags         eq         [Hello Beta          ] score=0.36000000000000004
+fuzzyfilter test:   Tags         eq         [Hello Alpha         ] score=0.35636363636363644
+fuzzyfilter test:   Tags         eq         [Hello Delta         ] score=0.35636363636363644
+fuzzyfilter test:   Tags         eq         [Hello Charlie       ] score=0.3507692307692308
+fuzzyfilter test: 
+fuzzyfilter test: === Suggestions for 'hello world' ===
+fuzzyfilter test:   Tags         in         [World One, Hello Echo] score=0.3622222222222223
+fuzzyfilter test:   Tags         nin        [World One, Hello Echo] score=0.3622222222222223
+fuzzyfilter test:   Tags         eq         [World One           ] score=0.18222222222222226
+fuzzyfilter test:   Tags         eq         [World Two           ] score=0.18222222222222226
+fuzzyfilter test:   Tags         eq         [Hello Echo          ] score=0.18000000000000002
+fuzzyfilter test:   Tags         eq         [Hello Beta          ] score=0.18000000000000002
+fuzzyfilter test:   Tags         eq         [Hello Alpha         ] score=0.17818181818181822
+fuzzyfilter test:   Tags         eq         [Hello Delta         ] score=0.17818181818181822
+fuzzyfilter test: (pass) FuzzyFilter > Parsing > 'in' operator arguments should not exceed the number of tokens (no token reuse) [2.48ms]
+fuzzyfilter test:   Tags         eq         [World Three         ] score=0.17818181818181822
+fuzzyfilter test:   Tags         eq         [Hello Charlie       ] score=0.1753846153846154
+fuzzyfilter test: (pass) FuzzyFilter > Parsing > validate returns errors for incomplete input [0.66ms]
+fuzzyfilter test: (pass) FuzzyFilter > Parsing > validate passes for complete input [0.78ms]
+fuzzyfilter test: (pass) FuzzyFilter > Compilation > compile creates a filter [1.41ms]
+fuzzyfilter test: (pass) FuzzyFilter > Compilation > compileFilter creates a filter programmatically [1.50ms]
+fuzzyfilter test: (pass) FuzzyFilter > Compilation > compiled filter predicate works [2.18ms]
+fuzzyfilter test: (pass) FuzzyFilter > Execution > execute returns matching rows [0.55ms]
+fuzzyfilter test: (pass) FuzzyFilter > Execution > count returns match count [0.30ms]
+fuzzyfilter test: (pass) Tokenizer > handles quoted strings [0.60ms]
+fuzzyfilter test: (pass) Tokenizer > handles operator symbols [0.36ms]
+fuzzyfilter test: (pass) N-gram Matching > matches values with spaces (e.g., 'Eve Foster') [0.57ms]
+fuzzyfilter test: (pass) N-gram Matching > matches operators with spaces (e.g., 'not equals') [1.09ms]
+fuzzyfilter test: (pass) N-gram Matching > value matches should not be boosted by eq when a better operator matches the same ngram [1.39ms]
+fuzzyfilter test: (pass) N-gram Matching > multi-word operator 'not equal' should beat single-word 'equal' for overlapping tokens [1.11ms]
+fuzzyfilter test: (pass) N-gram Matching > matches column aliases with spaces (e.g., 'assigned to') [0.56ms]
+fuzzyfilter test: (pass) N-gram Matching > matches 'is not empty' as a single operator phrase [0.59ms]
+fuzzyfilter test: (pass) N-gram Matching > matches 'less than or equal' operator [1.07ms]
+fuzzyfilter test: (pass) N-gram Matching > ranks exact value match 'in progress' higher than 'in' operator [0.73ms]
+fuzzyfilter test: (pass) N-gram Matching > ranks partial operator match lower than complete value match [0.43ms]
+fuzzyfilter test: (pass) Type-Specific Aliases > 'at' alias only suggests 'eq' for date columns, not string columns [0.64ms]
+fuzzyfilter test: (pass) Type-Specific Aliases > 'on' alias prioritizes date columns for eq suggestions [0.39ms]
+fuzzyfilter test: (pass) Type-Specific Aliases > matchedAlias is included in suggestion parts when an alias is matched [0.35ms]
+fuzzyfilter test: (pass) Type-Specific Aliases > matchedAlias is undefined when operator id/label is matched directly [0.38ms]
+fuzzyfilter test: (pass) Type-Specific Aliases > general aliases like 'equals' work for all supported types [0.53ms]
+fuzzyfilter test: (pass) Date Parsing > 'today' resolves to current date [1.08ms]
+fuzzyfilter test: (pass) Date Parsing > 'yesterday' resolves to previous day [0.47ms]
+fuzzyfilter test: (pass) Date Parsing > 'tomorrow' resolves to next day [0.13ms]
+fuzzyfilter test: (pass) Date Parsing > 'two weeks ago' resolves to date 14 days in the past [0.45ms]
+fuzzyfilter test: (pass) Date Parsing > 'last week' is detected as a range [0.10ms]
+fuzzyfilter test: (pass) Date Parsing > 'last month' is detected as a range [0.17ms]
+fuzzyfilter test: (pass) Date Parsing > mightBeDateExpression returns true for date keywords [0.09ms]
+fuzzyfilter test: (pass) Date Parsing > mightBeDateExpression returns false for non-date strings [0.12ms]
+fuzzyfilter test: (pass) Date Parsing > invalid date text returns null [0.06ms]
+fuzzyfilter test: (pass) Date Parsing > detectDateExpressions finds multiple dates in text [0.35ms]
+fuzzyfilter test: (pass) Date Column Suggestions > 'Created after yesterday' suggests proper date filter [10.40ms]
+fuzzyfilter test: (pass) Date Column Suggestions > typing 'two weeks ago' suggests date filters for date columns [0.81ms]
+fuzzyfilter test: (pass) Filter Context Stacking > suggestion counts reflect existing filter context [1.41ms]
+fuzzyfilter test: (pass) Filter Context Stacking > empty filter context behaves same as no context [0.68ms]
+fuzzyfilter test: (pass) Filter Context Stacking > multiple stacked filters reduce counts correctly [2.06ms]
+fuzzyfilter test: (pass) Filter Context Stacking > filter context affects exploratory suggestions [0.84ms]
+fuzzyfilter test: (pass) Filter Context Stacking > numeric value suggestions are constrained to filtered context [2.37ms]
+fuzzyfilter test: (pass) Filter Context Stacking > fuzzy string value search is constrained to filtered context [0.75ms]
+fuzzyfilter test: (pass) Date Filter Bug - 'created today' ranking and count > complete date suggestions rank higher than incomplete operator suggestions [1.42ms]
+fuzzyfilter test: (pass) Date Filter Bug - 'created today' ranking and count > preview result count matches actual filter execution for date filter [0.79ms]
+fuzzyfilter test: (pass) Date Filter Bug - 'created today' ranking and count > date filter with Date object works correctly [0.40ms]
+fuzzyfilter test: (pass) Date Filter Compilation > compiles date filter with natural language date [0.58ms]
+fuzzyfilter test: (pass) Date Filter Compilation > date equality compares by day [0.13ms]
+fuzzyfilter test: (pass) Date Filter Compilation > before operator works with date column [0.52ms]
+fuzzyfilter test: (pass) Date Filter Compilation > between operator works with date array for date ranges [0.32ms]
+fuzzyfilter test: (pass) Date Filter Compilation > between operator preview count matches actual filter execution for date range [1.19ms]
+fuzzyfilter test: (pass) Argument-Aware Scoring > typing 'prio 3 4' should suggest between with higher score than eq [0.75ms]
+fuzzyfilter test: (pass) Argument-Aware Scoring > typing 'prio 3' with single number should suggest eq with that value [1.83ms]
+fuzzyfilter test: 
+fuzzyfilter test: === Suggestions for '3 4' ===
+fuzzyfilter test:   Priority     in         [3, 4      ] score=0.5
+fuzzyfilter test:   Priority     nin        [3, 4      ] score=0.5
+fuzzyfilter test:   Priority     between    [3, 4      ] score=0.5
+fuzzyfilter test:   Priority     neq        [3         ] score=0.425
+fuzzyfilter test:   Priority     lt         [3         ] score=0.425
+fuzzyfilter test:   Priority     lte        [3         ] score=0.425
+fuzzyfilter test:   Priority     gt         [3         ] score=0.425
+fuzzyfilter test:   Priority     gte        [3         ] score=0.425
+fuzzyfilter test:   Priority     eq         ["3"       ] score=0.2
+fuzzyfilter test:   Priority     eq         ["4"       ] score=0.2
+fuzzyfilter test: Total: 10 suggestions
+fuzzyfilter test: (pass) Argument-Aware Scoring > typing just '3 4' should suggest 'Priority between 3 4' [0.78ms]
+fuzzyfilter test: 
+fuzzyfilter test: === Suggestions for 'between 3' ===
+fuzzyfilter test:   Priority     between    [3         ] score=0.6000000000000001 isComplete=false
+fuzzyfilter test:   Priority     between    [-         ] score=0.1 isComplete=false
+fuzzyfilter test: Total: 2 suggestions
+fuzzyfilter test: (pass) Argument-Aware Scoring > typing 'between 3' with single value should show partial between suggestion [0.55ms]
+fuzzyfilter test: 
+fuzzyfilter test: === Suggestions for 'between 3 5' ===
+fuzzyfilter test:   Priority     between    [3, 5      ] score=0.6000000000000001
+fuzzyfilter test:   Priority     between    ["3"       ] score=0.4
+fuzzyfilter test:   Priority     between    ["5"       ] score=0.4
+fuzzyfilter test:   Priority     between    [-         ] score=0.06666666666666667
+fuzzyfilter test: Total: 4 suggestions
+fuzzyfilter test: (pass) Argument-Aware Scoring > typing 'between 3 5' should suggest 'Priority between 3 - 5' as top suggestion [0.74ms]
+fuzzyfilter test: (pass) QueryMatch Highlighting > column match includes queryMatches with position info [1.21ms]
+fuzzyfilter test: (pass) QueryMatch Highlighting > operator match includes queryMatches with character indexes [0.54ms]
+fuzzyfilter test: (pass) QueryMatch Highlighting > value match includes queryMatches with position info [0.38ms]
+fuzzyfilter test: (pass) QueryMatch Highlighting > combined column and operator match includes queryMatches [0.42ms]
+fuzzyfilter test: (pass) QueryMatch Highlighting > fuzzy match includes character-level indexes [0.46ms]
+fuzzyfilter test: (pass) QueryMatch Highlighting > empty query has no queryMatches [0.34ms]
+fuzzyfilter test: (pass) QueryMatch Highlighting > standalone date expression like 'yesterday' includes queryMatches for value highlighting [1.55ms]
+fuzzyfilter test: (pass) Complete vs Incomplete Suggestion Scoring > column+operator+value suggestion should score higher than column+operator when value matches query token [0.38ms]
+fuzzyfilter test: (pass) Complete vs Incomplete Suggestion Scoring > works with operator aliases like 'equals' and 'is' [0.89ms]
+fuzzyfilter test: (pass) Fuzzy multi-word operator matching > 'not eql' should prefer 'neq' operator (not equals) [0.80ms]
+fuzzyfilter test: (pass) Alias Pattern Expansion > 'smaller than equals' matches lte via expanded pattern [1.02ms]
+fuzzyfilter test: (pass) Alias Pattern Expansion > 'under or eq' matches lte via expanded pattern [1.46ms]
+fuzzyfilter test: (pass) Alias Pattern Expansion > 'bigger than or equals' matches gte via expanded pattern [1.69ms]
+fuzzyfilter test: (pass) Alias Pattern Expansion > 'above or eq' matches gte via expanded pattern [0.96ms]
+fuzzyfilter test: (pass) Alias Pattern Expansion > 'begins with' matches startsWith via expanded pattern [0.52ms]
+fuzzyfilter test: (pass) Alias Pattern Expansion > 'is not empty' matches isNotEmpty via expanded pattern [0.82ms]
+fuzzyfilter test: (pass) Alias Pattern Expansion > 'not blank' matches isNotEmpty via expanded pattern [0.59ms]
+fuzzyfilter test: (pass) Spread Pattern Detection > 'from yesterday to today' generates between suggestion for date column [0.94ms]
+fuzzyfilter test: (pass) Spread Pattern Detection > 'from yesterday till today' uses till as separator [0.64ms]
+fuzzyfilter test: (pass) Spread Pattern Detection > 'from yesterday until today' uses until as separator [0.65ms]
+fuzzyfilter test: (pass) Spread Pattern Detection > 'between 100 and 300' generates between suggestion for number column [1.42ms]
+fuzzyfilter test: (pass) Multi-value string aggregation > 'status open closed' generates 'in' suggestion with both values [1.03ms]
+fuzzyfilter test: (pass) Multi-value string aggregation > multi-value 'in' suggestion ranks higher than single-value 'eq' suggestions [3.54ms]
+fuzzyfilter test: (pass) Multi-value string aggregation > 'status open closed' also generates 'nin' suggestion [0.64ms]
+fuzzyfilter test: (pass) Multi-value string aggregation > 'open closed' (without column) generates 'in' suggestion with both values [0.50ms]
+fuzzyfilter test: (pass) Multi-value string aggregation > 'open closed' multi-value suggestion ranks higher than single-value suggestions [0.23ms]
+fuzzyfilter test: (pass) Non-overlapping ngram value aggregation > 3 tokens should produce at most 3 values in 'in' suggestions [0.68ms]
+fuzzyfilter test: (pass) Non-overlapping ngram value aggregation > best-scoring non-overlapping values are selected [0.27ms]
+fuzzyfilter test: (pass) Non-overlapping ngram value aggregation > column match position is excluded from value matching [1.24ms]
+fuzzyfilter test: 
+fuzzyfilter test: === Suggestions for 'priority lt 3' ===
+fuzzyfilter test: Priority lt 3 | Score: 1.0000 | Column: Priority
+fuzzyfilter test: Priority equals 3 | Score: 0.5333 | Column: Priority
+fuzzyfilter test: Priority not equals 3 | Score: 0.5333 | Column: Priority
+fuzzyfilter test: Priority less than or equal 3 | Score: 0.5333 | Column: Priority
+fuzzyfilter test: Priority greater than 3 | Score: 0.5333 | Column: Priority
+fuzzyfilter test: Priority lt | Score: 0.4000 | Column: Priority
+fuzzyfilter test: Created lt 2024-01-30 | Score: 0.3411 | Column: Created
+fuzzyfilter test: Created lt 2024-03-31 | Score: 0.3411 | Column: Created
+fuzzyfilter test: Created lt 2025-03-05 | Score: 0.2645 | Column: Created
+fuzzyfilter test: Created lt 2024-03-08 | Score: 0.2645 | Column: Created
+fuzzyfilter test: Top Priority: 1.0000, Top Created: 0.3411
+fuzzyfilter test: (pass) Scoring Investigation > matched column should score higher than unmatched column with spurious value match [11.16ms]
+fuzzyfilter test: (pass) i18n Column Translation > getTranslatedColumnName returns translated name when i18n key is set [0.14ms]
+fuzzyfilter test: (pass) i18n Column Translation > getTranslatedColumnName falls back to static name when translation not found [0.04ms]
+fuzzyfilter test: (pass) i18n Column Translation > getTranslatedColumnName uses static name when no nameKey is set [0.04ms]
+fuzzyfilter test: (pass) i18n Column Translation > getTranslatedEnumValueLabel returns translated label when i18n key is set [0.06ms]
+fuzzyfilter test: (pass) i18n Column Translation > getTranslatedEnumValueLabel falls back to labels array [0.04ms]
+fuzzyfilter test: (pass) i18n Column Translation > getTranslatedEnumValueLabel falls back to values array [0.03ms]
+fuzzyfilter test: (pass) i18n Column Translation > getTranslatedBooleanLabel returns translated labels [0.07ms]
+fuzzyfilter test: (pass) i18n Column Translation > getTranslatedBooleanLabel falls back to static labels [0.03ms]
+fuzzyfilter test: 
+fuzzyfilter test: src/index.test.ts:
+fuzzyfilter test: (pass) Core Types > columnId creates branded type
+fuzzyfilter test: (pass) Operator Registry > getAllOperators returns all operators [0.29ms]
+fuzzyfilter test: (pass) Operator Registry > getOperator returns operator by id [0.02ms]
+fuzzyfilter test: (pass) Operator Registry > getOperatorsForType returns type-compatible operators [0.13ms]
+fuzzyfilter test: (pass) Operator Registry > isValidOperatorForType checks compatibility [0.06ms]
+fuzzyfilter test: (pass) Operator Registry > getDefaultOperatorForType returns sensible defaults [0.08ms]
+fuzzyfilter test: (pass) Operator Registry > isOperator type guard works correctly [0.05ms]
+fuzzyfilter test: (pass) Operator Registry > operators have aliases for fuzzy matching [0.05ms]
+fuzzyfilter test: (pass) Operator Registry > operators specify which types they support [0.02ms]
+fuzzyfilter test: (pass) Operator Registry > variadic operators are marked correctly [0.03ms]
+fuzzyfilter test: (pass) Operator Registry > nullability operators don't require arguments
+fuzzyfilter test: (pass) Schema Types > column definitions are type-safe [0.07ms]
+fuzzyfilter test: 
+fuzzyfilter test: src/date-parser.test.ts:
+fuzzyfilter test: (pass) date-parser > parseDate with locales > should parse 'gestern' (German for yesterday) with de locale [3.18ms]
+fuzzyfilter test: (pass) date-parser > parseDate with locales > should parse 'heute' (German for today) with de locale [0.20ms]
+fuzzyfilter test: (pass) date-parser > parseDate with locales > should parse 'morgen' (German for tomorrow) with de locale [0.20ms]
+fuzzyfilter test: (pass) date-parser > parseDate with locales > should NOT parse 'gestern' without German locale [0.04ms]
+fuzzyfilter test: (pass) date-parser > parseDate with locales > should parse 'hier' (French for yesterday) with fr locale [0.83ms]
+fuzzyfilter test: (pass) date-parser > parseDate with locales > should parse 'ayer' (Spanish for yesterday) with es locale [0.62ms]
+fuzzyfilter test: (pass) date-parser > parseDate with locales > should handle cache correctly when switching locales [0.02ms]
+fuzzyfilter test: (pass) date-parser > parseDate with locales > should handle locale switching correctly for 'today' equivalent [0.04ms]
+fuzzyfilter test: (pass) date-parser > getDateSuggestionsForLocale > should return German date suggestions for de locale [0.03ms]
+fuzzyfilter test: (pass) date-parser > getDateSuggestionsForLocale > should return French date suggestions for fr locale [0.02ms]
+fuzzyfilter test: (pass) date-parser > getDateSuggestionsForLocale > should return Spanish date suggestions for es locale [0.01ms]
+fuzzyfilter test: (pass) date-parser > getDateSuggestionsForLocale > should fall back to English for unknown locale [0.02ms]
+fuzzyfilter test: 
+fuzzyfilter test: src/alias-generator.test.ts:
+fuzzyfilter test: (pass) expandPattern > expands simple pattern with no optional parts [0.06ms]
+fuzzyfilter test: (pass) expandPattern > expands pattern with optional parts [0.05ms]
+fuzzyfilter test: (pass) expandPattern > expands pattern with multiple optional parts [0.04ms]
+fuzzyfilter test: (pass) expandPattern > handles single-word patterns [0.01ms]
+fuzzyfilter test: (pass) expandPattern > treats unknown keys as literal words [0.03ms]
+fuzzyfilter test: (pass) expandPattern > generates starts with pattern correctly [0.02ms]
+fuzzyfilter test: (pass) expandAliasPatterns > combines multiple patterns [0.03ms]
+fuzzyfilter test: (pass) expandAliasPatterns > deduplicates results [0.02ms]
+fuzzyfilter test: (pass) expandSpreadPattern > expands from/to pattern [0.05ms]
+fuzzyfilter test: (pass) expandSpreadPattern > expands between/and pattern [0.01ms]
+fuzzyfilter test: (pass) getAllSpreadKeywordPairs > combines pairs from multiple patterns [0.02ms]
+fuzzyfilter test: (pass) getSpreadStartKeywords > returns all start keywords [0.02ms]
+fuzzyfilter test: (pass) getSpreadSeparatorKeywords > returns all separator keywords [0.02ms]
+fuzzyfilter test: 
+fuzzyfilter test: src/telemetry/collector.test.ts:
+fuzzyfilter test: (pass) TelemetryCollector > createTelemetryCollector > should create a collector with default config
+fuzzyfilter test: (pass) TelemetryCollector > createTelemetryCollector > should allow custom config [0.19ms]
+fuzzyfilter test: (pass) TelemetryCollector > startEvent and finalization > should create an event with correct operation [0.13ms]
+fuzzyfilter test: (pass) TelemetryCollector > startEvent and finalization > should record error outcome [0.08ms]
+fuzzyfilter test: (pass) TelemetryCollector > startEvent and finalization > should record cancelled outcome [0.02ms]
+fuzzyfilter test: (pass) TelemetryCollector > startEvent and finalization > should allow setting fields via set() [0.02ms]
+fuzzyfilter test: (pass) TelemetryCollector > startEvent and finalization > should allow merging fields via merge() [0.03ms]
+fuzzyfilter test: (pass) TelemetryCollector > Phase timing > should track phase timings via startPhase() [8.86ms]
+fuzzyfilter test: (pass) TelemetryCollector > Phase timing > should track phase timings via recordPhase() [0.17ms]
+fuzzyfilter test: (pass) TelemetryCollector > Phase timing > should return empty phases object when no phases recorded [0.04ms]
+fuzzyfilter test: (pass) TelemetryCollector > Phase timing > should not record phases after event is completed [0.08ms]
+fuzzyfilter test: (pass) TelemetryCollector > Event collection > should collect events [0.03ms]
+fuzzyfilter test: (pass) TelemetryCollector > Event collection > should evict old events when exceeding maxEvents [0.05ms]
+fuzzyfilter test: (pass) TelemetryCollector > Event collection > should filter events by operation [0.03ms]
+fuzzyfilter test: (pass) TelemetryCollector > Event collection > should clear events [0.04ms]
+fuzzyfilter test: (pass) TelemetryCollector > Event collection > should call event listeners [0.05ms]
+fuzzyfilter test: (pass) TelemetryCollector > Event collection > should allow unsubscribing from events [0.05ms]
+fuzzyfilter test: (pass) TelemetryCollector > getSummary > should calculate basic statistics [0.28ms]
+fuzzyfilter test: (pass) TelemetryCollector > getSummary > should calculate percentiles [62.16ms]
+fuzzyfilter test: (pass) TelemetryCollector > getSummary > should calculate average phase timings [0.12ms]
+fuzzyfilter test: (pass) TelemetryCollector > getSummary > should return empty statistics for no events [0.06ms]
+fuzzyfilter test: (pass) TelemetryCollector > NULL_TELEMETRY_COLLECTOR > should have disabled config
+fuzzyfilter test: (pass) TelemetryCollector > NULL_TELEMETRY_COLLECTOR > should return no-op builder [0.01ms]
+fuzzyfilter test: (pass) TelemetryCollector > NULL_TELEMETRY_COLLECTOR > should have no-op phase methods [0.02ms]
+fuzzyfilter test: (pass) TelemetryCollector > NULL_TELEMETRY_COLLECTOR > should return empty collections [0.01ms]
+fuzzyfilter test: (pass) TelemetryCollector > NULL_TELEMETRY_COLLECTOR > should return empty summary [0.03ms]
+fuzzyfilter test: 
+fuzzyfilter test:  177 pass
+fuzzyfilter test:  0 fail
+fuzzyfilter test:  522 expect() calls
+fuzzyfilter test: Ran 177 tests across 5 files. [448.00ms]
+fuzzyfilter test: Exited with code 0
