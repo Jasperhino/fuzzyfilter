@@ -1,6 +1,6 @@
 {
   "name": "operator-icons",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared operator to Lucide icon mapping for fuzzyfilter",
   "module": "src/index.ts",
   "main": "src/index.ts",
@@ -15,10 +15,12 @@
   "peerDependencies": {
     "fuzzyfilter": "workspace:*"
   },
-  "keywords": ["fuzzyfilter", "icons", "lucide", "operators"],
+  "keywords": [
+    "fuzzyfilter",
+    "icons",
+    "lucide",
+    "operators"
+  ],
   "license": "MIT",
   "packageManager": "bun@1.3.5"
 }
-
-
-

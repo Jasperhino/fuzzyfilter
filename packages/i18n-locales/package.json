@@ -1,6 +1,6 @@
 {
   "name": "@fuzzyfilter/i18n-locales",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Locale translations for FuzzyFilter (English, Spanish, French, etc.)",
   "type": "module",
   "main": "src/index.ts",

@@ -1,6 +1,6 @@
 {
   "name": "vue-fuzzy-filter",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Vue 3 composable for FuzzyFilter",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,7 +22,7 @@
     "docs:generate": "bunx mint-tsdocs generate"
   },
   "peerDependencies": {
-    "fuzzyfilter": ">=0.1.0",
+    "fuzzyfilter": ">=0.1.1",
     "vue": "^3.0.0"
   },
   "devDependencies": {
