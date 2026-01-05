@@ -21,6 +21,8 @@ export const SCORING_WEIGHTS = {
   OPERATOR: 0.2,
   /** Value match importance */
   VALUE: 0.4,
+  /** Minimum score threshold to filter noise */
+  THRESHOLD: 0.1,
 } as const;
 
 /**

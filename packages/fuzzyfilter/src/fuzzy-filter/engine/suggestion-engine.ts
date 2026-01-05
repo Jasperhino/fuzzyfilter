@@ -4,7 +4,7 @@
  * Orchestrates all suggestion strategies, handles deduplication, ranking, and limiting.
  */
 
-import type { FilterSuggestion, SuggestionResponse, Token, SuggestionStrategyTiming, SuggestionPhaseTiming } from "../../types/index.ts";
+import type { FilterSuggestion, SuggestionResponse, Token } from "../../types/index.ts";
 import type { SuggestionStrategy, StrategyContext } from "../strategies/interface.ts";
 import type {
   FuzzyFilterState,
@@ -288,8 +288,8 @@ export class SuggestionEngine {
     const suggestions: FilterSuggestion[] = [];
     
     // Phase timing (only allocate when benchmarking)
-    const phases: Partial<SuggestionPhaseTiming> = {};
-    const strategyTimings: SuggestionStrategyTiming[] = [];
+    const phases: Partial<import("../../telemetry/index.ts").SuggestPhases> = {};
+    const strategyTimings: import("../../telemetry/index.ts").StrategyTiming[] = [];
     let cacheHit = false;
 
     if (!this.state.schema) {
@@ -466,7 +466,7 @@ export class SuggestionEngine {
     
     // Add benchmark data if enabled
     if (benchmark) {
-      response.phaseTiming = phases as SuggestionPhaseTiming;
+      response.phaseTiming = phases as import("../../telemetry/index.ts").SuggestPhases;
       response.strategyTimings = strategyTimings;
       response.cacheMetrics = {
         context_cache_hit: cacheHit,

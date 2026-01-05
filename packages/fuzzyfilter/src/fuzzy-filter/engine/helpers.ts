@@ -51,6 +51,7 @@ export function detectValueTokens(
           normalized: dateText.toLowerCase(),
           start: firstToken.start,
           end: lastToken.end,
+          quoted: false,
         };
         
         result.dates.push({ 

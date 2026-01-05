@@ -13,19 +13,19 @@
     "lint": "turbo run lint",
     "bench": "bun run --filter fuzzyfilter bench",
     "bench:otel": "bun run --filter fuzzyfilter bench:otel",
-    "deploy": "turbo run deploy --filter='./apps/*'",
-    "deploy:preview": "turbo run deploy:preview --filter='./apps/*'",
-    "deploy:link": "turbo run deploy:link --filter='./apps/*'",
-    "deploy:landing": "turbo run deploy --filter=fuzzyfilter-landing",
+    "deploy": "turbo run deploy --filter='./apps/*' --filter=fuzzyfilter-docs",
+    "deploy:preview": "turbo run deploy:preview --filter='./apps/*' --filter=fuzzyfilter-docs",
+    "deploy:link": "turbo run deploy:link --filter='./apps/*' --filter=fuzzyfilter-docs",
     "deploy:react": "turbo run deploy --filter=fuzzyfilter-react",
     "deploy:vue": "turbo run deploy --filter=fuzzyfilter-vue",
+    "deploy:docs": "turbo run deploy --filter=fuzzyfilter-docs",
     "docs:generate": "turbo run docs:generate",
-    "docs:dev": "cd docs && mintlify dev",
-    "docs:build": "cd docs && mintlify build"
+    "docs:dev": "cd docs && mintlify dev"
   },
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/*",
+    "docs"
   ],
   "devDependencies": {
     "@types/bun": "latest",

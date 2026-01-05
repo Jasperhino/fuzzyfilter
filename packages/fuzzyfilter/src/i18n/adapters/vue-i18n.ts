@@ -30,7 +30,24 @@
 
 import type { I18nProvider } from "../../types/i18n.ts";
 import type { Operator, WordSetKey } from "../../operators.ts";
-import type { I18n } from "vue-i18n";
+
+/**
+ * Minimal interface for vue-i18n global object.
+ * This is more permissive than the full I18n type to avoid strict type parameter conflicts.
+ */
+interface VueI18nGlobal {
+  locale: string | { value: string };
+  t: (key: string) => unknown;
+  tm: (key: string) => unknown;
+}
+
+/**
+ * Minimal interface for a vue-i18n instance.
+ * Using a permissive type to accept any vue-i18n instance regardless of its message type parameters.
+ */
+interface VueI18nInstance {
+  global: VueI18nGlobal;
+}
 
 /**
  * Creates an I18nProvider that uses vue-i18n for translations.
@@ -40,7 +57,7 @@ import type { I18n } from "vue-i18n";
  * @returns An I18nProvider instance
  */
 export function createVueI18nProvider(
-  i18nInstance: I18n,
+  i18nInstance: VueI18nInstance,
   namespace = "fuzzyfilter"
 ): I18nProvider {
   const getKey = (key: string): string => {
@@ -69,11 +86,14 @@ export function createVueI18nProvider(
     }
   };
 
+  // Cast t function to avoid union type compatibility issues
+  const t = i18nInstance.global.t as (key: string) => unknown;
+
   return {
     getOperatorLabel: (operatorId: Operator): string => {
       const key = getKey(`operators.${operatorId}.label`);
       try {
-        const translated = i18nInstance.global.t(key);
+        const translated = t(key);
         // If translation returns the key itself, it means translation not found
         return translated !== key ? String(translated) : operatorId;
       } catch {
@@ -112,7 +132,7 @@ export function createVueI18nProvider(
       // Use the app namespace for column/value translations
       const appKey = `app.${key}`;
       try {
-        const translated = i18nInstance.global.t(appKey);
+        const translated = t(appKey);
         // If translation returns the key itself, it means translation not found
         if (translated === appKey) {
           return undefined;

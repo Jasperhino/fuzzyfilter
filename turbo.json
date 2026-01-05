@@ -12,7 +12,8 @@
         "dist/**",
         ".next/**",
         "build/**",
-        ".vercel/**"
+        ".vercel/**",
+        ".mintlify/**"
       ]
     },
     "dev": {
@@ -34,6 +35,15 @@
       "dependsOn": [
         "build"
       ],
+      "cache": false
+    },
+    "deploy:preview": {
+      "dependsOn": [
+        "build"
+      ],
+      "cache": false
+    },
+    "deploy:link": {
       "cache": false
     },
     "docs:generate": {

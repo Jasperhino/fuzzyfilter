@@ -35,6 +35,9 @@ export interface WideEventBase {
   /** Outcome of the operation */
   outcome: EventOutcome;
 
+  /** Allow additional event-specific properties for compatibility with WideEventLike */
+  [key: string]: unknown;
+
   /** Error details if outcome is "error" */
   error?: {
     type: string;
