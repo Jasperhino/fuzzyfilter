@@ -44,8 +44,8 @@ export class SpreadPatternStrategy implements SuggestionStrategy {
     const seenValues = new Set<string>();
 
     // Detect spread patterns
-    const spreadOperators = getAllOperators().filter(op => op.spreadPatterns);
-    const spreadMatches = this.detectSpreadPatterns(context.tokens, spreadOperators);
+      const spreadOperators = getAllOperators(context.i18nProvider).filter(op => op.spreadPatterns);
+      const spreadMatches = this.detectSpreadPatterns(context.tokens, spreadOperators, context.i18nProvider);
 
     for (const spreadMatch of spreadMatches) {
       const arg1Text = spreadMatch.arg1Tokens.map(t => t.text).join(" ");
@@ -59,7 +59,7 @@ export class SpreadPatternStrategy implements SuggestionStrategy {
 
       // Check what columns this could apply to
       for (const col of getColumns(schema)) {
-        const opInfo = getOperator(spreadMatch.operator);
+        const opInfo = getOperator(spreadMatch.operator, context.i18nProvider);
         if (!opInfo.supportedTypes.includes(col.type)) continue;
 
         // Date columns
@@ -106,7 +106,7 @@ export class SpreadPatternStrategy implements SuggestionStrategy {
                 col,
                 spreadMatch.operator,
                 combinedParsedDate,
-                SCORING_CONFIG.BONUS.SPREAD_PATTERN_BASE, // Very high score - explicit spread pattern
+                SCORING_CONFIG.BONUS.SPREAD_PATTERN_BASE,
                 countForDateFilter(
                   col.id,
                   spreadMatch.operator,
@@ -115,7 +115,9 @@ export class SpreadPatternStrategy implements SuggestionStrategy {
                   context.contextRowIndices
                 ),
                 undefined,
-                spreadMatchMeta
+                spreadMatchMeta,
+                context.tokens,
+                context.i18nProvider
               )
             );
           }
@@ -175,11 +177,12 @@ export class SpreadPatternStrategy implements SuggestionStrategy {
                 col,
                 spreadMatch.operator,
                 args,
-                SCORING_CONFIG.BONUS.SPREAD_PATTERN_BASE, // Very high score - explicit spread pattern
+                SCORING_CONFIG.BONUS.SPREAD_PATTERN_BASE,
                 undefined,
                 undefined,
                 numSpreadMatchMeta,
-                context.tokens
+                context.tokens,
+                context.i18nProvider
               )
             );
           }
@@ -195,15 +198,16 @@ export class SpreadPatternStrategy implements SuggestionStrategy {
    */
   private detectSpreadPatterns(
     tokens: Token[],
-    operators: Array<{ id: import("../../types/index.ts").Operator; spreadPatterns?: readonly import("../../types/index.ts").SpreadPattern[] }>
+    operators: Array<{ id: import("../../types/index.ts").Operator; spreadPatterns?: readonly import("../../types/index.ts").SpreadPattern[] }>,
+    i18nProvider?: import("../../types/i18n.ts").I18nProvider
   ): SpreadPatternMatch[] {
     const matches: SpreadPatternMatch[] = [];
 
     for (const op of operators) {
       if (!op.spreadPatterns) continue;
 
-      const startKeywords = getSpreadStartKeywords(op.spreadPatterns);
-      const separatorKeywords = getSpreadSeparatorKeywords(op.spreadPatterns);
+      const startKeywords = getSpreadStartKeywords(op.spreadPatterns, i18nProvider);
+      const separatorKeywords = getSpreadSeparatorKeywords(op.spreadPatterns, i18nProvider);
 
       // Look for start keywords in tokens
       for (let i = 0; i < tokens.length; i++) {

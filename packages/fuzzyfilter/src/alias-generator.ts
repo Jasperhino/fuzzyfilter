@@ -10,6 +10,8 @@
 
 import type { AliasPattern, SpreadPattern } from "./types/index.ts";
 import { WORD_SETS, type WordSetKey } from "./operators.ts";
+import type { I18nProvider } from "./types/i18n.ts";
+import { createDefaultEnglishProvider } from "./i18n/default-provider.ts";
 
 /**
  * Parsed part from an alias pattern.
@@ -39,11 +41,16 @@ function parsePart(part: string): ParsedPart {
  * Returns empty array if the key is not found in WORD_SETS.
  * 
  * @param key - The word set key
+ * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
  * @returns Array of words for this key
  */
-function getWords(key: string): readonly string[] {
+function getWords(key: string, i18nProvider?: I18nProvider): readonly string[] {
   if (key in WORD_SETS) {
-    return WORD_SETS[key as WordSetKey];
+    const wordSetKey = key as WordSetKey;
+    if (i18nProvider) {
+      return i18nProvider.getWordSet(wordSetKey);
+    }
+    return WORD_SETS[wordSetKey];
   }
   // If not in word sets, treat the key itself as a literal word
   return [key];
@@ -104,15 +111,16 @@ function generatePartCombinations(parts: ParsedPart[]): string[][] {
  * - ... all combinations
  * 
  * @param keys - Array of word set keys
+ * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
  * @returns Array of joined phrase strings
  */
-function expandWordCombinations(keys: string[]): string[] {
+function expandWordCombinations(keys: string[], i18nProvider?: I18nProvider): string[] {
   if (keys.length === 0) {
     return [];
   }
   
   // Get all word arrays
-  const wordArrays = keys.map((key) => getWords(key));
+  const wordArrays = keys.map((key) => getWords(key, i18nProvider));
   
   // Generate cartesian product
   const results: string[] = [];
@@ -137,6 +145,7 @@ function expandWordCombinations(keys: string[]): string[] {
  * Expands a single alias pattern into all possible aliases.
  * 
  * @param pattern - The alias pattern to expand
+ * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
  * @returns Array of generated alias strings
  * 
  * @example
@@ -146,14 +155,14 @@ function expandWordCombinations(keys: string[]): string[] {
  * //           "less than or equal", "smaller equal", ...]
  * ```
  */
-export function expandPattern(pattern: AliasPattern): string[] {
+export function expandPattern(pattern: AliasPattern, i18nProvider?: I18nProvider): string[] {
   const parsedParts = pattern.parts.map((p) => parsePart(p as string));
   const partCombinations = generatePartCombinations(parsedParts);
   
   const allAliases: string[] = [];
   
   for (const keys of partCombinations) {
-    const aliases = expandWordCombinations(keys);
+    const aliases = expandWordCombinations(keys, i18nProvider);
     allAliases.push(...aliases);
   }
   
@@ -164,13 +173,14 @@ export function expandPattern(pattern: AliasPattern): string[] {
  * Expands all alias patterns for an operator into a flat array of aliases.
  * 
  * @param patterns - Array of alias patterns
+ * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
  * @returns Array of all generated alias strings (deduplicated)
  */
-export function expandAliasPatterns(patterns: readonly AliasPattern[]): string[] {
+export function expandAliasPatterns(patterns: readonly AliasPattern[], i18nProvider?: I18nProvider): string[] {
   const allAliases = new Set<string>();
   
   for (const pattern of patterns) {
-    const expanded = expandPattern(pattern);
+    const expanded = expandPattern(pattern, i18nProvider);
     for (const alias of expanded) {
       allAliases.add(alias);
     }
@@ -188,11 +198,12 @@ export function expandAliasPatterns(patterns: readonly AliasPattern[]): string[]
  * - ["from", "until"]
  * 
  * @param pattern - The spread pattern to expand
+ * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
  * @returns Array of keyword pairs
  */
-export function expandSpreadPattern(pattern: SpreadPattern): [string, string][] {
-  const startWords = getWords(pattern.keywordSets[0] as string);
-  const endWords = getWords(pattern.keywordSets[1] as string);
+export function expandSpreadPattern(pattern: SpreadPattern, i18nProvider?: I18nProvider): [string, string][] {
+  const startWords = getWords(pattern.keywordSets[0] as string, i18nProvider);
+  const endWords = getWords(pattern.keywordSets[1] as string, i18nProvider);
   
   const pairs: [string, string][] = [];
   
@@ -209,15 +220,17 @@ export function expandSpreadPattern(pattern: SpreadPattern): [string, string][] 
  * Gets all expanded keyword pairs from an array of spread patterns.
  * 
  * @param patterns - Array of spread patterns
+ * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
  * @returns Array of all keyword pairs
  */
 export function getAllSpreadKeywordPairs(
-  patterns: readonly SpreadPattern[]
+  patterns: readonly SpreadPattern[],
+  i18nProvider?: I18nProvider
 ): [string, string][] {
   const pairs: [string, string][] = [];
   
   for (const pattern of patterns) {
-    pairs.push(...expandSpreadPattern(pattern));
+    pairs.push(...expandSpreadPattern(pattern, i18nProvider));
   }
   
   return pairs;
@@ -228,15 +241,17 @@ export function getAllSpreadKeywordPairs(
  * Useful for detecting when a user might be starting a spread pattern.
  * 
  * @param patterns - Array of spread patterns
+ * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
  * @returns Set of all starting keywords
  */
 export function getSpreadStartKeywords(
-  patterns: readonly SpreadPattern[]
+  patterns: readonly SpreadPattern[],
+  i18nProvider?: I18nProvider
 ): Set<string> {
   const keywords = new Set<string>();
   
   for (const pattern of patterns) {
-    const words = getWords(pattern.keywordSets[0] as string);
+    const words = getWords(pattern.keywordSets[0] as string, i18nProvider);
     for (const word of words) {
       keywords.add(word.toLowerCase());
     }
@@ -250,15 +265,17 @@ export function getSpreadStartKeywords(
  * Useful for detecting the middle of a spread pattern.
  * 
  * @param patterns - Array of spread patterns
+ * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
  * @returns Set of all separator keywords
  */
 export function getSpreadSeparatorKeywords(
-  patterns: readonly SpreadPattern[]
+  patterns: readonly SpreadPattern[],
+  i18nProvider?: I18nProvider
 ): Set<string> {
   const keywords = new Set<string>();
   
   for (const pattern of patterns) {
-    const words = getWords(pattern.keywordSets[1] as string);
+    const words = getWords(pattern.keywordSets[1] as string, i18nProvider);
     for (const word of words) {
       keywords.add(word.toLowerCase());
     }

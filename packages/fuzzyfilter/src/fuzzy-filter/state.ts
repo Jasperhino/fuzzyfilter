@@ -10,16 +10,20 @@ import type {
   CachedContextResult,
 } from "./types.ts";
 import type { Schema, CompiledFilter, ColumnId } from "../types/index.ts";
+import type { I18nProvider } from "../types/i18n.ts";
 import { DataType } from "../types/index.ts";
 import { getColumns } from "../schema-builder.ts";
 import { createTrie } from "../trie.ts";
 import type { AnyColumnDefinition } from "../types/index.ts";
 import type { OperatorAliasEntry } from "./types.ts";
+import { createDefaultEnglishProvider } from "../i18n/default-provider.ts";
 
 /**
  * Creates a new FuzzyFilterState instance
+ * 
+ * @param i18nProvider - Optional i18n provider. Defaults to English provider if not provided.
  */
-export function createFuzzyFilterState(): FuzzyFilterState {
+export function createFuzzyFilterState(i18nProvider?: I18nProvider): FuzzyFilterState {
   return {
     schema: null,
     columnTrie: createTrie<AnyColumnDefinition>(),
@@ -28,6 +32,7 @@ export function createFuzzyFilterState(): FuzzyFilterState {
     data: [],
     dataVersion: 0,
     contextCache: new Map(),
+    i18nProvider: i18nProvider ?? createDefaultEnglishProvider(),
   };
 }
 

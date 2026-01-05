@@ -30,7 +30,7 @@ export class EmptyQueryStrategy implements SuggestionStrategy {
     const suggestions: FilterSuggestion[] = [];
 
     for (const col of getColumns(schema)) {
-      const defaultOp = getOperatorsForType(col.type)[0];
+      const defaultOp = getOperatorsForType(col.type, context.i18nProvider)[0];
       if (defaultOp) {
         suggestions.push(
           createSuggestion(
@@ -41,7 +41,8 @@ export class EmptyQueryStrategy implements SuggestionStrategy {
             undefined,
             undefined,
             undefined,
-            context.tokens
+            context.tokens,
+            context.i18nProvider
           )
         );
       }

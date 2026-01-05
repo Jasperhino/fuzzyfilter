@@ -14,6 +14,26 @@
     "./react": {
       "import": "./src/react/index.ts",
       "types": "./src/react/index.ts"
+    },
+    "./i18n/locales": {
+      "import": "./src/i18n/locales/index.ts",
+      "types": "./src/i18n/locales/index.ts"
+    },
+    "./i18n/adapters": {
+      "import": "./src/i18n/adapters/index.ts",
+      "types": "./src/i18n/adapters/index.ts"
+    },
+    "./i18n/adapters/i18next": {
+      "import": "./src/i18n/adapters/i18next.ts",
+      "types": "./src/i18n/adapters/i18next.ts"
+    },
+    "./i18n/adapters/vue-i18n": {
+      "import": "./src/i18n/adapters/vue-i18n.ts",
+      "types": "./src/i18n/adapters/vue-i18n.ts"
+    },
+    "./types/i18n": {
+      "import": "./src/types/i18n.ts",
+      "types": "./src/types/i18n.ts"
     }
   },
   "scripts": {

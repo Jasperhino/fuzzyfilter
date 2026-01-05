@@ -82,12 +82,6 @@ export interface ScoringWeights {
   operator: number;
   /** Weight for arguments match score */
   arguments: number;
-  /** Bonus for natural order (col → op → val) */
-  orderBonus: number;
-  /** Penalty for inferred operator */
-  inferredPenalty: number;
-  /** Bonus for complete hypothesis */
-  completenessBonus: number;
 }
 
 /**
@@ -98,7 +92,6 @@ export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {
   operator: 0.35,
   arguments: 0.25,
   orderBonus: 0.1,
-  inferredPenalty: 0.15,
   completenessBonus: 0.2,
 } as const;
 

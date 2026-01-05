@@ -5,11 +5,13 @@
  * Demonstrates the vue-fuzzy-filter composable with a combobox interface.
  * Uses virtual scrolling to handle large datasets (10,000+ rows).
  */
-import { ref, onMounted, computed } from "vue"
+import { ref, onMounted, computed, watch } from "vue"
 import { useVirtualizer } from "@tanstack/vue-virtual"
 import { useFuzzyFilter } from "vue-fuzzy-filter"
-import { createFuzzyFilter, getOperator, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch } from "fuzzyfilter"
+import { createFuzzyFilter, getOperator, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch, createVueI18nProvider } from "fuzzyfilter"
 import { TASK_SCHEMA, COLUMN_IDS, generateLargeDataset } from "@fuzzyfilter/sample-data"
+import { useI18n } from "vue-i18n"
+import { i18n } from "@/i18n"
 import DataTypeIcon from "./DataTypeIcon.vue"
 import ColumnInfoPopover from "./ColumnInfoPopover.vue"
 import QueryVisualization from "./QueryVisualization.vue"
@@ -27,8 +29,16 @@ const LARGE_DATASET = generateLargeDataset(10000, 42)
 // Row height for virtual scroll
 const ROW_HEIGHT = 48
 
-// Create filter instance
-const filter = createFuzzyFilter({ maxSuggestions: 12 })
+// Get i18n composer for reactive locale access
+const i18nComposer = useI18n()
+const { locale } = i18nComposer
+
+// Create filter instance with i18n
+// Use the actual i18n instance (from createI18n) for the provider, not the useI18n() composer
+const filter = createFuzzyFilter({ 
+  maxSuggestions: 12,
+  i18nProvider: createVueI18nProvider(i18n),
+})
 
 // Initialize schema and data
 onMounted(() => {
@@ -67,10 +77,36 @@ const {
   selectedIndex,
   navigateSuggestions,
   selectSuggestion,
+  setQuery,
 } = useFuzzyFilter(filter, {
   debounceMs: 150,
   filterContext: compiledFiltersForContext,
 })
+
+// Refetch suggestions when language changes
+// This ensures suggestions update with new translations immediately
+const prevLocaleRef = ref(locale.value)
+watch(
+  () => locale.value,
+  (newLocale) => {
+    // When language changes, trigger a refetch by updating the query
+    // This causes the composable to refetch suggestions with the new translations
+    if (newLocale !== prevLocaleRef.value) {
+      prevLocaleRef.value = newLocale
+      // Only refetch if there's a current query
+      if (query.value && query.value.trim()) {
+        // Trigger refetch by temporarily appending a character and removing it
+        // This ensures the composable detects a change and refetches
+        const currentQuery = query.value
+        setQuery(currentQuery + " ")
+        // Restore the original query after a brief delay to allow the refetch
+        setTimeout(() => {
+          setQuery(currentQuery.trim())
+        }, 50)
+      }
+    }
+  }
+)
 
 // Applied filters state - use the same ref for both display and context
 const appliedFilters = appliedFiltersForContext
@@ -189,10 +225,11 @@ function handleKeydown(event: KeyboardEvent) {
  * Get score text color based on score value
  */
 function getScoreColor(score: number): string {
-  if (score >= 3000) return "text-emerald-600"
-  if (score >= 1500) return "text-lime-600"
-  if (score >= 500) return "text-amber-600"
-  if (score >= -1000) return "text-orange-600"
+  // Score is now 0-1 range
+  if (score >= 0.8) return "text-emerald-600"
+  if (score >= 0.6) return "text-lime-600"
+  if (score >= 0.4) return "text-amber-600"
+  if (score >= 0.2) return "text-orange-600"
   return "text-rose-600"
 }
 
@@ -210,7 +247,7 @@ function getMissingArgsCount(suggestion: FilterSuggestion): number {
 function getScoreTooltip(suggestion: FilterSuggestion): string {
   const { score, category, scoreBreakdown } = suggestion
   const lines = [
-    `Final Score: ${Math.round(score)}`,
+    `Final Score: ${score.toFixed(4)}`,
     `Category: ${category}`,
     "",
   ]
@@ -218,10 +255,8 @@ function getScoreTooltip(suggestion: FilterSuggestion): string {
   if (scoreBreakdown) {
     lines.push(
       "── Score Breakdown ──",
-      `Raw Match: ${Math.round(scoreBreakdown.rawScore)}`,
-      `Coverage: +${scoreBreakdown.coverageBonus} (${scoreBreakdown.tokenCount}/${scoreBreakdown.totalTokens} tokens)`,
-      `Completeness: +${scoreBreakdown.completenessBonus}`,
-      `Full Query: +${scoreBreakdown.fullQueryBonus}`,
+      `Raw Match: ${scoreBreakdown.rawScore.toFixed(4)}`,
+      `Adjusted Score: ${scoreBreakdown.adjustedScore.toFixed(4)} (${scoreBreakdown.tokenCount}/${scoreBreakdown.totalTokens} tokens)`,
     )
   }
   
@@ -459,20 +494,6 @@ function getArgMatch(suggestion: FilterSuggestion, argText: string, argIndex: nu
   return valueMatches.find(m => m.matchedTarget === argText)
 }
 
-/**
- * Get the color class for a match type (for input overlay)
- */
-function getMatchTypeColorClass(matchType: "column" | "operator" | "value" | null): string {
-  if (!matchType) return "text-foreground"
-  
-  const colorClasses = {
-    column: "text-blue-600 dark:text-blue-400",
-    operator: "text-amber-600 dark:text-amber-400",
-    value: "text-emerald-600 dark:text-emerald-400",
-  }
-  return colorClasses[matchType]
-}
-
 // Check if query is in sync with suggestions (after debounce)
 const isQueryInSync = computed(() => query.value === suggestionsQuery.value)
 
@@ -486,14 +507,6 @@ const highlightedSuggestion = computed(() => {
 // Computed property for the query matches from the highlighted suggestion
 const inputQueryMatches = computed(() => {
   return highlightedSuggestion.value?.queryMatches ?? []
-})
-
-// Computed segments for the colored input overlay
-const coloredInputSegments = computed(() => {
-  if (!query.value || !isQueryInSync.value || inputQueryMatches.value.length === 0) {
-    return []
-  }
-  return getHighlightSegments(query.value, inputQueryMatches.value)
 })
 
 // Get column by ID from schema
@@ -565,39 +578,19 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
         :suggestion="highlightedSuggestion ?? undefined"
       />
 
-      <!-- Combobox with colored input overlay -->
+      <!-- Combobox -->
       <div class="relative">
         <div class="flex items-center gap-2 px-3 py-2 bg-background rounded-lg border border-input focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 transition-all relative">
           <SearchIcon class="size-4 text-muted-foreground shrink-0" />
-          <!-- Input wrapper with colored overlay -->
-          <div class="flex-1 relative">
-            <!-- Colored text overlay - positioned to match input -->
-            <div 
-              v-if="query && coloredInputSegments.length > 0"
-              class="absolute inset-0 flex items-center pointer-events-none"
-              aria-hidden="true"
-            >
-              <span class="text-sm whitespace-pre">
-                <span 
-                  v-for="(seg, i) in coloredInputSegments" 
-                  :key="i"
-                  :class="getMatchTypeColorClass(seg.matchType)"
-                >{{ seg.text }}</span>
-              </span>
-            </div>
-            <input
-              v-model="query"
-              type="text"
-              placeholder="Filter by column, operator, or value..."
-              :class="cn(
-                'w-full bg-transparent placeholder:text-muted-foreground outline-none text-sm',
-                query && coloredInputSegments.length > 0 ? 'text-transparent caret-foreground' : 'text-foreground'
-              )"
-              @focus="handleFocus"
-              @blur="handleBlur"
-              @keydown="handleKeydown"
-            />
-          </div>
+          <input
+            v-model="query"
+            type="text"
+            placeholder="Filter by column, operator, or value..."
+            class="flex-1 w-full bg-transparent placeholder:text-muted-foreground outline-none text-sm text-foreground"
+            @focus="handleFocus"
+            @blur="handleBlur"
+            @keydown="handleKeydown"
+          />
           <button
             v-if="query.length > 0"
             @click="query = ''"
@@ -646,7 +639,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                   class="shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground max-w-[200px] truncate"
                   :title="arg.displayText ? arg.text : undefined"
                 >
-                  <span class="whitespace-pre"><template v-for="(seg, segIdx) in getTextHighlightSegments(arg.text, getArgMatch(suggestion, arg.text, i)?.matchedCharIndexes)" :key="segIdx"><span v-if="seg.highlighted" class="font-bold">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template></span>
+                  <span class="whitespace-pre"><template v-for="(seg, segIdx) in getTextHighlightSegments(arg.displayText ?? arg.text, arg.displayMatchedIndexes ?? getArgMatch(suggestion, arg.text, i)?.matchedCharIndexes)" :key="segIdx"><span v-if="seg.highlighted" class="font-bold">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template></span>
                 </span>
                 <!-- Render placeholders for missing arguments -->
                 <span 
@@ -663,7 +656,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                 :class="cn('w-10 font-mono tabular-nums cursor-help shrink-0', getScoreColor(suggestion.score))"
                 :title="getScoreTooltip(suggestion)"
               >
-                {{ Math.round(suggestion.score) }}
+                {{ suggestion.score.toFixed(4) }}
               </span>
               
               <!-- Results column - left aligned, fixed width -->
@@ -678,20 +671,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
         </div>
       </div>
 
-      <!-- Query match highlighting demo -->
-      <div v-if="highlightedQuerySegments.length > 0" class="flex items-center gap-2 text-xs px-1">
-        <span class="text-muted-foreground">Query matches:</span>
-        <span class="font-mono text-xs">
-          <span 
-            v-for="(seg, i) in highlightedQuerySegments" 
-            :key="i"
-            :class="getMatchTypeClass(seg.matchType)"
-            :title="seg.matchType ? `Matched: ${seg.matchType}` : undefined"
-          >{{ seg.text }}</span>
-        </span>
-        <span class="text-muted-foreground">→</span>
-        <span class="text-foreground">{{ suggestions[0]?.label }}</span>
-      </div>
+   
 
       <!-- Help text -->
       <p class="text-xs text-muted-foreground">

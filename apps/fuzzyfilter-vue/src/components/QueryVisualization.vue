@@ -3,13 +3,23 @@
  * QueryVisualization Component
  *
  * Displays the parsed query structure above the combobox input,
- * showing colored segments with labels indicating token types.
+ * showing colored segments with labels and score contributions.
+ * 
+ * Layout (columnar, 3 rows per token):
+ * ┌──────────┬────┬──────────┬────┬────────┐
+ * │ priority │  · │    lt    │  · │   3    │  ← Token row
+ * ├──────────┼────┼──────────┼────┼────────┤
+ * │  column  │    │ operator │    │ arg 1  │  ← Label row
+ * ├──────────┼────┼──────────┼────┼────────┤
+ * │  +0.40   │    │  +0.20   │    │ +0.40  │  ← Score row
+ * └──────────┴────┴──────────┴────┴────────┘
+ * Coverage: 3/3 = 100% │ Final Score: 1.0
  */
 import { computed } from "vue"
-import { tokenize, type QueryMatch, type FilterSuggestion } from "fuzzyfilter"
+import { tokenize, type QueryMatch, type FilterSuggestion, type ScoreExplanation, type TokenScoreInfo } from "fuzzyfilter"
 
 /**
- * Represents a token segment with its match information
+ * Represents a token segment with its match and score information
  */
 interface TokenSegment {
   /** The text of this segment */
@@ -26,6 +36,8 @@ interface TokenSegment {
   isSeparator: boolean
   /** Whether this separator is part of a value match (space within value) vs token separator */
   isValueSpace?: boolean
+  /** Token index in the original token array (for mapping to score info) */
+  tokenIndex?: number
 }
 
 /**
@@ -36,7 +48,7 @@ const props = defineProps<{
   query: string
   /** Query matches from the highlighted suggestion */
   matches: QueryMatch[]
-  /** The highlighted suggestion (optional, for additional context) */
+  /** The highlighted suggestion (for score explanation) */
   suggestion?: FilterSuggestion
 }>()
 
@@ -50,7 +62,7 @@ function getLabelForMatch(
   matchType: "column" | "operator" | "value" | null,
   argIndex: number | null
 ): string {
-  if (!matchType) return ""
+  if (!matchType) return "—" // Em dash for unmatched
   if (matchType === "column") return "column"
   if (matchType === "operator") return "operator"
   if (matchType === "value" && argIndex !== null) {
@@ -60,7 +72,22 @@ function getLabelForMatch(
 }
 
 /**
- * Gets tokenized segments from query and matches
+ * Formats a score contribution for display
+ * @param contribution - The weighted contribution value
+ * @param isUnmatched - Whether this is an unmatched token (shows penalty)
+ * @returns Formatted string like "+0.40" or "-0.20"
+ */
+function formatScoreContribution(contribution: number, isUnmatched: boolean): string {
+  if (isUnmatched) {
+    // Show coverage penalty
+    return contribution.toFixed(2)
+  }
+  // Show positive contribution
+  return `+${contribution.toFixed(2)}`
+}
+
+/**
+ * Gets tokenized segments from query and matches, with token indices for score lookup
  * @param query - The user's query string
  * @param matches - Array of query matches from the suggestion
  * @returns Array of token segments with match information
@@ -71,16 +98,12 @@ function getTokenizedSegments(
 ): TokenSegment[] {
   if (!query) return []
 
-  // If no matches, return empty segments (component will handle empty state)
-  if (!matches || matches.length === 0) return []
-
   const result = tokenize(query)
   const tokens = result.tokens
   const segments: TokenSegment[] = []
 
-  // Filter out any undefined/null matches and ensure they have valid inputRange
-  // More defensive: check for inputRange existence and valid properties
-  const validMatches = matches.filter(
+  // If no matches, still return segments but mark them as unmatched
+  const validMatches = (matches || []).filter(
     (m): m is QueryMatch => 
       m != null && 
       m.inputRange != null &&
@@ -89,8 +112,6 @@ function getTokenizedSegments(
       m.inputRange.start >= 0 &&
       m.inputRange.end >= m.inputRange.start
   )
-
-  if (validMatches.length === 0) return []
 
   // Priority for match types: column > operator > value
   const matchTypePriority = { column: 0, operator: 1, value: 2 }
@@ -104,18 +125,15 @@ function getTokenizedSegments(
   })
 
   // Create a map of position ranges to matches for quick lookup
-  // When there are overlaps, the first match (higher priority) wins
   const matchMap = new Map<string, QueryMatch>()
   for (const match of sortedMatches) {
     const key = `${match.inputRange.start}-${match.inputRange.end}`
-    // Only set if not already present (first = highest priority)
     if (!matchMap.has(key)) {
       matchMap.set(key, match)
     }
   }
 
   // Build a set of position ranges that are assigned to non-value matches
-  // This helps us correctly count only the value matches that are actually used
   const nonValuePositions = new Set<string>()
   for (const [key, match] of matchMap.entries()) {
     if (match.matchType !== "value") {
@@ -123,8 +141,7 @@ function getTokenizedSegments(
     }
   }
 
-  // Track arg indices by matchedTarget (the value being matched)
-  // This ensures all tokens matching the same value share the same arg index
+  // Track arg indices by matchedTarget
   const matchedTargetToArgIndex = new Map<string, number>()
   let valueIdx = 0
 
@@ -135,7 +152,6 @@ function getTokenizedSegments(
       const key = `${match.inputRange.start}-${match.inputRange.end}`
       if (!nonValuePositions.has(key)) {
         positionToMatchedTarget.set(key, match.matchedTarget)
-        // Assign arg index if we haven't seen this matchedTarget yet
         if (!matchedTargetToArgIndex.has(match.matchedTarget)) {
           matchedTargetToArgIndex.set(match.matchedTarget, valueIdx++)
         }
@@ -153,6 +169,7 @@ function getTokenizedSegments(
   }
 
   let lastEnd = 0
+  let tokenIndex = 0
 
   for (const token of tokens) {
     // Add separator (whitespace) before this token if there's a gap
@@ -160,7 +177,6 @@ function getTokenizedSegments(
       const separatorStart = lastEnd
       const separatorEnd = token.start
       
-      // Check if this separator falls within any match's range (space within value)
       let isValueSpace = false
       for (const match of matchMap.values()) {
         if (
@@ -184,12 +200,10 @@ function getTokenizedSegments(
     }
 
     // Find if this token has a match
-    // Check for matches that overlap with this token's range
     let foundMatch: QueryMatch | undefined
     let foundKey: string | undefined
 
     for (const [key, match] of matchMap.entries()) {
-      // Check if match overlaps with token
       if (
         match.inputRange.start <= token.end &&
         match.inputRange.end >= token.start
@@ -200,7 +214,6 @@ function getTokenizedSegments(
       }
     }
 
-    // Get the value index for this position if it's a value match
     const valueIndex = foundKey ? valueIndexMap.get(foundKey) : undefined
 
     segments.push({
@@ -213,9 +226,11 @@ function getTokenizedSegments(
       start: token.start,
       end: token.end,
       isSeparator: false,
+      tokenIndex: tokenIndex,
     })
 
     lastEnd = token.end
+    tokenIndex++
   }
 
   // Add trailing whitespace if any
@@ -223,7 +238,6 @@ function getTokenizedSegments(
     const separatorStart = lastEnd
     const separatorEnd = query.length
     
-    // Check if this separator falls within any match's range (space within value)
     let isValueSpace = false
     for (const match of matchMap.values()) {
       if (
@@ -264,26 +278,66 @@ const visibleSegments = computed(() => {
 })
 
 /**
+ * Score explanation from suggestion
+ */
+const scoreExplanation = computed(() => {
+  return props.suggestion?.scoreExplanation
+})
+
+/**
  * Get color class for a match type
  */
 function getColorClass(matchType: "column" | "operator" | "value" | null): string {
+  if (matchType === null) {
+    return "text-red-500/70 dark:text-red-400/70"
+  }
   const colorClasses = {
     column: "text-blue-600 dark:text-blue-400",
     operator: "text-amber-600 dark:text-amber-400",
     value: "text-emerald-600 dark:text-emerald-400",
   }
-  return matchType ? colorClasses[matchType] : "text-muted-foreground"
+  return colorClasses[matchType]
+}
+
+/**
+ * Get score info for a token by its index
+ */
+function getTokenScoreInfo(tokenIndex: number | undefined): TokenScoreInfo | undefined {
+  if (tokenIndex === undefined || !scoreExplanation.value) return undefined
+  return scoreExplanation.value.tokenScores.find(ts => ts.tokenIndex === tokenIndex)
+}
+
+/**
+ * Get score display and class for a segment
+ */
+function getScoreDisplay(segment: TokenSegment): { text: string; class: string; title?: string } {
+  const scoreInfo = getTokenScoreInfo(segment.tokenIndex)
+  const isUnmatched = segment.matchType === null
+  
+  if (!scoreInfo) {
+    return { text: "", class: "text-muted-foreground/50" }
+  }
+  
+  const scoreText = formatScoreContribution(scoreInfo.weightedContribution, isUnmatched)
+  const scoreClass = isUnmatched
+    ? "text-red-500/70 dark:text-red-400/70"
+    : "text-emerald-600/70 dark:text-emerald-400/70"
+  
+  return { 
+    text: scoreText, 
+    class: scoreClass,
+    title: `Quality: ${scoreInfo.fuzzyQuality.toFixed(2)}`
+  }
 }
 </script>
 
 <template>
   <!-- Always render container with fixed height to prevent layout jumping -->
-  <!-- Use min-h-[3.5rem] (h-14) to ensure consistent height -->
   <div
-    class="flex flex-col gap-0.5 px-3 py-2 bg-muted/30 rounded-md border border-border/50 font-mono text-base min-h-[3.5rem] min-w-0"
+    class="flex flex-col gap-0.5 px-3 py-2 bg-muted/30 rounded-md border border-border/50 font-mono text-sm min-h-[5.5rem] min-w-0"
   >
     <template v-if="visibleSegments.length > 0">
-      <!-- Token row with separators -->
+      <!-- Token row -->
       <div class="flex items-center gap-0">
         <template v-for="(segment, index) in visibleSegments" :key="index">
           <!-- Separator: dot (·) for token separator, underscore (_) for space within value -->
@@ -316,16 +370,59 @@ function getColorClass(matchType: "column" | "operator" | "value" | null): strin
           <span
             v-else
             class="text-center truncate"
+            :class="{ 'text-red-500/50 dark:text-red-400/50': segment.matchType === null }"
             :style="{ width: `${segment.text.length}ch` }"
           >
             {{ getLabelForMatch(segment.matchType, segment.argIndex) }}
           </span>
         </template>
       </div>
+
+      <!-- Score row -->
+      <div v-if="scoreExplanation" class="flex items-center gap-0 text-xs">
+        <template v-for="(segment, index) in visibleSegments" :key="`score-${index}`">
+          <!-- Empty space for separator alignment -->
+          <span
+            v-if="segment.isSeparator"
+            class="px-1 select-none"
+            aria-hidden="true"
+          >
+            &nbsp;
+          </span>
+          <!-- Score aligned with token above -->
+          <span
+            v-else
+            class="text-center truncate"
+            :class="getScoreDisplay(segment).class"
+            :style="{ width: `${segment.text.length}ch` }"
+            :title="getScoreDisplay(segment).title"
+          >
+            {{ getScoreDisplay(segment).text }}
+          </span>
+        </template>
+      </div>
+
+      <!-- Summary row -->
+      <div 
+        v-if="scoreExplanation" 
+        class="flex items-center gap-2 text-xs text-muted-foreground/60 mt-1 pt-1 border-t border-border/30"
+      >
+        <span>
+          Coverage: {{ scoreExplanation.explainedTokens }}/{{ scoreExplanation.totalTokens }} = {{ (scoreExplanation.coverageRatio * 100).toFixed(0) }}%
+        </span>
+        <span class="text-muted-foreground/30">│</span>
+        <span>
+          Components: {{ scoreExplanation.componentSum.toFixed(2) }}
+        </span>
+        <span class="text-muted-foreground/30">│</span>
+        <span class="font-medium text-foreground/70">
+          Score: {{ scoreExplanation.finalScore.toFixed(2) }}
+        </span>
+      </div>
     </template>
     <template v-else>
       <!-- Empty state - invisible but maintains height -->
-      <div class="h-8" aria-hidden="true" />
+      <div class="h-12" aria-hidden="true" />
     </template>
   </div>
 </template>

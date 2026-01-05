@@ -220,3 +220,104 @@ export {
   /** Quick check if text might contain a date expression */
   mightBeDateExpression,
 } from "./date-parser.ts";
+
+// ============================================================================
+// I18N EXPORTS
+// ============================================================================
+
+/**
+ * Internationalization (i18n) utilities and types.
+ *
+ * @example Custom i18n provider
+ * ```typescript
+ * import { createFuzzyFilter, createObjectProvider } from "fuzzyfilter";
+ *
+ * const spanishTranslations = {
+ *   operators: {
+ *     eq: { label: "es igual a", aliases: ["igual", "="] },
+ *     contains: { label: "contiene", aliases: ["tiene"] },
+ *   },
+ *   wordSets: {
+ *     less: ["menos", "menor"],
+ *     than: ["que"],
+ *   },
+ * };
+ *
+ * const spanishProvider = createObjectProvider(spanishTranslations);
+ * const filter = createFuzzyFilter({ i18nProvider: spanishProvider });
+ * ```
+ */
+export {
+  /** Interface for custom i18n providers */
+  type I18nProvider,
+  /** Type for FuzzyFilter translation objects */
+  type FuzzyFilterTranslations,
+  /** Type for operator-specific translations */
+  type OperatorTranslations,
+  /** Type for word set translations */
+  type WordSetTranslations,
+  /** Create a default English i18n provider */
+  createDefaultEnglishProvider,
+  /** Create an i18n provider from a simple object */
+  createObjectProvider,
+} from "./i18n/index.ts";
+
+/**
+ * I18n adapters for popular i18n libraries.
+ *
+ * @example Using with i18next
+ * ```typescript
+ * import i18n from "i18next";
+ * import { createI18nextProvider } from "fuzzyfilter/i18n/adapters/i18next";
+ * import { createFuzzyFilter } from "fuzzyfilter";
+ *
+ * const provider = createI18nextProvider(i18n);
+ * const filter = createFuzzyFilter({ i18nProvider: provider });
+ * ```
+ *
+ * @example Using with vue-i18n
+ * ```typescript
+ * import { createI18n } from "vue-i18n";
+ * import { createVueI18nProvider } from "fuzzyfilter/i18n/adapters/vue-i18n";
+ * import { createFuzzyFilter } from "fuzzyfilter";
+ *
+ * const i18n = createI18n({ ... });
+ * const provider = createVueI18nProvider(i18n);
+ * const filter = createFuzzyFilter({ i18nProvider: provider });
+ * ```
+ */
+export {
+  /** Create an i18n provider from an i18next instance */
+  createI18nextProvider,
+  /** Create an i18n provider from a vue-i18n instance */
+  createVueI18nProvider,
+} from "./i18n/adapters/index.ts";
+
+/**
+ * Pre-built locale translations.
+ *
+ * The core package only includes English translations.
+ * For additional languages, use @fuzzyfilter/i18n-locales.
+ *
+ * @example Using English locale
+ * ```typescript
+ * import { createFuzzyFilter, createObjectProvider } from "fuzzyfilter";
+ * import { en } from "fuzzyfilter/i18n/locales";
+ *
+ * const provider = createObjectProvider(en);
+ * const filter = createFuzzyFilter({ i18nProvider: provider });
+ * ```
+ *
+ * @example Using additional locales from @fuzzyfilter/i18n-locales
+ * ```typescript
+ * import { createFuzzyFilter, createObjectProvider } from "fuzzyfilter";
+ * import { es, fr } from "@fuzzyfilter/i18n-locales";
+ *
+ * const provider = createObjectProvider(es);
+ * const filter = createFuzzyFilter({ i18nProvider: provider });
+ * ```
+ */
+export {
+  /** English (default) translations */
+  en,
+} from "./i18n/locales/index.ts";

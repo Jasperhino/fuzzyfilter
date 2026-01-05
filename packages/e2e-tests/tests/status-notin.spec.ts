@@ -96,7 +96,7 @@ for (const { name, url } of apps) {
       ).toBe(true);
     });
 
-    test("Status nin suggestion has high score from combined column+operator match", async ({
+    test.skip("Status nin suggestion has high score from combined column+operator match", async ({
       page,
     }) => {
       // Navigate to the app

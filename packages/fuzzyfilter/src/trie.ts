@@ -123,12 +123,19 @@ export function createTrie<T>(): Trie<T> {
     return allEntries.map((e) => ({ key: e.key, value: e.value }));
   }
 
+  function clear(): void {
+    root.children.clear();
+    allEntries.length = 0;
+    _size = 0;
+  }
+
   return {
     insert,
     lookup,
     prefixSearch,
     fuzzySearch,
     entries,
+    clear,
     get size() {
       return _size;
     },

@@ -24,6 +24,7 @@ import {
   countForDateFilter,
 } from "../engine/suggestion-helpers.ts";
 import { SCORING_CONFIG } from "../constants.ts";
+import { calculateSmartScore } from "../engine/scorer.ts";
 import fuzzysort from "fuzzysort";
 
 /**
@@ -76,17 +77,18 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     const detectedValues = detectValueTokens(tokens, usedForColumn);
 
     // 1. Column suggestions with argument-aware scoring
-    suggestions.push(...this.generateColumnSuggestions(
-      columnScores,
-      operatorScores,
-      detectedValues,
-      contextAvailableValues,
-      contextRowIndices,
-      tokens
-    ));
+    suggestions.push(...        this.generateColumnSuggestions(
+          columnScores,
+          operatorScores,
+          detectedValues,
+          contextAvailableValues,
+          contextRowIndices,
+          tokens,
+          context.i18nProvider
+        ));
 
     // 2. Operator suggestions
-    const usedForOperator = this.detectUsedTokensForOperators(operatorScores, tokens);
+    const usedForOperator = this.detectUsedTokensForOperators(operatorScores, tokens, context.i18nProvider);
     const operatorDetectedValues = detectValueTokens(tokens, usedForOperator);
     suggestions.push(...this.generateOperatorSuggestions(
       operatorScores,
@@ -94,7 +96,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
       operatorDetectedValues,
       contextAvailableValues,
       contextRowIndices,
-      tokens
+      tokens,
+      context.i18nProvider
     ));
 
     // 3. Value suggestions
@@ -108,13 +111,14 @@ export class NgramMatchStrategy implements SuggestionStrategy {
 
     // 4. Column + Operator + Value combinations (from parsed input)
     if (parsed.column && parsed.operator) {
-      suggestions.push(...this.generateColumnOperatorValueSuggestions(
-        parsed,
-        tokens,
-        contextAvailableValues,
-        contextRowIndices,
-        seenValues
-      ));
+      suggestions.push(...        this.generateColumnOperatorValueSuggestions(
+          parsed,
+          tokens,
+          contextAvailableValues,
+          contextRowIndices,
+          seenValues,
+          context.i18nProvider
+        ));
     }
 
     return suggestions;
@@ -158,11 +162,12 @@ export class NgramMatchStrategy implements SuggestionStrategy {
    */
   private detectUsedTokensForOperators(
     operatorScores: Map<string, import("../types.ts").OpScoreEntry>,
-    tokens: import("../../types/index.ts").Token[]
+    tokens: import("../../types/index.ts").Token[],
+    i18nProvider?: import("../../types/i18n.ts").I18nProvider
   ): Set<number> {
     const used = new Set<number>();
     for (const [_key, { operator: opId }] of operatorScores) {
-      const opInfo = getOperator(opId);
+      const opInfo = getOperator(opId, i18nProvider);
       // Find token(s) that best match this operator
       for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i]!;
@@ -192,7 +197,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     detectedValues: DetectedValues,
     contextAvailableValues: import("../types.ts").ContextAvailableValues | null,
     contextRowIndices: Set<number> | null,
-    tokens: import("../../types/index.ts").Token[]
+    tokens: import("../../types/index.ts").Token[],
+    i18nProvider?: import("../../types/i18n.ts").I18nProvider
   ): FilterSuggestion[] {
     const suggestions: FilterSuggestion[] = [];
 
@@ -206,7 +212,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
         matchedTarget: colMatchedTarget,
         matchIndexes: colMatchIndexes,
       } = colScoreEntry;
-      const ops = getOperatorsForType(col.type);
+      const ops = getOperatorsForType(col.type, i18nProvider);
 
       // Get compatible values for this column type, filtered by context availability
       const compatibleValues: (number | Date)[] =
@@ -232,47 +238,50 @@ export class NgramMatchStrategy implements SuggestionStrategy {
       if (compatibleValues.length >= 2) {
         suggestions.push(
           ...this.generateVariadicSuggestions(
-            col,
-            colBreakdown,
-            colNgram,
-            colMatchedTarget,
-            colMatchIndexes,
-            ops,
-            compatibleValues,
-            operatorScores,
-            contextRowIndices,
-            tokens
-          )
-        );
-      } else if (compatibleValues.length === 1) {
-        suggestions.push(
-          ...this.generateSingleValueSuggestions(
-            col,
-            colBreakdown,
-            colNgram,
-            colMatchedTarget,
-            colMatchIndexes,
-            ops,
-            compatibleValues[0]!,
-            operatorScores,
-            contextRowIndices,
-            tokens
-          )
-        );
-      } else {
-        suggestions.push(
-          ...this.generateNoArgSuggestions(
-            col,
-            colBreakdown,
-            colNgram,
-            colMatchedTarget,
-            colMatchIndexes,
-            ops,
-            operatorScores,
-            contextRowIndices,
-            tokens
-          )
-        );
+          col,
+          colBreakdown,
+          colNgram,
+          colMatchedTarget,
+          colMatchIndexes,
+          ops,
+          compatibleValues,
+          operatorScores,
+          contextRowIndices,
+          tokens,
+          i18nProvider
+        )
+      );
+    } else if (compatibleValues.length === 1) {
+      suggestions.push(
+        ...this.generateSingleValueSuggestions(
+          col,
+          colBreakdown,
+          colNgram,
+          colMatchedTarget,
+          colMatchIndexes,
+          ops,
+          compatibleValues[0]!,
+          operatorScores,
+          contextRowIndices,
+          tokens,
+          i18nProvider
+        )
+      );
+    } else {
+      suggestions.push(
+        ...this.generateNoArgSuggestions(
+          col,
+          colBreakdown,
+          colNgram,
+          colMatchedTarget,
+          colMatchIndexes,
+          ops,
+          operatorScores,
+          contextRowIndices,
+          tokens,
+          i18nProvider
+        )
+      );
       }
     }
 
@@ -292,12 +301,13 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     compatibleValues: (number | Date)[],
     operatorScores: Map<string, import("../types.ts").OpScoreEntry>,
     contextRowIndices: Set<number> | null,
-    tokens: import("../../types/index.ts").Token[]
+    tokens: import("../../types/index.ts").Token[],
+    i18nProvider?: import("../../types/i18n.ts").I18nProvider
   ): FilterSuggestion[] {
     const suggestions: FilterSuggestion[] = [];
 
     for (const op of ops) {
-      const opInfo = getOperator(op.id);
+      const opInfo = getOperator(op.id, i18nProvider);
       let valuesUsed = 0;
       let suggestionArgs: import("../../types/index.ts").HypothesisValueType[] | undefined;
 
@@ -331,15 +341,6 @@ export class NgramMatchStrategy implements SuggestionStrategy {
       const typedKey = `${op.id}:${col.type}`;
       const opMatch = operatorScores.get(typedKey) ?? operatorScores.get(generalKey);
 
-      // Calculate argument coverage bonus
-      const argumentCoverageBonus = Math.round(
-        (valuesUsed / compatibleValues.length) * SCORING_CONFIG.BONUS.ARGUMENT_COVERAGE
-      );
-      // Include operator score if the operator was also matched in the input
-      const operatorBonus = opMatch ? opMatch.breakdown.adjustedScore : 0;
-      const adjustedScore =
-        colBreakdown.adjustedScore + argumentCoverageBonus + operatorBonus;
-
       // Build match metadata for highlighting
       const matchMeta: MatchMetadata = {
         column: {
@@ -368,11 +369,12 @@ export class NgramMatchStrategy implements SuggestionStrategy {
           col,
           op.id,
           suggestionArgs,
-          adjustedScore,
+          0, // Score will be calculated by createSuggestion using matchMetadata
           undefined,
           opMatch?.matchedAlias,
           matchMeta,
-          tokens
+          tokens,
+          i18nProvider
         )
       );
     }
@@ -393,25 +395,20 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     firstVal: number | Date,
     operatorScores: Map<string, import("../types.ts").OpScoreEntry>,
     contextRowIndices: Set<number> | null,
-    tokens: import("../../types/index.ts").Token[]
+    tokens: import("../../types/index.ts").Token[],
+    i18nProvider?: import("../../types/i18n.ts").I18nProvider
   ): FilterSuggestion[] {
     const suggestions: FilterSuggestion[] = [];
     const argValue = toHypothesisValue(firstVal);
 
     for (const op of ops.slice(0, 5)) {
-      const opInfo = getOperator(op.id);
+      const opInfo = getOperator(op.id, i18nProvider);
       if (!opInfo.requiresArgument) continue;
 
       // Check if this operator was also matched in the input
       const generalKey = op.id;
       const typedKey = `${op.id}:${col.type}`;
       const opMatch = operatorScores.get(typedKey) ?? operatorScores.get(generalKey);
-
-      // Full coverage bonus since only 1 value
-      // Include operator score if the operator was also matched in the input
-      const operatorBonus = opMatch ? opMatch.breakdown.adjustedScore : 0;
-      const adjustedScore =
-        colBreakdown.adjustedScore + SCORING_CONFIG.BONUS.ARGUMENT_COVERAGE + operatorBonus;
 
       // Build match metadata for highlighting
       const matchMeta: MatchMetadata = {
@@ -441,7 +438,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
           col,
           op.id,
           [argValue],
-          adjustedScore,
+          0, // Score will be calculated by createSuggestion using matchMetadata
           undefined,
           opMatch?.matchedAlias,
           matchMeta,
@@ -465,12 +462,16 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     ops: Array<{ id: import("../../types/index.ts").Operator }>,
     operatorScores: Map<string, import("../types.ts").OpScoreEntry>,
     contextRowIndices: Set<number> | null,
-    tokens: import("../../types/index.ts").Token[]
+    tokens: import("../../types/index.ts").Token[],
+    i18nProvider?: import("../../types/i18n.ts").I18nProvider
   ): FilterSuggestion[] {
     const suggestions: FilterSuggestion[] = [];
 
     // First, check if any no-argument operators for this column were matched in operatorScores
-    const noArgOps = ops.filter((op) => !getOperator(op.id).requiresArgument);
+    const noArgOps = ops.filter((op) => {
+      const opInfo = getOperator(op.id, i18nProvider);
+      return !opInfo.requiresArgument;
+    });
     const matchedNoArgOps: Array<{
       opId: import("../../types/index.ts").Operator;
       opBreakdown: import("../types.ts").ScoreBreakdown;
@@ -511,12 +512,6 @@ export class NgramMatchStrategy implements SuggestionStrategy {
         opMatchedTarget,
         opMatchIndexes,
       } of matchedNoArgOps) {
-        // Combine column + operator scores, plus completeness bonus
-        const combinedScore =
-          colBreakdown.adjustedScore +
-          opBreakdown.adjustedScore +
-          SCORING_CONFIG.BONUS.ARGUMENT_COVERAGE;
-
         // Build match metadata for highlighting (both column and operator matched)
         const matchMeta: MatchMetadata = {
           column: {
@@ -544,7 +539,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
             col,
             opId,
             undefined,
-            combinedScore,
+            0, // Score will be calculated by createSuggestion using matchMetadata
             undefined,
             matchedAlias,
             matchMeta,
@@ -623,7 +618,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     operatorDetectedValues: DetectedValues,
     contextAvailableValues: import("../types.ts").ContextAvailableValues | null,
     contextRowIndices: Set<number> | null,
-    tokens: import("../../types/index.ts").Token[]
+    tokens: import("../../types/index.ts").Token[],
+    i18nProvider?: import("../../types/i18n.ts").I18nProvider
   ): FilterSuggestion[] {
     const suggestions: FilterSuggestion[] = [];
     const schema = this.getSchema();
@@ -641,7 +637,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
         matchIndexes: opMatchIndexes,
       },
     ] of operatorScores) {
-      const opInfo = getOperator(operator);
+      const opInfo = getOperator(operator, i18nProvider);
       for (const col of getColumns(schema)) {
         // Skip if this is a type-specific alias that doesn't match the column type
         if (forType && forType !== col.type) continue;
@@ -651,12 +647,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
           const colMatchEntry = columnScores.get(col.id as string);
 
           if (colMatchEntry && !opInfo.requiresArgument) {
-            // Both column and no-argument operator matched - use combined score
-            const combinedScore =
-              colMatchEntry.breakdown.adjustedScore +
-              opBreakdown.adjustedScore +
-              SCORING_CONFIG.BONUS.ARGUMENT_COVERAGE;
-
+            // Both column and no-argument operator matched
             const matchMeta: MatchMetadata = {
               column: {
                 inputStart: colMatchEntry.ngram.inputStart,
@@ -681,7 +672,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 col,
                 operator,
                 undefined,
-                combinedScore,
+                0, // Score will be calculated by createSuggestion using matchMetadata
                 undefined,
                 matchedAlias,
                 matchMeta,
@@ -690,11 +681,6 @@ export class NgramMatchStrategy implements SuggestionStrategy {
             );
           } else if (colMatchEntry && opInfo.requiresArgument) {
             // Both column and operator matched, but operator requires arguments
-            const combinedScore =
-              colMatchEntry.breakdown.adjustedScore +
-              opBreakdown.adjustedScore +
-              SCORING_CONFIG.BONUS.ARGUMENT_COVERAGE;
-
             const matchMeta: MatchMetadata = {
               column: {
                 inputStart: colMatchEntry.ngram.inputStart,
@@ -719,7 +705,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 col,
                 operator,
                 undefined,
-                combinedScore,
+                0, // Score will be calculated by createSuggestion using matchMetadata
                 undefined,
                 matchedAlias,
                 matchMeta,
@@ -784,12 +770,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
               }
 
               if (valuesUsed > 0 && suggestionArgs) {
-                const argumentCoverageBonus = Math.round(
-                  (valuesUsed / compatibleValues.length) *
-                    SCORING_CONFIG.BONUS.ARGUMENT_COVERAGE
-                );
-                const adjustedScore = opBreakdown.adjustedScore + argumentCoverageBonus;
-
+                // Operator-only match (no column match)
                 const matchMeta: MatchMetadata = {
                   operator: {
                     inputStart: opNgram.inputStart,
@@ -806,7 +787,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                     col,
                     operator,
                     suggestionArgs,
-                    adjustedScore,
+                    0, // Score will be calculated by createSuggestion using matchMetadata
                     undefined,
                     matchedAlias,
                     matchMeta,
@@ -816,7 +797,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
               }
             }
 
-            // Also create incomplete suggestion
+            // Also create incomplete suggestion (no value match)
             const opOnlyMeta: MatchMetadata = {
               operator: {
                 inputStart: opNgram.inputStart,
@@ -832,7 +813,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 col,
                 operator,
                 undefined,
-                opBreakdown.adjustedScore,
+                0, // Score will be calculated by createSuggestion using matchMetadata
                 undefined,
                 matchedAlias,
                 opOnlyMeta,
@@ -840,7 +821,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
               )
             );
           } else {
-            // Only operator matched
+            // Only operator matched (no column, no value)
             const opOnlyMeta: MatchMetadata = {
               operator: {
                 inputStart: opNgram.inputStart,
@@ -856,7 +837,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 col,
                 operator,
                 undefined,
-                opBreakdown.adjustedScore,
+                0, // Score will be calculated by createSuggestion using matchMetadata
                 undefined,
                 matchedAlias,
                 opOnlyMeta,
@@ -879,7 +860,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     columnScores: Map<string, import("../types.ts").ColumnScoreEntry>,
     operatorScores: Map<string, import("../types.ts").OpScoreEntry>,
     contextRowIndices: Set<number> | null,
-    tokens: import("../../types/index.ts").Token[]
+    tokens: import("../../types/index.ts").Token[],
+    i18nProvider?: import("../../types/i18n.ts").I18nProvider
   ): FilterSuggestion[] {
     const suggestions: FilterSuggestion[] = [];
 
@@ -933,7 +915,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
         let bestOpEntry: import("../types.ts").OpScoreEntry | undefined = opEntry;
 
         for (const [, opScoreEntry] of operatorScores) {
-          const opInfo = getOperator(opScoreEntry.operator);
+          const opInfo = getOperator(opScoreEntry.operator, i18nProvider);
           if (
             opInfo.supportedTypes.includes(col.type) &&
             opInfo.requiresArgument
@@ -946,14 +928,6 @@ export class NgramMatchStrategy implements SuggestionStrategy {
               bestOpForValue = opScoreEntry.operator;
             }
           }
-        }
-
-        // Calculate combined score when column and operator also matched
-        let finalScore = breakdown.adjustedScore;
-        if (!anotherOpMatchesBetter && (colEntry || bestOpEntry)) {
-          const colBonus = colEntry ? colEntry.breakdown.adjustedScore : 0;
-          const opBonus = bestOpEntry ? bestOpEntry.breakdown.adjustedScore : 0;
-          finalScore = breakdown.adjustedScore + colBonus + opBonus;
         }
 
         // Build match metadata for highlighting (value matched)
@@ -995,7 +969,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
             col,
             bestOpForValue,
             [{ kind: "string", value: match.value.value }],
-            finalScore,
+            0, // Score will be calculated by createSuggestion using matchMetadata
             rowCount,
             bestOpEntry?.matchedAlias,
             matchMeta,
@@ -1016,24 +990,47 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     tokens: import("../../types/index.ts").Token[],
     contextAvailableValues: import("../types.ts").ContextAvailableValues | null,
     contextRowIndices: Set<number> | null,
-    seenValues: Set<string>
+    seenValues: Set<string>,
+    i18nProvider?: import("../../types/i18n.ts").I18nProvider
   ): FilterSuggestion[] {
     const suggestions: FilterSuggestion[] = [];
     const col = parsed.column!.match.column;
     const op = parsed.operator!.match.operator;
-    const opInfo = getOperator(op);
+    const opInfo = getOperator(op, i18nProvider);
 
     if (!opInfo.requiresArgument) {
       // Operator doesn't need value - suggest the complete filter
+      // Normalize raw fuzzysort scores and apply weights
+      const colMatch = parsed.column!.match;
+      const opMatch = parsed.operator!.match;
+      
+      // Build match metadata for date suggestions without values
+      const colOpMatchMeta: MatchMetadata = {
+        column: {
+          inputStart: parsed.column!.token.start,
+          inputEnd: parsed.column!.token.end,
+          inputText: parsed.column!.token.text,
+          matchedTarget: col.name,
+          score: colMatch.score,
+        },
+        operator: {
+          inputStart: parsed.operator!.token.start,
+          inputEnd: parsed.operator!.token.end,
+          inputText: parsed.operator!.token.text,
+          matchedTarget: opInfo.label,
+          score: opMatch.score,
+        },
+      };
+      
       suggestions.push(
         createSuggestion(
           col,
           op,
           undefined,
-          parsed.column!.match.score + parsed.operator!.match.score,
+          0, // Score will be calculated by createSuggestion using matchMetadata
           undefined,
           undefined,
-          undefined,
+          colOpMatchMeta,
           tokens
         )
       );
@@ -1113,7 +1110,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 col,
                 op,
                 parsedDate,
-                SCORING_CONFIG.BONUS.DATE_FILTER_COMPLETE - 500, // High score for complete date filter
+                SCORING_CONFIG.BONUS.DATE_FILTER_COMPLETE,
                 countForDateFilter(
                   col.id,
                   op,
@@ -1122,7 +1119,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                   contextRowIndices
                 ),
                 undefined,
-                dateMatchMeta
+                dateMatchMeta,
+                tokens
               )
             );
           }
@@ -1144,15 +1142,42 @@ export class NgramMatchStrategy implements SuggestionStrategy {
               seenValues.add(key);
               const rowCount =
                 contextRowIndices !== null ? undefined : match.value.rowCount;
+              // Apply smart scoring for value match, normalize parsed column score
+              const valScore = calculateSmartScore(
+                match.score,
+                match.indexes,
+                match.value.value
+              );
+              const colMatch = parsed.column!.match;
+              
+              // Build match metadata for column + value match
+              const colValMatchMeta: MatchMetadata = {
+                column: {
+                  inputStart: parsed.column!.token.start,
+                  inputEnd: parsed.column!.token.end,
+                  inputText: parsed.column!.token.text,
+                  matchedTarget: col.name,
+                  score: colMatch.score,
+                },
+                values: [{
+                  inputStart: valueTokens[0]!.start,
+                  inputEnd: valueTokens[valueTokens.length - 1]!.end,
+                  inputText: valueQueryNorm,
+                  matchedTarget: match.value.value,
+                  matchIndexes: match.indexes,
+                  score: match.score,
+                }],
+              };
+              
               suggestions.push(
                 createSuggestion(
                   col,
                   op,
                   [{ kind: "string", value: match.value.value }],
-                  match.score + parsed.column!.match.score,
+                  0, // Score will be calculated by createSuggestion using matchMetadata
                   rowCount,
                   undefined,
-                  undefined,
+                  colValMatchMeta,
                   tokens
                 )
               );
@@ -1200,7 +1225,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                     contextRowIndices
                   ),
                   dateSuggestion.label,
-                  colOpMatchMeta
+                  colOpMatchMeta,
+                  tokens
                 )
               );
             }
@@ -1256,25 +1282,32 @@ export class NgramMatchStrategy implements SuggestionStrategy {
           }
 
           if (matchedValues.length > 0) {
-            const colScore = parsed.column!.match.score;
-            const opScore = parsed.operator?.match.score ?? 0;
-            const colBonus = colScore >= -100 ? 500 : Math.max(0, 500 + colScore);
-            const opBonus = opScore >= -100 ? 500 : Math.max(0, 500 + opScore);
+            // Normalize raw fuzzysort scores from parsed matches
+            const colMatch = parsed.column!.match;
+            const opMatch = parsed.operator?.match;
+            const sCol = Math.max(0, Math.min(1, 1 + (colMatch.score / 10000)));
+            const sOp = opMatch ? Math.max(0, Math.min(1, 1 + (opMatch.score / 10000))) : 0;
+            
+            // Calculate average value score using smart scoring
+            // Find the corresponding match info to get indexes for smart scoring
             const avgValScore =
-              matchedValues.reduce((sum, v) => sum + v.score, 0) /
-              matchedValues.length;
-            const valBonus =
-              avgValScore >= -100 ? 500 : Math.max(0, 500 + avgValScore);
-            const valueCoverageBonus = Math.round(
-              (matchedValues.length / valueTokens.length) *
-                SCORING_CONFIG.BONUS.VALUE_COVERAGE
-            );
-            const combinedScore =
-              SCORING_CONFIG.BONUS.COMBINED_MATCH_BASE +
-              colBonus +
-              opBonus +
-              valBonus +
-              valueCoverageBonus;
+              matchedValues.reduce((sum, v) => {
+                // Find the token match info for this value to get indexes
+                const tokenMatch = tokenMatchInfo.find(
+                  (info) => info && info.matchedValue === v.value
+                );
+                if (tokenMatch) {
+                  // Use smart scoring with indexes
+                  return sum + calculateSmartScore(
+                    v.score,
+                    tokenMatch.matchIndexes,
+                    v.value
+                  );
+                } else {
+                  // Fallback: normalize raw score
+                  return sum + Math.max(0, Math.min(1, 1 + (v.score / 10000)));
+                }
+              }, 0) / matchedValues.length;
 
             const args: import("../../types/index.ts").HypothesisValueType[] =
               matchedValues.map((v) => ({ kind: "string", value: v.value }));
@@ -1308,14 +1341,14 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 inputEnd: colToken.end,
                 inputText: colToken.text,
                 matchedTarget: col.name,
-                score: colScore,
+                score: colMatch.score,
               },
               operator: {
                 inputStart: opToken.start,
                 inputEnd: opToken.end,
                 inputText: opToken.text,
                 matchedTarget: op,
-                score: opScore,
+                score: opMatch?.score ?? 0,
               },
               values: valueMatchEntries,
             };
@@ -1327,7 +1360,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                   col,
                   op,
                   args,
-                  combinedScore,
+                  0, // Score will be calculated by createSuggestion using matchMetadata
                   undefined,
                   undefined,
                   matchMeta,
@@ -1350,30 +1383,57 @@ export class NgramMatchStrategy implements SuggestionStrategy {
 
           for (const match of valMatches) {
             if (match.value.columnId === col.id) {
-              const colScore = parsed.column!.match.score;
-              const opScore = parsed.operator?.match.score ?? 0;
-              const colBonus = colScore >= -100 ? 500 : Math.max(0, 500 + colScore);
-              const opBonus = opScore >= -100 ? 500 : Math.max(0, 500 + opScore);
-              const valBonus = match.score >= -100 ? 500 : Math.max(0, 500 + match.score);
-              const combinedScore =
-                SCORING_CONFIG.BONUS.COMBINED_MATCH_BASE +
-                colBonus +
-                opBonus +
-                valBonus;
+              // Normalize raw fuzzysort scores and apply smart scoring for value
+              const colMatch = parsed.column!.match;
+              const opMatch = parsed.operator?.match;
+              const sCol = Math.max(0, Math.min(1, 1 + (colMatch.score / 10000)));
+              const sOp = opMatch ? Math.max(0, Math.min(1, 1 + (opMatch.score / 10000))) : 0;
+              const sVal = calculateSmartScore(
+                match.score,
+                match.indexes,
+                match.value.value
+              );
+              
               const key = `${col.id}:${op}:${match.value.value}`;
               if (!seenValues.has(key)) {
                 seenValues.add(key);
                 const rowCount =
                   contextRowIndices !== null ? undefined : match.value.rowCount;
+                // Build match metadata for value match
+                const valueMatchMeta: MatchMetadata = {
+                  column: {
+                    inputStart: parsed.column!.token.start,
+                    inputEnd: parsed.column!.token.end,
+                    inputText: parsed.column!.token.text,
+                    matchedTarget: col.name,
+                    score: colMatch.score,
+                  },
+                  operator: {
+                    inputStart: parsed.operator!.token.start,
+                    inputEnd: parsed.operator!.token.end,
+                    inputText: parsed.operator!.token.text,
+                    matchedTarget: op,
+                    score: opMatch?.score ?? 0,
+                  },
+                  values: [{
+                    inputStart: valueTokens[0]!.start,
+                    inputEnd: valueTokens[valueTokens.length - 1]!.end,
+                    inputText: valueQuery,
+                    matchedTarget: match.value.value,
+                    matchIndexes: match.indexes,
+                    score: match.score,
+                  }],
+                };
+                
                 suggestions.push(
                   createSuggestion(
                     col,
                     op,
                     [{ kind: "string", value: match.value.value }],
-                    combinedScore,
+                    0, // Score will be calculated by createSuggestion using matchMetadata
                     rowCount,
                     undefined,
-                    undefined,
+                    valueMatchMeta,
                     tokens
                   )
                 );

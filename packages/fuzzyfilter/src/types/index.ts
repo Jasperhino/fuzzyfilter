@@ -94,6 +94,12 @@ export type {
   FilterCache,
 } from "./results.ts";
 
+// Score explanation types (for visualization)
+export type {
+  TokenScoreInfo,
+  ScoreExplanation,
+} from "../fuzzy-filter/engine/scorer.ts";
+
 // API types
 export type {
   FuzzyFilterConfig,

@@ -9,6 +9,7 @@
 
 import type { OperatorInfoBase } from "./types/index.ts";
 import { DataType, OperatorCategory } from "./types/index.ts";
+import type { I18nProvider } from "./types/i18n.ts";
 
 // ============================================================================
 // WORD SETS FOR ALIAS GENERATION
@@ -315,23 +316,56 @@ export interface OperatorInfo extends OperatorInfoBase {
 
 /**
  * Get all operators
+ * 
+ * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
+ * @returns Array of all operators with translations applied if provider is given
  */
-export function getAllOperators(): OperatorInfo[] {
-  return Object.values(OPERATORS) as OperatorInfo[];
+export function getAllOperators(i18nProvider?: I18nProvider): OperatorInfo[] {
+  const operators = Object.values(OPERATORS) as OperatorInfo[];
+  
+  if (!i18nProvider) {
+    return operators;
+  }
+  
+  // Apply translations to each operator
+  return operators.map(op => ({
+    ...op,
+    label: i18nProvider.getOperatorLabel(op.id),
+    aliases: i18nProvider.getOperatorAliases(op.id),
+  }));
 }
 
 /**
  * Get operator by ID
+ * 
+ * @param id - The operator ID
+ * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
+ * @returns Operator info with translations applied if provider is given
  */
-export function getOperator(id: Operator): OperatorInfo {
-  return OPERATORS[id] as OperatorInfo;
+export function getOperator(id: Operator, i18nProvider?: I18nProvider): OperatorInfo {
+  const op = OPERATORS[id] as OperatorInfo;
+  
+  if (!i18nProvider) {
+    return op;
+  }
+  
+  // Return a new object with translated label and aliases
+  // Note: This doesn't modify the original OPERATORS registry
+  return {
+    ...op,
+    label: i18nProvider.getOperatorLabel(id),
+    aliases: i18nProvider.getOperatorAliases(id),
+  };
 }
 
 /**
  * Get operators valid for a data type
+ * 
+ * @param type - The data type
+ * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
  */
-export function getOperatorsForType(type: DataType): OperatorInfo[] {
-  return getAllOperators().filter(op => op.supportedTypes.includes(type));
+export function getOperatorsForType(type: DataType, i18nProvider?: I18nProvider): OperatorInfo[] {
+  return getAllOperators(i18nProvider).filter(op => op.supportedTypes.includes(type));
 }
 
 /**
@@ -399,9 +433,10 @@ export function getDefaultOperatorForType(type: DataType): Operator {
  * 
  * @param operator - The operator to get search terms for
  * @param forType - Optional: include type-specific aliases for this data type
+ * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
  */
-export function getOperatorSearchTerms(operator: Operator, forType?: DataType): string[] {
-  const info = getOperator(operator);
+export function getOperatorSearchTerms(operator: Operator, forType?: DataType, i18nProvider?: I18nProvider): string[] {
+  const info = getOperator(operator, i18nProvider);
   
   const terms: string[] = [
     info.id,
@@ -410,6 +445,7 @@ export function getOperatorSearchTerms(operator: Operator, forType?: DataType): 
   ];
 
   // Add type-specific aliases if a type is specified
+  // Note: Type-specific aliases are not translated via I18nProvider (they're in the operator definition)
   if (forType && info.typeSpecificAliases?.[forType]) {
     terms.push(...info.typeSpecificAliases[forType]!);
   }
@@ -422,13 +458,15 @@ export function getOperatorSearchTerms(operator: Operator, forType?: DataType): 
  * 
  * @param operator - The operator to get aliases for
  * @param forType - Optional: include type-specific aliases for this data type
+ * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
  */
-export function getOperatorAliases(operator: Operator, forType?: DataType): string[] {
-  const info = getOperator(operator);
+export function getOperatorAliases(operator: Operator, forType?: DataType, i18nProvider?: I18nProvider): string[] {
+  const info = getOperator(operator, i18nProvider);
   
   const aliases = [...info.aliases];
 
   // Add type-specific aliases if a type is specified
+  // Note: Type-specific aliases are not translated via I18nProvider (they're in the operator definition)
   if (forType && info.typeSpecificAliases?.[forType]) {
     aliases.push(...info.typeSpecificAliases[forType]!);
   }

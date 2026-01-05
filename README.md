@@ -346,20 +346,6 @@ console.log(stats);
 // → { totalRows: 1000, columnsIndexed: 6, uniqueValues: 234, indexSizeBytes: 45678 }
 ```
 
-### Scoring System
-
-FuzzyFilter uses a sophisticated scoring system that prioritizes:
-
-1. **Coverage Bonus** - Matches using more of the input score higher
-2. **Completeness Bonus** - Matches covering more of the target score higher
-3. **Full Query Bonus** - Exact matches of the full query get a boost
-
-```typescript
-// "in progress" query results:
-// 1. "Status = In Progress" → score: 3501 (uses both tokens)
-// 2. "Status ∈" (in operator) → score: 2001 (only uses "in" token)
-```
-
 ## API Reference
 
 ### `createFuzzyFilter(config?)`

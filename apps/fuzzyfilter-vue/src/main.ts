@@ -28,6 +28,8 @@ async function startApp(): Promise<void> {
 
   // Initialize app after the Meticulous recorder is ready
   const app = createApp(DemoPage)
+  const { i18n } = await import("./i18n")
+  app.use(i18n)
   app.mount("#app")
 }
 

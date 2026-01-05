@@ -137,7 +137,8 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
           allDetectedValues.numbers.map((n) => n.value),
           contextAvailableValues,
           contextRowIndices,
-          tokens
+          tokens,
+          context.i18nProvider
         )
       );
     }
@@ -149,7 +150,8 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
           allDetectedValues.dates,
           contextAvailableValues,
           contextRowIndices,
-          tokens
+          tokens,
+          context.i18nProvider
         )
       );
     }
@@ -181,7 +183,8 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
     numValues: number[],
     contextAvailableValues: import("../types.ts").ContextAvailableValues | null,
     contextRowIndices: Set<number> | null,
-    tokens: import("../../types/index.ts").Token[]
+    tokens: import("../../types/index.ts").Token[],
+    i18nProvider?: import("../../types/i18n.ts").I18nProvider
   ): FilterSuggestion[] {
     const suggestions: FilterSuggestion[] = [];
     const schema = this.getSchema();
@@ -198,13 +201,13 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
 
       if (filteredValues.length === 0) continue;
 
-      const ops = getOperatorsForType(col.type);
+      const ops = getOperatorsForType(col.type, i18nProvider);
       const baseScore = SCORING_CONFIG.BONUS.VALUE_ONLY_BASE;
 
       if (filteredValues.length >= 2) {
         // Multiple values: prioritize between, in operators
         for (const op of ops) {
-          const opInfo = getOperator(op.id);
+          const opInfo = getOperator(op.id, i18nProvider);
           let valuesUsed = 0;
           let suggestionArgs: import("../../types/index.ts").HypothesisValueType[] | undefined;
 
@@ -225,11 +228,9 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
           }
 
           if (valuesUsed > 0) {
-            const argumentCoverageBonus = Math.round(
-              (valuesUsed / filteredValues.length) *
-                SCORING_CONFIG.BONUS.ARGUMENT_COVERAGE
-            );
-            const adjustedScore = baseScore + argumentCoverageBonus;
+            // Coverage multiplier based on how many values were used
+            const coverageMultiplier = valuesUsed / filteredValues.length;
+            const adjustedScore = baseScore * (0.7 + 0.3 * coverageMultiplier);
 
             suggestions.push(
               createSuggestion(
@@ -240,7 +241,8 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
                 undefined,
                 undefined,
                 undefined,
-                tokens
+                tokens,
+                i18nProvider
               )
             );
           }
@@ -249,7 +251,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
         // Single numeric value
         const numVal = filteredValues[0]!;
         for (const op of ops.slice(0, 5)) {
-          const opInfo = getOperator(op.id);
+          const opInfo = getOperator(op.id, i18nProvider);
           if (!opInfo.requiresArgument || opInfo.isVariadic) continue;
 
           suggestions.push(
@@ -257,11 +259,12 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
               col,
               op.id,
               [toHypothesisValue(numVal)],
-              baseScore + SCORING_CONFIG.BONUS.ARGUMENT_COVERAGE, // Full coverage bonus
+              baseScore * 1.0, // Full coverage (use full base score)
               undefined,
               undefined,
               undefined,
-              tokens
+              tokens,
+              i18nProvider
             )
           );
         }
@@ -275,10 +278,11 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
    * Generate suggestions for date values
    */
   private generateDateValueSuggestions(
-    dateValues: Array<{ value: Date; token: import("../../types/index.ts").Token; index: number; parsed?: import("../../date-parser.ts").ParsedDate }>,
+    dateValues: Array<{ value: Date; token: import("../../types/index.ts").Token; index: number; parsed?: import("../../types/index.ts").ParsedDate }>,
     contextAvailableValues: import("../types.ts").ContextAvailableValues | null,
     contextRowIndices: Set<number> | null,
-    tokens: import("../../types/index.ts").Token[]
+    tokens: import("../../types/index.ts").Token[],
+    i18nProvider?: import("../../types/i18n.ts").I18nProvider
   ): FilterSuggestion[] {
     const suggestions: FilterSuggestion[] = [];
     const schema = this.getSchema();
@@ -295,7 +299,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
 
       if (filteredValues.length === 0) continue;
 
-      const ops = getOperatorsForType(col.type);
+      const ops = getOperatorsForType(col.type, i18nProvider);
       const baseScore = SCORING_CONFIG.BONUS.VALUE_ONLY_BASE;
 
       // Separate date ranges from single dates
@@ -334,11 +338,13 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
             createDateSuggestion(
               col,
               betweenOp.id,
-              dateEntry.parsed,
-              baseScore + SCORING_CONFIG.BONUS.ARGUMENT_COVERAGE,
-              countForDateFilter(col.id, betweenOp.id, dateEntry.parsed, this.getData(), contextRowIndices),
+              dateEntry.parsed!,
+              baseScore * 1.0, // Full coverage
+              undefined, // Count will be computed later
               undefined,
-              matchMeta
+              matchMeta,
+              tokens,
+              i18nProvider
             )
           );
         }
@@ -347,7 +353,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
       if (nonRangeDates.length >= 2) {
         // Multiple dates: prioritize between
         for (const op of ops) {
-          const opInfo = getOperator(op.id);
+          const opInfo = getOperator(op.id, i18nProvider);
           let valuesUsed = 0;
           let suggestionArgs: import("../../types/index.ts").HypothesisValueType[] | undefined;
           let valueMatchEntries: Array<{
@@ -399,11 +405,9 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
           }
 
           if (valuesUsed > 0) {
-            const argumentCoverageBonus = Math.round(
-              (valuesUsed / nonRangeDates.length) *
-                SCORING_CONFIG.BONUS.ARGUMENT_COVERAGE
-            );
-            const adjustedScore = baseScore + argumentCoverageBonus;
+            // Coverage multiplier based on how many values were used
+            const coverageMultiplier = valuesUsed / nonRangeDates.length;
+            const adjustedScore = baseScore * (0.7 + 0.3 * coverageMultiplier);
 
             const matchMeta: import("../types.ts").MatchMetadata = {
               values: valueMatchEntries,
@@ -417,9 +421,9 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
                 adjustedScore,
                 undefined,
                 undefined,
-                undefined,
                 matchMeta,
-                tokens
+                tokens,
+                i18nProvider
               )
             );
           }
@@ -429,7 +433,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
         const dateEntry = nonRangeDates[0]!;
         const dateVal = dateEntry.value;
         for (const op of ops.slice(0, 5)) {
-          const opInfo = getOperator(op.id);
+          const opInfo = getOperator(op.id, i18nProvider);
           if (!opInfo.requiresArgument || opInfo.isVariadic) continue;
 
           const matchMeta: MatchMetadata = {
@@ -447,12 +451,12 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
               col,
               op.id,
               [toHypothesisValue(dateVal)],
-              baseScore + SCORING_CONFIG.BONUS.ARGUMENT_COVERAGE,
-              undefined,
+              baseScore * 1.0, // Full coverage
               undefined,
               undefined,
               matchMeta,
-              tokens
+              tokens,
+              i18nProvider
             )
           );
         }
@@ -469,27 +473,15 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
     col: import("../../types/index.ts").AnyColumnDefinition,
     valueMatches: PositionedValueMatch[],
     tokens: import("../../types/index.ts").Token[],
-    contextRowIndices: Set<number> | null
+    contextRowIndices: Set<number> | null,
+    i18nProvider?: import("../../types/i18n.ts").I18nProvider
   ): FilterSuggestion[] {
     const suggestions: FilterSuggestion[] = [];
-    const ops = getOperatorsForType(col.type);
+    const ops = getOperatorsForType(col.type, i18nProvider);
     const variadicOps = ops.filter((op) => {
-      const opInfo = getOperator(op.id);
+      const opInfo = getOperator(op.id, i18nProvider);
       return opInfo.isVariadic && (opInfo.minArguments ?? 1) === 1;
     });
-
-    // Use scores from the non-overlapping matches directly
-    const avgValueScore =
-      valueMatches.reduce((sum, v) => sum + v.score, 0) / valueMatches.length;
-
-    // Multi-value bonus: each additional value explained is worth more
-    const multiValueBonus = valueMatches.length * SCORING_CONFIG.BONUS.MULTI_VALUE_PER_ITEM;
-    // Coverage bonus: how much of the query tokens we've explained
-    const coverageBonus = Math.round(
-      (valueMatches.length / tokens.length) * SCORING_CONFIG.BONUS.VALUE_COVERAGE * 2
-    );
-
-    const combinedScore = avgValueScore + multiValueBonus + coverageBonus;
 
     // Build match metadata for highlighting
     const matchMeta: MatchMetadata = {
@@ -509,11 +501,12 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
           col,
           op.id,
           valueMatches.map((v) => toHypothesisValue(v.value)),
-          combinedScore,
+          0, // Score will be calculated by createSuggestion using matchMetadata
           undefined,
           undefined,
           matchMeta,
-          tokens
+          tokens,
+          i18nProvider
         )
       );
     }
@@ -527,6 +520,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
   private generateColumnMatchedMultiValueSuggestions(
     context: StrategyContext
   ): FilterSuggestion[] {
+    const i18nProvider = context.i18nProvider;
     const suggestions: FilterSuggestion[] = [];
     const {
       columnScores,
@@ -580,9 +574,9 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
 
       // Only generate multi-value suggestions if we have 2+ values
       if (aggregatedValues.length >= 2) {
-        const ops = getOperatorsForType(col.type);
+        const ops = getOperatorsForType(col.type, i18nProvider);
         const variadicOps = ops.filter((op) => {
-          const opInfo = getOperator(op.id);
+          const opInfo = getOperator(op.id, i18nProvider);
           return opInfo.isVariadic && (opInfo.minArguments ?? 1) === 1;
         });
 
@@ -590,22 +584,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
           const args: import("../../types/index.ts").HypothesisValueType[] =
             aggregatedValues.map((v) => toHypothesisValue(v.value));
 
-          // Calculate score: column score + average value scores + multi-value coverage bonus
-          const avgValueScore =
-            aggregatedValues.reduce((sum, v) => sum + v.score, 0) /
-            aggregatedValues.length;
-          const multiValueBonus =
-            aggregatedValues.length * SCORING_CONFIG.BONUS.MULTI_VALUE_PER_ITEM;
-          const nonColTokenCount = Math.max(1, tokens.length - 1); // Assume 1 token used for column
-          const valueCoverage = aggregatedValues.length / nonColTokenCount;
-          const coverageBonus = Math.round(valueCoverage * SCORING_CONFIG.BONUS.VALUE_COVERAGE * 2);
-
-          const combinedScore =
-            colEntry.breakdown.adjustedScore +
-            avgValueScore +
-            multiValueBonus +
-            coverageBonus;
-
+          // Calculate weighted score: column + average value scores
           // Build match metadata
           const matchMeta: MatchMetadata = {
             column: {
@@ -631,11 +610,12 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
               col,
               op.id,
               args,
-              combinedScore,
+              0, // Score will be calculated by createSuggestion using matchMetadata
               undefined,
               undefined,
               matchMeta,
-              tokens
+              tokens,
+              i18nProvider
             )
           );
         }
@@ -651,6 +631,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
   private generateOperatorMatchedMultiValueSuggestions(
     context: StrategyContext
   ): FilterSuggestion[] {
+    const i18nProvider = context.i18nProvider;
     const suggestions: FilterSuggestion[] = [];
     const {
       operatorScores,
@@ -689,7 +670,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
         matchIndexes: opMatchIndexes,
       },
     ] of operatorScores) {
-      const opInfo = getOperator(operator);
+      const opInfo = getOperator(operator, i18nProvider);
       const schema = this.getSchema();
       if (!schema) continue;
 
@@ -725,20 +706,6 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
           const args: import("../../types/index.ts").HypothesisValueType[] =
             aggregatedValues.map((v) => toHypothesisValue(v.value));
 
-          const avgValueScore =
-            aggregatedValues.reduce((sum, v) => sum + v.score, 0) /
-            aggregatedValues.length;
-          const multiValueBonus =
-            aggregatedValues.length * SCORING_CONFIG.BONUS.MULTI_VALUE_PER_ITEM;
-          const nonOpTokenCount = Math.max(1, tokens.length - 1);
-          const valueCoverage = aggregatedValues.length / nonOpTokenCount;
-          const coverageBonus = Math.round(
-            valueCoverage * SCORING_CONFIG.BONUS.VALUE_COVERAGE * 2
-          );
-
-          const combinedScore =
-            opBreakdown.adjustedScore + avgValueScore + multiValueBonus + coverageBonus;
-
           const matchMeta: MatchMetadata = {
             operator: {
               inputStart: opNgram.inputStart,
@@ -763,11 +730,12 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
               col,
               operator,
               args,
-              combinedScore,
+              0, // Score will be calculated by createSuggestion using matchMetadata
               undefined,
               matchedAlias,
               matchMeta,
-              tokens
+              tokens,
+              i18nProvider
             )
           );
         }

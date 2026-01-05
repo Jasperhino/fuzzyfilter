@@ -8,6 +8,7 @@ import type { Operator } from "../operators.ts";
 import type { AnyColumnDefinition } from "./schema.ts";
 import type { HypothesisValueType } from "./hypothesis.ts";
 import type { RoaringBitmap } from "./index-layer.ts";
+import type { ScoreExplanation } from "../fuzzy-filter/engine/scorer.ts";
 
 // ============================================================================
 // QUERY MATCH (for highlighting)
@@ -65,12 +66,15 @@ export interface FilterSuggestion {
      * Argument parts for display.
      * - `text`: Full value (used for completion and actual filter)
      * - `displayText`: Truncated text with ellipsis for long values (optional)
+     * - `displayMatchedIndexes`: Character indexes relative to displayText for highlighting (optional)
      */
     arguments?: { 
       /** Full value text */
       text: string; 
       /** Truncated display text with ellipsis (for long values) */
       displayText?: string;
+      /** Character indexes relative to displayText for highlighting (when displayText is used) */
+      displayMatchedIndexes?: number[];
       highlight?: boolean;
     }[];
   };
@@ -106,6 +110,8 @@ export interface FilterSuggestion {
     tokenCount: number;
     /** Total tokens in the query */
     totalTokens: number;
+    /** Adjusted score (rawScore + bonuses) */
+    adjustedScore: number;
   };
 
   /** Is this a complete filter or a suggestion template? */
@@ -129,6 +135,13 @@ export interface FilterSuggestion {
    * Useful for rendering highlighted query input.
    */
   queryMatches?: QueryMatch[];
+
+  /**
+   * Detailed per-token score breakdown for visualization.
+   * Shows how each token contributes to the final score,
+   * including coverage penalties for unexplained tokens.
+   */
+  scoreExplanation?: ScoreExplanation;
 }
 
 /**

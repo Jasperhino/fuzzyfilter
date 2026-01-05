@@ -16,24 +16,36 @@ import type {
   ColumnId,
 } from "../../types/index.ts";
 import type { ScoreBreakdown, MatchMetadata } from "../types.ts";
+import type { I18nProvider } from "../../types/i18n.ts";
 import { getOperator } from "../../operators.ts";
 import { formatDateForDisplay } from "../../date-parser.ts";
 import { SCORING_CONFIG } from "../constants.ts";
+import { calculateQueryExplanationScore } from "./scorer.ts";
 
 /**
- * Truncates a long value string to show the matched portion with ellipsis.
- * Shows context around the matched portion within a max width.
- *
+ * Result of truncating a value with ellipsis
+ */
+export interface TruncateResult {
+  /** Truncated display text with ellipsis */
+  displayText: string;
+  /** Adjusted character indexes relative to displayText (accounting for excerpt offset and ellipsis) */
+  adjustedIndexes?: number[];
+}
+
+/**
+ * Truncate a value string with ellipsis, centering around matched characters if provided.
+ * Uses a fixed 5-character padding around the match (or as much as available).
+ * 
  * @param value - The full value string
- * @param matchedIndexes - The matched character indexes (from fuzzy matching)
- * @param maxDisplayLength - Maximum display length (default: 30)
- * @returns Truncated string with ellipsis, or undefined if no truncation needed
+ * @param matchedIndexes - Optional array of character indexes that were matched (relative to full value)
+ * @param maxDisplayLength - Maximum length for the display text (default: 30)
+ * @returns TruncateResult with displayText and adjustedIndexes, or undefined if no truncation needed
  */
 export function truncateWithEllipsis(
   value: string,
   matchedIndexes?: readonly number[],
   maxDisplayLength = 30
-): string | undefined {
+): TruncateResult | undefined {
   // If value is short enough, no truncation needed
   if (value.length <= maxDisplayLength) {
     return undefined;
@@ -41,7 +53,10 @@ export function truncateWithEllipsis(
 
   // If no match indexes, truncate from the start
   if (!matchedIndexes || matchedIndexes.length === 0) {
-    return value.slice(0, maxDisplayLength - 1) + "…";
+    return {
+      displayText: value.slice(0, maxDisplayLength - 1) + "…",
+      adjustedIndexes: undefined,
+    };
   }
 
   // Find the range of matched characters
@@ -49,20 +64,31 @@ export function truncateWithEllipsis(
   const lastMatchIdx = Math.max(...matchedIndexes);
   const matchLength = lastMatchIdx - firstMatchIdx + 1;
 
-  // Calculate padding around the match
-  const availableSpace = maxDisplayLength - matchLength - 2; // Reserve space for ellipses
-  const paddingBefore = Math.floor(availableSpace / 2);
-  const paddingAfter = Math.ceil(availableSpace / 2);
-
-  // Calculate visible range
-  let start = Math.max(0, firstMatchIdx - paddingBefore);
-  let end = Math.min(value.length, lastMatchIdx + paddingAfter + 1);
-
-  // Adjust if we're near the edges
-  if (start === 0) {
-    end = Math.min(value.length, maxDisplayLength - 1);
-  } else if (end === value.length) {
-    start = Math.max(0, value.length - maxDisplayLength + 1);
+  // Use fixed 5-character padding around the match (or as much as available)
+  const paddingSize = 5;
+  const minRequiredLength = matchLength + paddingSize * 2;
+  
+  // Calculate visible range with fixed padding
+  let start = Math.max(0, firstMatchIdx - paddingSize);
+  let end = Math.min(value.length, lastMatchIdx + paddingSize + 1);
+  
+  // If we don't have enough space, prioritize showing the match
+  const currentLength = end - start;
+  if (currentLength > maxDisplayLength - 2) { // Reserve space for ellipses
+    // Try to fit within maxDisplayLength while keeping match visible
+    const availableForContent = maxDisplayLength - 2; // Reserve for ellipses
+    if (matchLength >= availableForContent) {
+      // Match is too long, just show the match
+      start = firstMatchIdx;
+      end = lastMatchIdx + 1;
+    } else {
+      // Distribute remaining space around the match
+      const remainingSpace = availableForContent - matchLength;
+      const paddingBefore = Math.min(paddingSize, Math.floor(remainingSpace / 2));
+      const paddingAfter = Math.min(paddingSize, remainingSpace - paddingBefore);
+      start = Math.max(0, firstMatchIdx - paddingBefore);
+      end = Math.min(value.length, lastMatchIdx + paddingAfter + 1);
+    }
   }
 
   // Build truncated string with ellipsis
@@ -70,14 +96,29 @@ export function truncateWithEllipsis(
   const showEndEllipsis = end < value.length;
 
   let result = value.slice(start, end);
+  let ellipsisOffset = 0;
   if (showStartEllipsis) {
     result = "…" + result;
+    ellipsisOffset = 1; // Account for leading ellipsis
   }
   if (showEndEllipsis) {
     result = result + "…";
   }
 
-  return result;
+  // Adjust matched indexes to be relative to the truncated displayText
+  const adjustedIndexes: number[] = [];
+  for (const idx of matchedIndexes) {
+    if (idx >= start && idx < end) {
+      // Map original index to position in displayText
+      const adjustedIdx = idx - start + ellipsisOffset;
+      adjustedIndexes.push(adjustedIdx);
+    }
+  }
+
+  return {
+    displayText: result,
+    adjustedIndexes: adjustedIndexes.length > 0 ? adjustedIndexes : undefined,
+  };
 }
 
 /**
@@ -112,13 +153,14 @@ export function createSuggestion(
   resultCount?: number,
   matchedAlias?: string,
   matchMetadata?: MatchMetadata,
-  queryTokens?: Token[]
+  queryTokens?: Token[],
+  i18nProvider?: I18nProvider
 ): FilterSuggestion {
-  const opInfo = getOperator(operator);
+  const opInfo = getOperator(operator, i18nProvider);
 
   // Format value text based on arguments
   let valueText = "";
-  const argumentParts: { text: string; displayText?: string; highlight?: boolean }[] = [];
+  const argumentParts: { text: string; displayText?: string; displayMatchedIndexes?: number[]; highlight?: boolean }[] = [];
 
   if (args && args.length > 0) {
     const formattedValues = args
@@ -144,8 +186,12 @@ export function createSuggestion(
       const val = formattedValues[i]!;
       // Find the matching value in matchMetadata (if available)
       const valueMatch = matchMetadata?.values?.find((v) => v.matchedTarget === val);
-      const displayText = truncateWithEllipsis(val, valueMatch?.matchIndexes);
-      argumentParts.push({ text: val, displayText });
+      const truncateResult = truncateWithEllipsis(val, valueMatch?.matchIndexes);
+      argumentParts.push({ 
+        text: val, 
+        displayText: truncateResult?.displayText,
+        displayMatchedIndexes: truncateResult?.adjustedIndexes,
+      });
     }
   }
 
@@ -159,73 +205,24 @@ export function createSuggestion(
     ? `${column.name} ${operator} "${valueText}"`
     : `${column.name} ${operator} `;
 
-  // Handle both plain score and breakdown
-  const isBreakdown = typeof scoreOrBreakdown === "object";
-  let score = isBreakdown ? scoreOrBreakdown.adjustedScore : scoreOrBreakdown;
-
-  // Calculate token coverage bonus
-  // Using more tokens from the query should give a bonus
-  // This is proportional and capped so it doesn't override match quality
+  // Calculate query explanation score using the new centralized scorer
+  // This replaces the old scattered scoring logic with a unified "how well does this explain the query?" approach
+  let score: number;
+  let scoreExplanation: import("./scorer.ts").ScoreExplanation | undefined;
+  
   if (queryTokens && queryTokens.length > 0 && matchMetadata) {
-    const coveredTokenIndices = new Set<number>();
-
-    // Helper to mark tokens as covered based on character range
-    const markCoveredTokens = (inputStart: number, inputEnd: number) => {
-      for (let i = 0; i < queryTokens!.length; i++) {
-        const token = queryTokens![i]!;
-        // A token is covered if its range overlaps with the match range
-        if (token.start < inputEnd && token.end > inputStart) {
-          coveredTokenIndices.add(i);
-        }
-      }
-    };
-
-    // Mark tokens covered by column match
-    if (matchMetadata.column) {
-      markCoveredTokens(matchMetadata.column.inputStart, matchMetadata.column.inputEnd);
-    }
-
-    // Mark tokens covered by operator match
-    if (matchMetadata.operator) {
-      markCoveredTokens(matchMetadata.operator.inputStart, matchMetadata.operator.inputEnd);
-    }
-
-    // Mark tokens covered by value matches
-    if (matchMetadata.values) {
-      for (const val of matchMetadata.values) {
-        markCoveredTokens(val.inputStart, val.inputEnd);
-      }
-    }
-
-    // For suggestions with detected numeric/date values (not string values from index),
-    // mark the value tokens as covered if we have arguments
-    if (args && args.length > 0) {
-      for (const arg of args) {
-        if (arg.kind === "number" || arg.kind === "date") {
-          // Find the token that matches this value
-          const valueStr = arg.kind === "number" ? String(arg.value) : "";
-          for (let i = 0; i < queryTokens.length; i++) {
-            const token = queryTokens[i]!;
-            // Check if this token represents the numeric value
-            if (arg.kind === "number" && token.text === valueStr) {
-              coveredTokenIndices.add(i);
-            }
-            // For dates, check if the token could be part of a date expression
-            if (arg.kind === "date" && !isNaN(parseFloat(token.text))) {
-              coveredTokenIndices.add(i);
-            }
-          }
-        }
-      }
-    }
-
-    // Calculate token coverage bonus (proportional, max TOKEN_COVERAGE for full coverage)
-    // This is a PRIMARY ranking factor - suggestions that explain more of the query
-    // should score significantly higher than those that leave tokens unexplained.
-    const coverageRatio = coveredTokenIndices.size / queryTokens.length;
-    const tokenCoverageBonus = Math.round(coverageRatio * SCORING_CONFIG.BONUS.TOKEN_COVERAGE);
-    score += tokenCoverageBonus;
+    // Use the new query explanation scoring system
+    const result = calculateQueryExplanationScore(matchMetadata, queryTokens, args);
+    score = result.score;
+    scoreExplanation = result.explanation;
+  } else {
+    // Fallback: if no matchMetadata or tokens, use the passed score
+    const isBreakdownFallback = typeof scoreOrBreakdown === "object";
+    score = isBreakdownFallback ? scoreOrBreakdown.adjustedScore : scoreOrBreakdown;
   }
+  
+  // Handle score breakdown for backward compatibility (if needed)
+  const isBreakdown = typeof scoreOrBreakdown === "object";
 
   const scoreBreakdown = isBreakdown
     ? {
@@ -236,6 +233,7 @@ export function createSuggestion(
         exactMatchBonus: scoreOrBreakdown.exactMatchBonus,
         tokenCount: scoreOrBreakdown.tokenCount,
         totalTokens: scoreOrBreakdown.totalTokens,
+        adjustedScore: scoreOrBreakdown.adjustedScore,
       }
     : undefined;
 
@@ -321,6 +319,7 @@ export function createSuggestion(
           ? "exact"
           : "fuzzy",
     queryMatches: queryMatches.length > 0 ? queryMatches : undefined,
+    scoreExplanation,
   };
 }
 
@@ -330,10 +329,12 @@ export function createSuggestion(
  * @param column - The column definition
  * @param operator - The operator
  * @param parsedDate - The parsed date information
- * @param score - The suggestion score
+ * @param score - The suggestion score (fallback if no matchMetadata/tokens)
  * @param resultCount - Optional pre-computed result count
  * @param customLabel - Optional custom label for the date
  * @param matchMetadata - Optional metadata for highlighting
+ * @param queryTokens - Optional query tokens for score calculation
+ * @param i18nProvider - Optional i18n provider
  * @returns A FilterSuggestion object
  */
 export function createDateSuggestion(
@@ -343,9 +344,11 @@ export function createDateSuggestion(
   score: number,
   resultCount?: number,
   customLabel?: string,
-  matchMetadata?: MatchMetadata
+  matchMetadata?: MatchMetadata,
+  queryTokens?: Token[],
+  i18nProvider?: I18nProvider
 ): FilterSuggestion {
-  const opInfo = getOperator(operator);
+  const opInfo = getOperator(operator, i18nProvider);
 
   // For date ranges with variadic operators, show both dates
   const isRangeOperator = opInfo.isVariadic && parsedDate.rangeStart && parsedDate.rangeEnd;
@@ -379,6 +382,19 @@ export function createDateSuggestion(
         { text: formatDateForDisplay(parsedDate.rangeEnd!) },
       ]
     : [{ text: displayDate }];
+
+  // Calculate query explanation score using the centralized scorer
+  let finalScore: number;
+  let scoreExplanation: import("./scorer.ts").ScoreExplanation | undefined;
+
+  if (queryTokens && queryTokens.length > 0 && matchMetadata) {
+    const result = calculateQueryExplanationScore(matchMetadata, queryTokens, args);
+    finalScore = result.score;
+    scoreExplanation = result.explanation;
+  } else {
+    // Fallback: use the passed score
+    finalScore = score;
+  }
 
   // Build queryMatches array from match metadata
   const queryMatches: QueryMatch[] = [];
@@ -441,12 +457,13 @@ export function createDateSuggestion(
     // Defer count computation to post-processing (lazy evaluation)
     // Use -1 as placeholder; counts are computed only for final suggestions
     resultCount: resultCount ?? -1,
-    score,
+    score: finalScore,
     isComplete: true,
     completionText,
     cursorPositionAfter: completionText.length,
     category: "fuzzy",
     queryMatches: queryMatches.length > 0 ? queryMatches : undefined,
+    scoreExplanation,
   };
 }
 

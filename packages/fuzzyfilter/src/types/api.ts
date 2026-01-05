@@ -19,6 +19,7 @@ import type {
   FilterResult,
   CountOptions,
 } from "./results.ts";
+import type { I18nProvider } from "./i18n.ts";
 
 // ============================================================================
 // MAIN FUZZY FILTER INTERFACE
@@ -54,6 +55,9 @@ export interface FuzzyFilterConfig {
 
   /** Enable debug logging */
   debug: boolean;
+
+  /** Optional i18n provider for translations. If not provided, uses default English provider. */
+  i18nProvider?: I18nProvider;
 }
 
 /**
@@ -61,13 +65,12 @@ export interface FuzzyFilterConfig {
  */
 export const DEFAULT_CONFIG: FuzzyFilterConfig = {
   maxSuggestions: 10,
-  minScore: -10000, // fuzzysort uses negative scores, higher = better
+  minScore: 0.1,
   scoringWeights: {
     column: 0.4,
     operator: 0.35,
     arguments: 0.25,
     orderBonus: 0.1,
-    inferredPenalty: 0.15,
     completenessBonus: 0.2,
   },
   hypothesisOptions: {
@@ -82,7 +85,7 @@ export const DEFAULT_CONFIG: FuzzyFilterConfig = {
   enableCache: true,
   maxCacheSize: 1000,
   debounceMs: 150,
-  debug: false,
+  debug: true,
 } as const;
 
 /**

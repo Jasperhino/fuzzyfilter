@@ -2771,3 +2771,38 @@ describe("Non-overlapping ngram value aggregation", () => {
   });
 });
 
+describe("Scoring Investigation", () => {
+  test("matched column should score higher than unmatched column with spurious value match", async () => {
+    const filter = createFuzzyFilter({ 
+      maxSuggestions: 20
+    });
+    
+    filter.setSchema(TASK_SCHEMA);
+    
+    const testData = createSeededGenerator(SAMPLE_DATA_SEED)(50);
+    filter.indexData(testData);
+    
+    // Test: "priority lt 3" - "3" can fuzzy-match date strings like "2024-06-30"
+    // Without the fix, Created suggestions could score higher than Priority
+    const response = await filter.suggest("priority lt 3");
+    
+    console.log("\n=== Suggestions for 'priority lt 3' ===");
+    for (const s of response.suggestions.slice(0, 10)) {
+      console.log(`${s.label} | Score: ${s.score.toFixed(4)} | Column: ${s.column.name}`);
+    }
+    
+    const prioritySuggestions = response.suggestions.filter(s => s.column.name === "Priority");
+    const createdSuggestions = response.suggestions.filter(s => s.column.name === "Created");
+    
+    expect(prioritySuggestions.length).toBeGreaterThan(0);
+    
+    if (createdSuggestions.length > 0) {
+      const topPriorityScore = prioritySuggestions[0]!.score;
+      const topCreatedScore = createdSuggestions[0]!.score;
+      
+      console.log(`Top Priority: ${topPriorityScore.toFixed(4)}, Top Created: ${topCreatedScore.toFixed(4)}`);
+      
+      expect(topPriorityScore).toBeGreaterThan(topCreatedScore);
+    }
+  });
+});

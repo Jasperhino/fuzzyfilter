@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "fuzzyfilter/types/i18n": ["../fuzzyfilter/src/types/i18n.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

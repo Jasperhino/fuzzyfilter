@@ -17,8 +17,8 @@ import { SpreadPatternStrategy } from "../strategies/spread-pattern.ts";
 import { NgramMatchStrategy } from "../strategies/ngram-match.ts";
 import { ValueInferenceStrategy } from "../strategies/value-inference.ts";
 import { generateNgrams } from "./ngrams.ts";
-import { adjustScoreForCoverage } from "./scorer.ts";
-import { SCORING_CONFIG } from "../constants.ts";
+import { adjustScoreForCoverage, calculateSmartScore } from "./scorer.ts";
+import { SCORING_CONFIG, SCORING_WEIGHTS } from "../constants.ts";
 import { getAllOperators } from "../../operators.ts";
 import { countForFilter, countForDateFilter } from "./suggestion-helpers.ts";
 import { computeFilterContext } from "../state.ts";
@@ -42,6 +42,8 @@ interface BuildContextOptions {
 function buildStrategyContext(options: BuildContextOptions): StrategyContext {
   const { tokens, parsed, contextRowIndices, contextAvailableValues, state } = options;
   const ngrams = generateNgrams(tokens);
+  
+  // Include i18nProvider in context for strategies to use
 
   // Track best matches to avoid duplicates (keep best score)
   const columnScores = new Map<string, ColumnScoreEntry>();
@@ -53,17 +55,32 @@ function buildStrategyContext(options: BuildContextOptions): StrategyContext {
     // Column matches
     const colMatches = state.columnTrie.fuzzySearch(ngram.text, 5);
     for (const match of colMatches) {
-      const key = match.value.id as string;
-      const breakdown = adjustScoreForCoverage(
-        match.score,
-        ngram,
-        match.value.name.length,
-        match.key // Pass matched key for exact match detection
+      // NEW: Use smart scoring
+      const score = calculateSmartScore(
+        match.score, 
+        match.indexes, 
+        match.value.name
       );
+      
+      // Filter noise immediately
+      if (score < SCORING_WEIGHTS.THRESHOLD) continue;
+
+      const key = match.value.id as string;
       const existing = columnScores.get(key);
-      if (!existing || breakdown.adjustedScore > existing.breakdown.adjustedScore) {
+      
+      if (!existing || score > existing.breakdown.adjustedScore) {
+        // Store the smart 0-1 score in breakdown.adjustedScore for now (backward compat)
+        // TODO: Refactor to use simple number score
         columnScores.set(key, {
-          breakdown,
+          breakdown: {
+            rawScore: match.score,
+            coverageBonus: 0,
+            completenessBonus: 0,
+            fullQueryBonus: 0,
+            tokenCount: ngram.tokenCount,
+            totalTokens: ngram.totalTokens,
+            adjustedScore: score,
+          },
           ngram,
           matchedTarget: match.value.name,
           matchIndexes: match.indexes,
@@ -75,26 +92,36 @@ function buildStrategyContext(options: BuildContextOptions): StrategyContext {
     const opMatches = state.operatorTrie.fuzzySearch(ngram.text, 5);
     for (const match of opMatches) {
       const opEntry = match.value;
-      const opInfo = getAllOperators().find((op) => op.id === opEntry.operator);
+      const opInfo = getAllOperators(state.i18nProvider).find((op) => op.id === opEntry.operator);
       if (!opInfo) continue;
 
-      // Use the longer of id or label for target length
-      const targetLength = Math.max(opInfo.id.length, opInfo.label.length);
-      const breakdown = adjustScoreForCoverage(
+      // Use the matched alias/key as target text for smart scoring
+      const targetText = match.key || opInfo.label;
+      const score = calculateSmartScore(
         match.score,
-        ngram,
-        targetLength,
-        match.key // Pass matched key for exact match detection
+        match.indexes,
+        targetText
       );
+      
+      // Filter noise immediately
+      if (score < SCORING_WEIGHTS.THRESHOLD) continue;
 
       // Store with type restriction info and matched alias
       const key = opEntry.forType
         ? `${opEntry.operator}:${opEntry.forType}`
         : opEntry.operator;
       const existing = operatorScores.get(key);
-      if (!existing || breakdown.adjustedScore > existing.breakdown.adjustedScore) {
+      if (!existing || score > existing.breakdown.adjustedScore) {
         operatorScores.set(key, {
-          breakdown,
+          breakdown: {
+            rawScore: match.score,
+            coverageBonus: 0,
+            completenessBonus: 0,
+            fullQueryBonus: 0,
+            tokenCount: ngram.tokenCount,
+            totalTokens: ngram.totalTokens,
+            adjustedScore: score,
+          },
           operator: opEntry.operator,
           matchedAlias: match.key, // Track the actual alias that was matched
           forType: opEntry.forType,
@@ -115,17 +142,30 @@ function buildStrategyContext(options: BuildContextOptions): StrategyContext {
       : valMatchesRaw;
     for (const match of valMatches) {
       const key = `${match.value.columnId}:${match.value.value}`;
-      const breakdown = adjustScoreForCoverage(
+      
+      // NEW: Use smart scoring
+      const score = calculateSmartScore(
         match.score,
-        ngram,
-        match.value.value.length,
-        match.key // Pass matched key for exact match detection
+        match.indexes,
+        match.value.value
       );
+      
+      // Filter noise immediately
+      if (score < SCORING_WEIGHTS.THRESHOLD) continue;
+      
       const existing = valueScores.get(key);
-      if (!existing || breakdown.adjustedScore > existing.breakdown.adjustedScore) {
+      if (!existing || score > existing.breakdown.adjustedScore) {
         // Store the source token text to track which token matched this value
         valueScores.set(key, {
-          breakdown,
+          breakdown: {
+            rawScore: match.score,
+            coverageBonus: 0,
+            completenessBonus: 0,
+            fullQueryBonus: 0,
+            tokenCount: ngram.tokenCount,
+            totalTokens: ngram.totalTokens,
+            adjustedScore: score,
+          },
           match: { ...match, indexes: match.indexes },
           sourceTokenText: ngram.text,
           ngram,
@@ -189,6 +229,7 @@ function buildStrategyContext(options: BuildContextOptions): StrategyContext {
     ngrams,
     contextRowIndices,
     contextAvailableValues,
+    i18nProvider: state.i18nProvider,
     columnScores,
     operatorScores,
     valueScores,

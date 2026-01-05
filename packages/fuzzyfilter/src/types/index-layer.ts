@@ -173,6 +173,9 @@ export interface Trie<T> {
   /** Get all entries */
   entries(): Array<{ key: string; value: T }>;
 
+  /** Clear all entries from the trie */
+  clear(): void;
+
   /** Number of entries */
   readonly size: number;
 }

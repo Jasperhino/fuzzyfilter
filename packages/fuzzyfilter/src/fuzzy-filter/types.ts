@@ -13,6 +13,7 @@ import type {
   CompiledFilter,
   FilterSuggestion,
 } from "../types/index.ts";
+import type { I18nProvider } from "../types/i18n.ts";
 import { DataType } from "../types/index.ts";
 
 /**
@@ -47,6 +48,8 @@ export interface FuzzyFilterState {
   dataVersion: number;
   /** LRU cache for filter context results */
   contextCache: Map<string, CachedContextResult>;
+  /** i18n provider for translations */
+  i18nProvider: I18nProvider;
 }
 
 /**
@@ -173,6 +176,7 @@ export interface SuggestionContext {
   ngrams: NgramWithMeta[];
   contextRowIndices: Set<number> | null;
   contextAvailableValues: ContextAvailableValues | null;
+  i18nProvider: I18nProvider;
 }
 
 /**

@@ -278,7 +278,7 @@ export function validateInput(
   if (!parsed.operator) {
     errors.push("No operator specified");
   } else {
-    const opInfo = getOperator(parsed.operator.match.operator);
+    const opInfo = getOperator(parsed.operator.match.operator, state.i18nProvider);
     if (opInfo.requiresArgument && !parsed.value) {
       errors.push(`Operator '${opInfo.label}' requires a value`);
     }
