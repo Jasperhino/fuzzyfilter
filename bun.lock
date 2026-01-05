@@ -141,6 +141,7 @@
         "roaring": "^2.6.0",
       },
       "devDependencies": {
+        "@fuzzyfilter/axiom-exporter": "workspace:*",
         "@fuzzyfilter/sample-data": "workspace:*",
         "mitata": "^1.0.10",
       },

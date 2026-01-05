@@ -39,7 +39,8 @@
   "scripts": {
     "test": "bun test",
     "bench": "bun run src/benchmark.ts",
-    "bench:profile": "bun --cpu-prof run src/benchmark.ts"
+    "bench:profile": "bun --cpu-prof run src/benchmark.ts",
+    "bench:otel": "bun run src/benchmark-otel.ts"
   },
   "dependencies": {
     "fuzzysort": "^3.1.0",
@@ -47,6 +48,7 @@
     "roaring": "^2.6.0"
   },
   "devDependencies": {
+    "@fuzzyfilter/axiom-exporter": "workspace:*",
     "@fuzzyfilter/sample-data": "workspace:*",
     "mitata": "^1.0.10"
   },

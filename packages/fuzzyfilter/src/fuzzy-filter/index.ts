@@ -116,6 +116,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     // Initialize suggestion engine
     this.suggestionEngine = new SuggestionEngine(this.state, {
       maxSuggestions: this._config.maxSuggestions,
+      benchmark: this._config.benchmark,
     });
 
     // Subscribe to language changes if provider supports it
@@ -303,6 +304,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     // Update suggestion engine config
     this.suggestionEngine = new SuggestionEngine(this.state, {
       maxSuggestions: this._config.maxSuggestions,
+      benchmark: this._config.benchmark,
     });
   }
 
@@ -373,7 +375,8 @@ export class FuzzyFilterImpl implements FuzzyFilter {
         return;
       }
 
-      // Count values per column
+      // Phase 1: Count values per column
+      const endCounting = event.startPhase("value_counting_ms");
       const valueCounts = new Map<string, Map<string, number>>();
 
       for (const col of getColumns(this.state.schema)) {
@@ -390,19 +393,30 @@ export class FuzzyFilterImpl implements FuzzyFilter {
           counts.set(strValue, (counts.get(strValue) ?? 0) + 1);
         }
       }
+      endCounting();
 
-      // Build value trie
-      // Limit indexed values per column to top 100 most frequent for performance
+      // Phase 2: Sort values by frequency
+      const endSorting = event.startPhase("value_sorting_ms");
       const MAX_VALUES_PER_COLUMN = 100;
+      const sortedValuesMap = new Map<string, Array<[string, number]>>();
+      const cardinalityPerColumn: Record<string, number> = {};
 
       for (const col of getColumns(this.state.schema)) {
         const counts = valueCounts.get(col.id as string)!;
-
+        cardinalityPerColumn[col.id as string] = counts.size;
+        
         // Sort values by frequency and take top N
         const sortedValues = [...counts.entries()]
           .sort((a, b) => b[1] - a[1])
           .slice(0, MAX_VALUES_PER_COLUMN);
+        sortedValuesMap.set(col.id as string, sortedValues);
+      }
+      endSorting();
 
+      // Phase 3: Build value trie
+      const endTrieBuild = event.startPhase("trie_building_ms");
+      for (const col of getColumns(this.state.schema)) {
+        const sortedValues = sortedValuesMap.get(col.id as string)!;
         for (const [value, count] of sortedValues) {
           // Insert value with metadata into trie
           this.state.valueTrie.insert(value, {
@@ -412,15 +426,21 @@ export class FuzzyFilterImpl implements FuzzyFilter {
           });
         }
       }
+      endTrieBuild();
       
-      // Add translated enum values to the trie
+      // Phase 4: Add translated enum values to the trie
+      const endTranslation = event.startPhase("translation_insert_ms");
       this.addTranslatedValuesToTrie();
+      endTranslation();
       
       event.merge({
         result: {
           columns_indexed: this.state.schema.columns.size,
           unique_values: this.state.valueTrie.size,
         },
+        phases: event.getPhases() as import("../telemetry/index.ts").IndexDataPhases,
+        trie_node_count: this.state.valueTrie.size,
+        cardinality_per_column: cardinalityPerColumn,
       });
       event.success();
     } catch (error) {
@@ -643,8 +663,11 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     
     try {
       this.state.data.push(row);
-      // Re-index to update value counts
+      // Re-index to update value counts and track reindex time
+      const reindexStart = performance.now();
       this.indexData(this.state.data);
+      const reindexDuration = performance.now() - reindexStart;
+      event.set("reindex_duration_ms", Math.round(reindexDuration * 100) / 100);
       event.success();
     } catch (error) {
       event.recordError(error instanceof Error ? error : String(error));
@@ -674,8 +697,11 @@ export class FuzzyFilterImpl implements FuzzyFilter {
         return;
       }
       this.state.data.splice(index, 1);
-      // Re-index to update value counts
+      // Re-index to update value counts and track reindex time
+      const reindexStart = performance.now();
       this.indexData(this.state.data);
+      const reindexDuration = performance.now() - reindexStart;
+      event.set("reindex_duration_ms", Math.round(reindexDuration * 100) / 100);
       event.success();
     } catch (error) {
       event.recordError(error instanceof Error ? error : String(error));
@@ -693,8 +719,11 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       const removedCount = previousCount - this.state.data.length;
       
       if (removedCount > 0) {
-        // Re-index to update value counts
+        // Re-index to update value counts and track reindex time
+        const reindexStart = performance.now();
         this.indexData(this.state.data);
+        const reindexDuration = performance.now() - reindexStart;
+        event.set("reindex_duration_ms", Math.round(reindexDuration * 100) / 100);
       }
       
       event.set("mutation", {
@@ -799,6 +828,17 @@ export class FuzzyFilterImpl implements FuzzyFilter {
         categories,
       });
       
+      // Add phase timing and strategy data if available
+      if (response.phaseTiming) {
+        event.set("phases", response.phaseTiming as import("../telemetry/index.ts").SuggestPhases);
+      }
+      if (response.strategyTimings) {
+        event.set("strategies", response.strategyTimings as import("../telemetry/index.ts").StrategyTiming[]);
+      }
+      if (response.cacheMetrics) {
+        event.set("cache", response.cacheMetrics as import("../telemetry/index.ts").CacheMetrics);
+      }
+      
       event.success();
       
       return response;
@@ -833,9 +873,12 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       const parsed = this.parse(input);
       const result = compileFromParsed(parsed, (id) => this.getColumn(id));
       
+      // Get column type by looking up the column from the result's columnId
+      const column = result ? this.getColumn(result.columnId) : null;
+      
       event.set("result", {
         success: result !== null,
-        column_type: result?.column.type,
+        column_type: column?.type,
       });
       event.success();
       

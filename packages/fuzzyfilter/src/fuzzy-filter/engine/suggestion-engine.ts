@@ -4,7 +4,7 @@
  * Orchestrates all suggestion strategies, handles deduplication, ranking, and limiting.
  */
 
-import type { FilterSuggestion, SuggestionResponse, Token } from "../../types/index.ts";
+import type { FilterSuggestion, SuggestionResponse, Token, SuggestionStrategyTiming, SuggestionPhaseTiming } from "../../types/index.ts";
 import type { SuggestionStrategy, StrategyContext } from "../strategies/interface.ts";
 import type {
   FuzzyFilterState,
@@ -249,7 +249,7 @@ export class SuggestionEngine {
 
   constructor(
     private state: FuzzyFilterState,
-    private config: { maxSuggestions: number }
+    private config: { maxSuggestions: number; benchmark?: boolean }
   ) {
     this.strategies = [
       new EmptyQueryStrategy(() => this.state.schema),
@@ -284,7 +284,13 @@ export class SuggestionEngine {
     tokenizeFn: (input: string) => { tokens: Token[] }
   ): SuggestionResponse {
     const startTime = performance.now();
+    const benchmark = this.config.benchmark ?? false;
     const suggestions: FilterSuggestion[] = [];
+    
+    // Phase timing (only allocate when benchmarking)
+    const phases: Partial<SuggestionPhaseTiming> = {};
+    const strategyTimings: SuggestionStrategyTiming[] = [];
+    let cacheHit = false;
 
     if (!this.state.schema) {
       return {
@@ -296,17 +302,31 @@ export class SuggestionEngine {
       };
     }
 
-    // Compute filter context
+    // Phase: Tokenize
+    let phaseStart = benchmark ? performance.now() : 0;
+    const parsed = parseFn(query);
+    const { tokens } = tokenizeFn(query);
+    if (benchmark) {
+      phases.tokenize_ms = Math.round((performance.now() - phaseStart) * 100) / 100;
+    }
+
+    // Phase: Compute filter context
+    phaseStart = benchmark ? performance.now() : 0;
+    const cacheKeyBefore = this.state.contextCache.size;
     const [contextRowIndices, contextAvailableValues] =
       filterContext && filterContext.length > 0
         ? computeFilterContext(this.state, filterContext)
         : [null, null];
+    if (benchmark) {
+      phases.filter_context_ms = Math.round((performance.now() - phaseStart) * 100) / 100;
+      // Check if cache was hit (size didn't change means hit)
+      cacheHit = filterContext && filterContext.length > 0 
+        ? this.state.contextCache.size === cacheKeyBefore 
+        : false;
+    }
 
-    // Parse input
-    const parsed = parseFn(query);
-    const { tokens } = tokenizeFn(query);
-
-    // Build strategy context with n-gram matching
+    // Phase: Build strategy context with n-gram matching (includes trie searches)
+    phaseStart = benchmark ? performance.now() : 0;
     const strategyContext = buildStrategyContext({
       query,
       tokens,
@@ -315,12 +335,26 @@ export class SuggestionEngine {
       contextAvailableValues,
       state: this.state,
     });
+    if (benchmark) {
+      phases.trie_search_ms = Math.round((performance.now() - phaseStart) * 100) / 100;
+    }
 
-    // Execute strategies
+    // Phase: Execute strategies
+    phaseStart = benchmark ? performance.now() : 0;
     const suggestionIds = new Set<string>();
     for (const strategy of this.strategies) {
       if (strategy.canHandle(strategyContext)) {
+        const strategyStart = benchmark ? performance.now() : 0;
         const results = strategy.generate(strategyContext);
+        
+        if (benchmark) {
+          strategyTimings.push({
+            strategy: strategy.constructor.name,
+            duration_ms: Math.round((performance.now() - strategyStart) * 100) / 100,
+            suggestions_generated: results.length,
+          });
+        }
+        
         for (const res of results) {
           if (!suggestionIds.has(res.id)) {
             suggestions.push(res);
@@ -329,8 +363,12 @@ export class SuggestionEngine {
         }
       }
     }
+    if (benchmark) {
+      phases.strategy_execution_ms = Math.round((performance.now() - phaseStart) * 100) / 100;
+    }
 
-    // Deduplicate by ID (keep highest score)
+    // Phase: Deduplicate by ID (keep highest score)
+    phaseStart = benchmark ? performance.now() : 0;
     const uniqueSuggestions = new Map<string, FilterSuggestion>();
     for (const suggestion of suggestions) {
       const existing = uniqueSuggestions.get(suggestion.id);
@@ -338,16 +376,24 @@ export class SuggestionEngine {
         uniqueSuggestions.set(suggestion.id, suggestion);
       }
     }
+    if (benchmark) {
+      phases.deduplication_ms = Math.round((performance.now() - phaseStart) * 100) / 100;
+    }
 
-    // Sort by score (higher = better)
+    // Phase: Sort by score (higher = better)
+    phaseStart = benchmark ? performance.now() : 0;
     const sortedSuggestions = Array.from(uniqueSuggestions.values()).sort(
       (a, b) => b.score - a.score
     );
 
     // Limit results
     const limitedSuggestions = sortedSuggestions.slice(0, this.config.maxSuggestions);
+    if (benchmark) {
+      phases.sorting_ms = Math.round((performance.now() - phaseStart) * 100) / 100;
+    }
 
-    // Compute result counts only for the final limited suggestions (lazy evaluation)
+    // Phase: Compute result counts only for the final limited suggestions (lazy evaluation)
+    phaseStart = benchmark ? performance.now() : 0;
     for (const suggestion of limitedSuggestions) {
       if (suggestion.resultCount === -1) {
         // Check if this is a date filter based on arguments
@@ -397,8 +443,11 @@ export class SuggestionEngine {
         }
       }
     }
+    if (benchmark) {
+      phases.count_calculation_ms = Math.round((performance.now() - phaseStart) * 100) / 100;
+    }
 
-    return {
+    const response: SuggestionResponse = {
       query,
       cursorPosition: cursorPosition ?? query.length,
       suggestions: limitedSuggestions,
@@ -414,5 +463,17 @@ export class SuggestionEngine {
               : "fullParse",
       },
     };
+    
+    // Add benchmark data if enabled
+    if (benchmark) {
+      response.phaseTiming = phases as SuggestionPhaseTiming;
+      response.strategyTimings = strategyTimings;
+      response.cacheMetrics = {
+        context_cache_hit: cacheHit,
+        context_cache_size: this.state.contextCache.size,
+      };
+    }
+
+    return response;
   }
 }

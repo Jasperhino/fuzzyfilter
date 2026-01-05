@@ -37,6 +37,7 @@ export type {
   WideEventCallback,
   TelemetryCollector,
   TelemetryConfig,
+  TelemetrySummary,
 
   // Context types
   SchemaContext,
@@ -45,6 +46,13 @@ export type {
   SuggestionResultContext,
   IndexingContext,
   ProgressContext,
+
+  // Phase timing types
+  IndexDataPhases,
+  SuggestPhases,
+  StrategyTiming,
+  CacheMetrics,
+  HistogramStats,
 
   // Specific event types
   SetSchemaEvent,

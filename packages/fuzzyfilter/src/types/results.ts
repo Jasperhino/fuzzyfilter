@@ -164,6 +164,31 @@ export interface SuggestionGroup {
 // ============================================================================
 
 /**
+ * Strategy timing information for telemetry
+ */
+export interface SuggestionStrategyTiming {
+  /** Strategy name */
+  strategy: string;
+  /** Duration in ms */
+  duration_ms: number;
+  /** Number of suggestions generated */
+  suggestions_generated: number;
+}
+
+/**
+ * Internal phase timings from suggestion engine
+ */
+export interface SuggestionPhaseTiming {
+  tokenize_ms: number;
+  filter_context_ms: number;
+  trie_search_ms: number;
+  strategy_execution_ms: number;
+  deduplication_ms: number;
+  sorting_ms: number;
+  count_calculation_ms: number;
+}
+
+/**
  * Complete response from the suggestion engine
  */
 export interface SuggestionResponse {
@@ -189,6 +214,18 @@ export interface SuggestionResponse {
   parseInfo?: {
     tokens: string[];
     dominantStrategy: string;
+  };
+
+  /** Phase timings for telemetry (only when benchmarking enabled) */
+  phaseTiming?: SuggestionPhaseTiming;
+
+  /** Per-strategy timings for telemetry (only when benchmarking enabled) */
+  strategyTimings?: SuggestionStrategyTiming[];
+
+  /** Cache metrics for telemetry */
+  cacheMetrics?: {
+    context_cache_hit: boolean;
+    context_cache_size: number;
   };
 }
 

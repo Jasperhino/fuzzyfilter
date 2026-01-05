@@ -57,6 +57,9 @@ onMounted(() => {
   filter.setSchema(TASK_SCHEMA)
   filter.indexData(INITIAL_DATASET)
   
+  // Trigger reactivity update so filteredData re-evaluates
+  dataVersion.value++
+  
   // Attach Axiom telemetry exporter if configured
   // Set VITE_AXIOM_API_KEY and VITE_AXIOM_DATASET environment variables to enable
   attachAxiomExporter(filter.getTelemetry())
