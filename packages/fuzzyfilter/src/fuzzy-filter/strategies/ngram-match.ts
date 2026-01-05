@@ -326,11 +326,11 @@ export class NgramMatchStrategy implements SuggestionStrategy {
             }
             return (a as number) - (b as number);
           });
-          suggestionArgs = sorted.map(toHypothesisValue);
+          suggestionArgs = sorted.map((val) => toHypothesisValue(val));
         } else {
           // Operators like "in"/"nin" that accept any number of values
           valuesUsed = compatibleValues.length;
-          suggestionArgs = compatibleValues.map(toHypothesisValue);
+          suggestionArgs = compatibleValues.map((val) => toHypothesisValue(val));
         }
       } else if (opInfo.requiresArgument) {
         // Single-value operator - uses first value
@@ -761,7 +761,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                       }
                       return (a as number) - (b as number);
                     });
-                    suggestionArgs = sorted.map(toHypothesisValue);
+                    suggestionArgs = sorted.map((val) => toHypothesisValue(val));
                   } else if (compatibleValues.length === 1) {
                     valuesUsed = 1;
                     suggestionArgs = [toHypothesisValue(compatibleValues[0]!)];
@@ -769,7 +769,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 } else {
                   // Operators like "in"/"nin" that accept any number of values (min 1)
                   valuesUsed = compatibleValues.length;
-                  suggestionArgs = compatibleValues.map(toHypothesisValue);
+                  suggestionArgs = compatibleValues.map((val) => toHypothesisValue(val));
                 }
               } else {
                 // Single-value operator - uses first value

@@ -6,6 +6,12 @@
  * compilation, parsing, and state management.
  */
 
+// Type declaration for requestIdleCallback (browser API, not available in Node.js)
+declare function requestIdleCallback(
+  callback: (deadline: { didTimeout: boolean; timeRemaining: () => number }) => void,
+  options?: { timeout: number }
+): number;
+
 import type {
   FuzzyFilter,
   FuzzyFilterConfig,
@@ -341,7 +347,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     return this.state.schema;
   }
 
-  getColumn(id: ColumnId | string): import("../../types/index.ts").AnyColumnDefinition | null {
+  getColumn(id: ColumnId | string): import("../types/index.ts").AnyColumnDefinition | null {
     if (!this.state.schema) return null;
     return getColumn(this.state.schema, id);
   }
@@ -438,7 +444,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
           columns_indexed: this.state.schema.columns.size,
           unique_values: this.state.valueTrie.size,
         },
-        phases: event.getPhases() as import("../telemetry/index.ts").IndexDataPhases,
+        phases: event.getPhases() as unknown as import("../telemetry/index.ts").IndexDataPhases,
         trie_node_count: this.state.valueTrie.size,
         cardinality_per_column: cardinalityPerColumn,
       });
@@ -586,10 +592,11 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       // Handle enum columns with translated value keys
       if (col.type === DataType.ENUM && "valueKeys" in col && col.valueKeys) {
         const enumCol = col as import("../types/index.ts").EnumColumnDefinition;
+        const valueKeys = enumCol.valueKeys!;
         
         for (let i = 0; i < enumCol.values.length; i++) {
           const originalValue = enumCol.values[i]!;
-          const valueKey = enumCol.valueKeys[i];
+          const valueKey = valueKeys[i];
           
           if (valueKey) {
             const translatedValue = this.i18nProvider.translate(valueKey);
@@ -790,7 +797,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       query: {
         text: query,
         length: query.length,
-        token_count: tokens.length,
+        token_count: tokens.tokens.length,
         cursor_position: cursorPosition,
         filter_context_count: filterContext?.length ?? 0,
       },
@@ -810,7 +817,8 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       // Build result context
       const categories: Record<string, number> = {};
       for (const s of response.suggestions) {
-        categories[s.type] = (categories[s.type] ?? 0) + 1;
+        const cat = s.category ?? "fuzzy";
+        categories[cat] = (categories[cat] ?? 0) + 1;
       }
       
       const topScore = response.suggestions.length > 0 
@@ -818,7 +826,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
         : null;
       
       const hasCompleteMatch = response.suggestions.some(
-        (s) => s.type === "column_operator_value"
+        (s) => s.isComplete
       );
       
       event.set("result", {

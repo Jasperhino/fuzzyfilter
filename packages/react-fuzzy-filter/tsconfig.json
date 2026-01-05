@@ -4,7 +4,8 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "lib": ["ESNext", "DOM"],
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "paths": {}
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

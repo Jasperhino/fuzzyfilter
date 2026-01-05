@@ -3,23 +3,31 @@
   "version": "0.1.0",
   "description": "Vue 3 composable for FuzzyFilter",
   "type": "module",
-  "main": "src/index.ts",
-  "module": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./src/index.ts",
-      "types": "./src/index.ts"
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     }
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
     "docs:generate": "bunx mint-tsdocs generate"
   },
   "peerDependencies": {
-    "fuzzyfilter": "workspace:*",
+    "fuzzyfilter": ">=0.1.0",
     "vue": "^3.0.0"
   },
   "devDependencies": {
+    "fuzzyfilter": "workspace:*",
+    "typescript": "^5.7.3",
     "vue": "^3.5.24"
   },
   "keywords": [
@@ -31,12 +39,15 @@
     "search",
     "autocomplete"
   ],
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/fuzzyfilter",
+    "url": "https://github.com/Jasperhino/fuzzyfilter",
     "directory": "packages/vue-fuzzy-filter"
+  },
+  "homepage": "https://github.com/Jasperhino/fuzzyfilter#readme",
+  "bugs": {
+    "url": "https://github.com/Jasperhino/fuzzyfilter/issues"
   },
   "packageManager": "bun@1.3.5"
 }
-
-

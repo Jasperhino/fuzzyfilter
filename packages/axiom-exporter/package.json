@@ -21,9 +21,6 @@
   "peerDependencies": {
     "fuzzyfilter": "workspace:*"
   },
-  "devDependencies": {
-    "fuzzyfilter": "workspace:*"
-  },
   "keywords": [
     "axiom",
     "telemetry",
