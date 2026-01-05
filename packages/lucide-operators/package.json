@@ -1,5 +1,6 @@
 {
   "name": "lucide-operators",
+  "private": true,
   "version": "0.1.1",
   "description": "Shared operator to icon mapping and custom SVGs for fuzzyfilter",
   "module": "src/index.ts",
@@ -14,7 +15,7 @@
     "./assets/*": "./assets/*"
   },
   "peerDependencies": {
-    "fuzzyfilter": "workspace:*"
+    "@jasperhino/fuzzyfilter": "workspace:*"
   },
   "keywords": [
     "fuzzyfilter",

@@ -1,5 +1,15 @@
 # vue-fuzzy-filter
 
+## 0.1.2
+
+### Patch Changes
+
+- e244f2c: Rename package to @jasperhino/fuzzyfilter
+- e0fcd30: initial npm publish
+- Updated dependencies [e244f2c]
+- Updated dependencies [e0fcd30]
+  - @jasperhino/fuzzyfilter@0.1.2
+
 ## 0.1.1
 
 ### Patch Changes

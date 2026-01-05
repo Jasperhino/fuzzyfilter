@@ -1,5 +1,6 @@
 {
   "name": "lucide-operators-react",
+  "private": true,
   "version": "0.1.1",
   "description": "React icon components for fuzzyfilter operators - wraps lucide-react",
   "module": "src/index.tsx",

@@ -1,5 +1,6 @@
 {
   "name": "@fuzzyfilter/sample-data",
+  "private": true,
   "version": "0.1.1",
   "description": "Sample data for FuzzyFilter examples",
   "type": "module",
@@ -16,7 +17,7 @@
     "@faker-js/faker": "^10.1.0"
   },
   "peerDependencies": {
-    "fuzzyfilter": "workspace:*"
+    "@jasperhino/fuzzyfilter": "workspace:*"
   },
   "packageManager": "bun@1.3.5"
 }

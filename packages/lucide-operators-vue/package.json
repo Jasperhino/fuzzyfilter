@@ -1,5 +1,6 @@
 {
   "name": "lucide-operators-vue",
+  "private": true,
   "version": "0.1.1",
   "description": "Vue icon components for fuzzyfilter operators - wraps lucide-vue-next",
   "module": "src/index.ts",

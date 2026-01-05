@@ -1,5 +1,6 @@
 {
   "name": "@fuzzyfilter/i18n-locales",
+  "private": true,
   "version": "0.1.1",
   "description": "Locale translations for FuzzyFilter (English, Spanish, French, etc.)",
   "type": "module",
@@ -25,7 +26,7 @@
     }
   },
   "peerDependencies": {
-    "fuzzyfilter": "workspace:*"
+    "@jasperhino/fuzzyfilter": "workspace:*"
   },
   "packageManager": "bun@1.3.5"
 }

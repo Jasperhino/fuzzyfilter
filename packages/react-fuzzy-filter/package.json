@@ -1,6 +1,6 @@
 {
   "name": "react-fuzzy-filter",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "React hook for FuzzyFilter",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,12 +22,12 @@
     "docs:generate": "bunx mint-tsdocs generate"
   },
   "peerDependencies": {
-    "fuzzyfilter": ">=0.1.1",
+    "@jasperhino/fuzzyfilter": ">=0.1.2",
     "react": "^18 || ^19"
   },
   "devDependencies": {
+    "@jasperhino/fuzzyfilter": "workspace:*",
     "@types/react": "^19.2.5",
-    "fuzzyfilter": "workspace:*",
     "react": "^19.2.0",
     "typescript": "^5.7.3"
   },

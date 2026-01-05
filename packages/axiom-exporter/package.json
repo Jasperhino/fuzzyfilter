@@ -1,5 +1,6 @@
 {
   "name": "@fuzzyfilter/axiom-exporter",
+  "private": true,
   "version": "0.1.1",
   "description": "Axiom exporter for FuzzyFilter telemetry events",
   "type": "module",
@@ -19,7 +20,7 @@
     "@axiomhq/js": "^1.0.0"
   },
   "peerDependencies": {
-    "fuzzyfilter": "workspace:*"
+    "@jasperhino/fuzzyfilter": "workspace:*"
   },
   "keywords": [
     "axiom",
