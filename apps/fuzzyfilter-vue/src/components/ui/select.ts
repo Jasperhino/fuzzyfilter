@@ -14,6 +14,7 @@ import {
   SelectContent as SelectContentPrimitive,
   SelectItem as SelectItemPrimitive,
   SelectItemIndicator as SelectItemIndicatorPrimitive,
+  SelectItemText as SelectItemTextPrimitive,
   SelectPortal,
 } from "radix-vue";
 import { CheckIcon, ChevronDownIcon } from "lucide-vue-next";
@@ -141,6 +142,8 @@ export const SelectContent = defineComponent({
 
 /**
  * Select Item Component
+ * 
+ * Uses SelectItemText to properly display the selected value in the trigger.
  */
 export const SelectItem = defineComponent({
   name: "SelectItem",
@@ -152,6 +155,10 @@ export const SelectItem = defineComponent({
     },
     disabled: Boolean,
     class: String,
+    /**
+     * The text value displayed in the trigger when this item is selected.
+     * Maps to Radix Vue's textValue prop.
+     */
     text: String,
   },
   setup(props, { slots, attrs }) {
@@ -161,6 +168,7 @@ export const SelectItem = defineComponent({
         {
           ...attrs,
           value: props.value,
+          textValue: props.text,
           disabled: props.disabled,
           class: cn(
             "focus:bg-accent focus:text-accent-foreground gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm relative flex w-full cursor-default items-center outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
@@ -169,9 +177,11 @@ export const SelectItem = defineComponent({
         },
         {
           default: () => [
-            h("span", {
+            h(SelectItemTextPrimitive, {
               class: "flex flex-1 gap-2 shrink-0 whitespace-nowrap",
-            }, slots.default?.()),
+            }, {
+              default: () => slots.default?.(),
+            }),
             h(SelectItemIndicatorPrimitive, {
               class: "pointer-events-none absolute right-2 flex size-4 items-center justify-center",
             }, {

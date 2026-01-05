@@ -14,6 +14,8 @@ import type {
   QueryMatch,
   ParsedDate,
   ColumnId,
+  EnumColumnDefinition,
+  BooleanColumnDefinition,
 } from "../../types/index.ts";
 import type { ScoreBreakdown, MatchMetadata } from "../types.ts";
 import type { I18nProvider } from "../../types/i18n.ts";
@@ -21,6 +23,90 @@ import { getOperator } from "../../operators.ts";
 import { formatDateForDisplay } from "../../date-parser.ts";
 import { SCORING_CONFIG } from "../constants.ts";
 import { calculateQueryExplanationScore } from "./scorer.ts";
+
+/**
+ * Get the translated column name using i18n, falling back to static name.
+ * 
+ * @param column - The column definition
+ * @param i18nProvider - Optional i18n provider for translations
+ * @returns The translated column name, or the static name if no translation found
+ */
+export function getTranslatedColumnName(
+  column: AnyColumnDefinition,
+  i18nProvider?: I18nProvider
+): string {
+  // Try to translate using i18n key if available
+  if (column.nameKey && i18nProvider?.translate) {
+    const translated = i18nProvider.translate(column.nameKey);
+    if (translated) {
+      return translated;
+    }
+  }
+  // Fall back to static name
+  return column.name;
+}
+
+/**
+ * Get the translated enum value label using i18n, falling back to static label or value.
+ * 
+ * @param column - The enum column definition
+ * @param valueIndex - The index of the value in the values array
+ * @param i18nProvider - Optional i18n provider for translations
+ * @returns The translated label, or the static label/value if no translation found
+ */
+export function getTranslatedEnumValueLabel(
+  column: EnumColumnDefinition,
+  valueIndex: number,
+  i18nProvider?: I18nProvider
+): string {
+  // Try to translate using i18n key if available
+  if (column.valueKeys && column.valueKeys[valueIndex] && i18nProvider?.translate) {
+    const translated = i18nProvider.translate(column.valueKeys[valueIndex]);
+    if (translated) {
+      return translated;
+    }
+  }
+  // Fall back to static labels array
+  if (column.labels && column.labels[valueIndex]) {
+    return column.labels[valueIndex];
+  }
+  // Fall back to values array
+  return column.values[valueIndex] ?? "";
+}
+
+/**
+ * Get the translated boolean label using i18n, falling back to static label.
+ * 
+ * @param column - The boolean column definition
+ * @param value - true or false
+ * @param i18nProvider - Optional i18n provider for translations
+ * @returns The translated label, or the static label if no translation found
+ */
+export function getTranslatedBooleanLabel(
+  column: BooleanColumnDefinition,
+  value: boolean,
+  i18nProvider?: I18nProvider
+): string {
+  if (value) {
+    // Try to translate true label
+    if (column.trueLabelKey && i18nProvider?.translate) {
+      const translated = i18nProvider.translate(column.trueLabelKey);
+      if (translated) {
+        return translated;
+      }
+    }
+    return column.trueLabel ?? "true";
+  } else {
+    // Try to translate false label
+    if (column.falseLabelKey && i18nProvider?.translate) {
+      const translated = i18nProvider.translate(column.falseLabelKey);
+      if (translated) {
+        return translated;
+      }
+    }
+    return column.falseLabel ?? "false";
+  }
+}
 
 /**
  * Result of truncating a value with ellipsis
@@ -197,9 +283,13 @@ export function createSuggestion(
 
   // Use matched alias in label if provided, otherwise use operator label
   const operatorDisplay = matchedAlias ?? opInfo.label;
+  
+  // Get translated column name for display
+  const columnDisplayName = getTranslatedColumnName(column, i18nProvider);
+  
   const label = valueText
-    ? `${column.name} ${operatorDisplay} ${valueText}`
-    : `${column.name} ${operatorDisplay}`;
+    ? `${columnDisplayName} ${operatorDisplay} ${valueText}`
+    : `${columnDisplayName} ${operatorDisplay}`;
 
   const completionText = valueText
     ? `${column.name} ${operator} "${valueText}"`
@@ -288,7 +378,7 @@ export function createSuggestion(
     id: `${column.id}:${operator}:${valueText}`,
     label,
     parts: {
-      column: { text: column.name },
+      column: { text: columnDisplayName },
       operator: {
         text: opInfo.label,
         symbol: opInfo.symbol,
@@ -356,7 +446,11 @@ export function createDateSuggestion(
     (isRangeOperator
       ? `${formatDateForDisplay(parsedDate.rangeStart!)} - ${formatDateForDisplay(parsedDate.rangeEnd!)}`
       : formatDateForDisplay(parsedDate.date));
-  const label = `${column.name} ${opInfo.label} ${displayDate}`;
+  
+  // Get translated column name for display
+  const columnDisplayName = getTranslatedColumnName(column, i18nProvider);
+  
+  const label = `${columnDisplayName} ${opInfo.label} ${displayDate}`;
 
   // Use the original text for completion to preserve natural language
   const completionText = `${column.name} ${operator} "${parsedDate.text}"`;
@@ -447,7 +541,7 @@ export function createDateSuggestion(
     id: suggestionId,
     label,
     parts: {
-      column: { text: column.name },
+      column: { text: columnDisplayName },
       operator: { text: opInfo.label, symbol: opInfo.symbol },
       arguments: argumentParts,
     },

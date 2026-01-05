@@ -45,8 +45,25 @@ export interface ColumnDefinition<T extends DataType = DataType> {
    * Display name for the column.
    *
    * This is what users see in suggestions and what they can type to match.
+   * Used as fallback if `nameKey` is not provided or translation is missing.
    */
   name: string;
+
+  /**
+   * i18n key for the column name (e.g., "columns.status").
+   *
+   * When provided, the column name will be looked up via the i18n provider.
+   * Falls back to `name` if translation is not found.
+   *
+   * @example
+   * ```typescript
+   * {
+   *   name: "Status",
+   *   nameKey: "columns.status", // Translated via i18n
+   * }
+   * ```
+   */
+  nameKey?: string;
 
   /**
    * Alternative names/aliases for fuzzy matching.
@@ -63,6 +80,21 @@ export interface ColumnDefinition<T extends DataType = DataType> {
    */
   aliases?: string[];
 
+  /**
+   * i18n keys for aliases (looked up dynamically via i18n provider).
+   *
+   * These are resolved at runtime and merged with static `aliases`.
+   *
+   * @example
+   * ```typescript
+   * {
+   *   aliases: ["created"], // Static aliases
+   *   aliasKeys: ["aliases.created", "aliases.date"], // Dynamic i18n aliases
+   * }
+   * ```
+   */
+  aliasKeys?: string[];
+
   /** The data type of this column */
   type: T;
 
@@ -71,6 +103,14 @@ export interface ColumnDefinition<T extends DataType = DataType> {
 
   /** Description for tooltips/help */
   description?: string;
+
+  /**
+   * i18n key for the description (e.g., "descriptions.status").
+   *
+   * When provided, the description will be looked up via the i18n provider.
+   * Falls back to `description` if translation is not found.
+   */
+  descriptionKey?: string;
 }
 
 /**
@@ -169,6 +209,21 @@ export interface EnumColumnDefinition extends ColumnDefinition<"enum"> {
   values: string[];
   /** Display labels for each value (parallel array, optional) */
   labels?: string[];
+  /**
+   * i18n keys for enum value labels (parallel array to values).
+   *
+   * When provided, enum value labels will be looked up via the i18n provider.
+   * Falls back to `labels` or `values` if translation is not found.
+   *
+   * @example
+   * ```typescript
+   * {
+   *   values: ["Open", "In Progress", "Closed"],
+   *   valueKeys: ["values.open", "values.inProgress", "values.closed"],
+   * }
+   * ```
+   */
+  valueKeys?: string[];
 }
 
 /**
@@ -192,6 +247,20 @@ export interface BooleanColumnDefinition extends ColumnDefinition<"boolean"> {
   trueLabel?: string;
   /** Custom label for false values */
   falseLabel?: string;
+  /**
+   * i18n key for true label (e.g., "booleans.blocked").
+   *
+   * When provided, the true label will be looked up via the i18n provider.
+   * Falls back to `trueLabel` if translation is not found.
+   */
+  trueLabelKey?: string;
+  /**
+   * i18n key for false label (e.g., "booleans.notBlocked").
+   *
+   * When provided, the false label will be looked up via the i18n provider.
+   * Falls back to `falseLabel` if translation is not found.
+   */
+  falseLabelKey?: string;
 }
 
 /**

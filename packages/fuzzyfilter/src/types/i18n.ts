@@ -52,6 +52,17 @@ export interface I18nProvider {
   getWordSet(wordSetKey: WordSetKey): string[];
   
   /**
+   * Translate a generic i18n key.
+   * 
+   * This is a general-purpose translation method for any i18n key.
+   * Used for column names, enum values, descriptions, etc.
+   * 
+   * @param key - The i18n key (e.g., "columns.status", "values.open")
+   * @returns Translated string, or undefined if not found
+   */
+  translate?(key: string): string | undefined;
+  
+  /**
    * Optional: Subscribe to language change events.
    * 
    * If provided, FuzzyFilter can reactively update when language changes.

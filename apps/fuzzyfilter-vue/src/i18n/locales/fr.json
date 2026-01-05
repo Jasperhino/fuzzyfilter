@@ -1,0 +1,63 @@
+{
+  "columns": {
+    "status": "Statut",
+    "assignee": "Responsable",
+    "priority": "Priorité",
+    "department": "Département",
+    "created": "Créé",
+    "isBlocked": "Est bloqué",
+    "comments": "Commentaires"
+  },
+  "values": {
+    "status": {
+      "open": "Ouvert",
+      "inProgress": "En cours",
+      "closed": "Fermé",
+      "blocked": "Bloqué"
+    },
+    "department": {
+      "engineering": "Ingénierie",
+      "design": "Design",
+      "product": "Produit"
+    },
+    "boolean": {
+      "blocked": "Bloqué",
+      "notBlocked": "Non bloqué"
+    }
+  },
+  "ui": {
+    "title": "FuzzyFilter Combobox avec Table de Données (Vue)",
+    "filterPlaceholder": "Filtrer par colonne, opérateur ou valeur...",
+    "noResults": "Aucun résultat",
+    "noRowsTitle": "Aucune ligne ne correspond à vos filtres",
+    "noRowsHint": "Essayez d'ajuster ou de supprimer certains filtres",
+    "clearAll": "Tout effacer",
+    "clearFilters": "Effacer les filtres",
+    "selectLanguage": "Sélectionner la langue",
+    "showingResults": "{count} résultats affichés",
+    "activeFilters": "Filtres actifs :",
+    "appliedFilters": "Filtres appliqués",
+    "noFilters": "Aucun filtre appliqué",
+    "filtersApplied": "{count} filtre(s) appliqué(s)",
+    "suggestion": "Suggestion",
+    "score": "Score",
+    "results": "# Résultats",
+    "tasks": "Tâches",
+    "noComments": "Pas de commentaires",
+    "apiDocs": "Documentation API",
+    "operators": "Opérateurs",
+    "usage": "Utilisation",
+    "dataTypes": "Types de données"
+  },
+  "table": {
+    "headers": {
+      "status": "Statut",
+      "assignee": "Responsable",
+      "priority": "Priorité",
+      "department": "Dép.",
+      "created": "Créé",
+      "isBlocked": "Bloqué",
+      "comments": "Commentaires"
+    }
+  }
+}

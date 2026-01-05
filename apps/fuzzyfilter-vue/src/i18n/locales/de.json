@@ -1,0 +1,63 @@
+{
+  "columns": {
+    "status": "Status",
+    "assignee": "Zuständiger",
+    "priority": "Priorität",
+    "department": "Abteilung",
+    "created": "Erstellt",
+    "isBlocked": "Ist blockiert",
+    "comments": "Kommentare"
+  },
+  "values": {
+    "status": {
+      "open": "Offen",
+      "inProgress": "In Bearbeitung",
+      "closed": "Geschlossen",
+      "blocked": "Blockiert"
+    },
+    "department": {
+      "engineering": "Technik",
+      "design": "Design",
+      "product": "Produkt"
+    },
+    "boolean": {
+      "blocked": "Blockiert",
+      "notBlocked": "Nicht blockiert"
+    }
+  },
+  "ui": {
+    "title": "FuzzyFilter Combobox mit Datentabelle (Vue)",
+    "filterPlaceholder": "Nach Spalte, Operator oder Wert filtern...",
+    "noResults": "Keine Ergebnisse",
+    "noRowsTitle": "Keine Zeilen entsprechen Ihren Filtern",
+    "noRowsHint": "Versuchen Sie, einige Filter anzupassen oder zu entfernen",
+    "clearAll": "Alle löschen",
+    "clearFilters": "Filter löschen",
+    "selectLanguage": "Sprache auswählen",
+    "showingResults": "{count} Ergebnisse angezeigt",
+    "activeFilters": "Aktive Filter:",
+    "appliedFilters": "Angewendete Filter",
+    "noFilters": "Keine Filter angewendet",
+    "filtersApplied": "{count} Filter angewendet",
+    "suggestion": "Vorschlag",
+    "score": "Score",
+    "results": "# Ergebnisse",
+    "tasks": "Aufgaben",
+    "noComments": "Keine Kommentare",
+    "apiDocs": "API-Dokumentation",
+    "operators": "Operatoren",
+    "usage": "Verwendung",
+    "dataTypes": "Datentypen"
+  },
+  "table": {
+    "headers": {
+      "status": "Status",
+      "assignee": "Zuständiger",
+      "priority": "Priorität",
+      "department": "Abt.",
+      "created": "Erstellt",
+      "isBlocked": "Blockiert",
+      "comments": "Kommentare"
+    }
+  }
+}

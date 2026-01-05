@@ -80,6 +80,19 @@ export function createI18nextProvider(
       return [];
     },
 
+    translate: (key: string): string | undefined => {
+      // Use the app namespace for column/value translations
+      const appKey = `app:${key}`;
+      const translated = i18nInstance.t(appKey, { defaultValue: undefined });
+      
+      // If translation returns the key itself, it means translation not found
+      if (translated === appKey || translated === undefined) {
+        return undefined;
+      }
+      
+      return String(translated);
+    },
+
     onChange: (callback: () => void): (() => void) => {
       // Subscribe to i18next language change events
       const handler = () => {

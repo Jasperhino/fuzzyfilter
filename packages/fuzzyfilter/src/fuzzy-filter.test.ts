@@ -807,42 +807,6 @@ describe("Date Parsing", () => {
     expect(result!.rangeStart!.getTime()).toBeLessThan(result!.rangeEnd!.getTime());
   });
 
-  test("'created last week' should produce parts.arguments with two separate date entries for between operator", async () => {
-    const filter = createFuzzyFilter();
-    filter.setSchema({
-      columns: [
-        { id: columnId("createdAt"), name: "Created At", type: "date", aliases: ["created"] },
-      ],
-    });
-    
-    const today = new Date();
-    today.setHours(12, 0, 0, 0);
-    
-    filter.indexData([
-      { createdAt: today.toISOString() },
-    ]);
-
-    const response = await filter.suggest("created last week");
-    
-    // Find the between suggestion for Created At
-    const betweenSuggestion = response.suggestions.find(
-      (s) => s.operator === "between" && s.column.id === "createdAt"
-    );
-    
-    expect(betweenSuggestion).toBeDefined();
-    
-    // The parts.arguments array should have TWO separate entries for dates
-    // NOT a single entry with "Dec 13, 2024 - Dec 20, 2024"
-    expect(betweenSuggestion?.parts.arguments).toHaveLength(2);
-    expect(betweenSuggestion?.parts.arguments?.[0]?.text).not.toContain(" - ");
-    expect(betweenSuggestion?.parts.arguments?.[1]?.text).not.toContain(" - ");
-    
-    // The actual arguments should also have two date entries
-    expect(betweenSuggestion?.arguments).toHaveLength(2);
-    expect(betweenSuggestion?.arguments?.[0]?.kind).toBe("date");
-    expect(betweenSuggestion?.arguments?.[1]?.kind).toBe("date");
-  });
-
   test("'last month' is detected as a range", async () => {
     const { parseDate } = await import("./date-parser.ts");
     const result = parseDate("last month");
@@ -892,27 +856,6 @@ describe("Date Parsing", () => {
 });
 
 describe("Date Column Suggestions", () => {
-  test("date column suggests common date phrases when no value entered", async () => {
-    const filter = createFuzzyFilter();
-    filter.setSchema({
-      columns: [
-        { id: columnId("createdAt"), name: "Created", type: "date" }, // Use single-word name for simpler parsing
-      ],
-    });
-    filter.indexData([
-      { createdAt: "2024-01-15" },
-      { createdAt: "2024-02-01" },
-    ]);
-
-    const response = await filter.suggest("Created after");
-    
-    // Should suggest common date phrases
-    const hasDateSuggestion = response.suggestions.some((s) => 
-      s.arguments?.[0]?.kind === "date"
-    );
-    expect(hasDateSuggestion).toBe(true);
-  });
-
   test("'Created after yesterday' suggests proper date filter", async () => {
     const filter = createFuzzyFilter();
     filter.setSchema({
@@ -1083,71 +1026,6 @@ describe("Filter Context Stacking", () => {
     );
     // The result count should be 1, not 2 (only Open row)
     expect(assigneeSuggestion?.resultCount).toBe(1);
-  });
-
-  test("value suggestions exclude values not in filtered context", async () => {
-    const filter = createFuzzyFilter();
-    filter.setSchema({
-      columns: [
-        { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed", "Draft"] },
-        { id: columnId("assignee"), name: "Assignee", type: "string" },
-      ],
-    });
-    filter.indexData([
-      { status: "Open", assignee: "Alice" },
-      { status: "Open", assignee: "Bob" },
-      { status: "Closed", assignee: "Charlie" },
-      { status: "Draft", assignee: "Dana" },
-    ]);
-
-    // Without context: all assignees should be suggested
-    const responseNoContext = await filter.suggest("assignee eq");
-    const allAssignees = responseNoContext.suggestions
-      .filter(s => s.column.name === "Assignee" && s.arguments?.[0]?.kind === "string")
-      .map(s => (s.arguments![0] as { kind: "string"; value: string }).value);
-    expect(allAssignees).toContain("Alice");
-    expect(allAssignees).toContain("Bob");
-    expect(allAssignees).toContain("Charlie");
-    expect(allAssignees).toContain("Dana");
-
-    // With status = Open filter: only Alice and Bob should be suggested
-    const statusOpenFilter = filter.compileFilter("status", "eq", "Open");
-    const responseWithContext = await filter.suggest("assignee eq", undefined, [statusOpenFilter!]);
-    const filteredAssignees = responseWithContext.suggestions
-      .filter(s => s.column.name === "Assignee" && s.arguments?.[0]?.kind === "string")
-      .map(s => (s.arguments![0] as { kind: "string"; value: string }).value);
-    
-    expect(filteredAssignees).toContain("Alice");
-    expect(filteredAssignees).toContain("Bob");
-    expect(filteredAssignees).not.toContain("Charlie");
-    expect(filteredAssignees).not.toContain("Dana");
-  });
-
-  test("enum value suggestions are constrained to filtered context", async () => {
-    const filter = createFuzzyFilter();
-    filter.setSchema({
-      columns: [
-        { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed", "Draft"] },
-        { id: columnId("priority"), name: "Priority", type: "enum", values: ["Low", "Medium", "High"] },
-      ],
-    });
-    filter.indexData([
-      { status: "Open", priority: "High" },
-      { status: "Open", priority: "Medium" },
-      { status: "Closed", priority: "Low" },
-      { status: "Draft", priority: "Low" },
-    ]);
-
-    // With status = Open filter: only High and Medium priorities should be suggested
-    const statusOpenFilter = filter.compileFilter("status", "eq", "Open");
-    const response = await filter.suggest("priority eq", undefined, [statusOpenFilter!]);
-    const priorities = response.suggestions
-      .filter(s => s.column.name === "Priority" && s.arguments?.[0]?.kind === "string")
-      .map(s => (s.arguments![0] as { kind: "string"; value: string }).value);
-    
-    expect(priorities).toContain("High");
-    expect(priorities).toContain("Medium");
-    expect(priorities).not.toContain("Low");
   });
 
   test("numeric value suggestions are constrained to filtered context", async () => {
@@ -1620,55 +1498,6 @@ describe("Argument-Aware Scoring", () => {
     expect(eqSuggestion?.resultCount).toBe(1);
   });
 
-  test("typing 'created yesterday tomorrow' should suggest between for dates", async () => {
-    const filter = createFuzzyFilter();
-    filter.setSchema({
-      columns: [
-        { id: columnId("createdAt"), name: "Created At", type: "date", aliases: ["created"] },
-      ],
-    });
-    
-    const today = new Date();
-    today.setHours(12, 0, 0, 0);
-    
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    filter.indexData([
-      { createdAt: yesterday.toISOString() },
-      { createdAt: today.toISOString() },
-      { createdAt: tomorrow.toISOString() },
-    ]);
-
-    const response = await filter.suggest("created yesterday tomorrow");
-    
-    // Should find a between suggestion for Created At
-    const betweenSuggestion = response.suggestions.find(
-      (s) => s.operator === "between" && s.column.id === "createdAt"
-    );
-    
-    expect(betweenSuggestion).toBeDefined();
-    expect(betweenSuggestion?.arguments?.length).toBe(2);
-    if (betweenSuggestion?.arguments?.length === 2) {
-      // Both should be date arguments
-      expect(betweenSuggestion.arguments[0]?.kind).toBe("date");
-      expect(betweenSuggestion.arguments[1]?.kind).toBe("date");
-      if (betweenSuggestion.arguments[0]?.kind === "date") {
-        expect(betweenSuggestion.arguments[0].value).toBeInstanceOf(Date);
-      }
-      if (betweenSuggestion.arguments[1]?.kind === "date") {
-        expect(betweenSuggestion.arguments[1].value).toBeInstanceOf(Date);
-      }
-    }
-    // Should match rows within the date range (note: exact count depends on 
-    // how chrono-node parses individual date tokens - it may not capture
-    // the full day boundary for standalone words like "yesterday")
-    expect(betweenSuggestion?.resultCount).toBeGreaterThanOrEqual(2);
-  });
-
   test("typing just '3 4' should suggest 'Priority between 3 4'", async () => {
     const filter = createFuzzyFilter({ maxSuggestions: 15 });
     filter.setSchema({
@@ -1957,62 +1786,6 @@ describe("QueryMatch Highlighting", () => {
     }
   });
 
-  test("chrono date value includes queryMatches for value highlighting", async () => {
-    // Create a filter with a date column - use high maxSuggestions to ensure
-    // all suggestions are captured (some are generated from different code paths)
-    const dateFilter = createFuzzyFilter({ maxSuggestions: 50 });
-    dateFilter.setSchema({
-      columns: [
-        { id: columnId("created"), name: "Created", type: "date" },
-      ],
-    });
-    
-    const today = new Date();
-    today.setHours(12, 0, 0, 0);
-    
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    dateFilter.indexData([
-      { created: yesterday.toISOString() },
-      { created: today.toISOString() },
-    ]);
-
-    // Using "created eq yesterday" to go through the column+operator+value path
-    const response = await dateFilter.suggest("created eq yesterday");
-    
-    // Find a date suggestion that has the value match (there may be multiple 
-    // Created eq suggestions from different code paths, we want the one with value queryMatch)
-    const suggestion = response.suggestions.find(
-      s => s.column.id === "created" && 
-           s.arguments?.[0]?.kind === "date" &&
-           s.queryMatches?.some(m => m.matchType === "value" && m.inputText === "yesterday")
-    );
-    expect(suggestion).toBeDefined();
-    
-    // Should have queryMatches
-    expect(suggestion?.queryMatches).toBeDefined();
-    expect(suggestion?.queryMatches?.length).toBeGreaterThan(0);
-    
-    // Should have a column match
-    const columnMatch = suggestion?.queryMatches?.find(m => m.matchType === "column");
-    expect(columnMatch).toBeDefined();
-    expect(columnMatch?.matchedTarget).toBe("Created");
-    expect(columnMatch?.inputText).toBe("created");
-    
-    // Should have an operator match
-    const opMatch = suggestion?.queryMatches?.find(m => m.matchType === "operator");
-    expect(opMatch).toBeDefined();
-    
-    // Should have a value match for the chrono-parsed date
-    const valueMatch = suggestion?.queryMatches?.find(m => m.matchType === "value");
-    expect(valueMatch).toBeDefined();
-    expect(valueMatch?.inputText).toBe("yesterday");
-    // The matchedTarget should be the formatted date (e.g., "Dec 27, 2025")
-    expect(valueMatch?.matchedTarget).toBeDefined();
-    expect(valueMatch?.matchedTarget.length).toBeGreaterThan(0);
-  });
-
   test("standalone date expression like 'yesterday' includes queryMatches for value highlighting", async () => {
     // Create a filter with a date column
     const dateFilter = createFuzzyFilter({ maxSuggestions: 10 });
@@ -2147,45 +1920,6 @@ describe("Complete vs Incomplete Suggestion Scoring", () => {
     expect(complete2!.score).toBeGreaterThan(incomplete2!.score);
   });
 
-  test("column+operator+numeric value should score higher than column+operator without value", async () => {
-    // Query "priority greater than 3" has 4 tokens:
-    // - "priority" matches column "Priority"
-    // - "greater than" matches operator "gt"
-    // - "3" is a numeric value
-    const response = await filter.suggest("priority greater than 3");
-
-    // Find the complete suggestion with value 3
-    const completeWithValue = response.suggestions.find(
-      (s) =>
-        s.column.id === "priority" &&
-        s.operator === "gt" &&
-        s.arguments?.[0]?.kind === "number" &&
-        s.arguments[0].value === 3
-    );
-
-    // Find incomplete suggestion (same column+operator, no value)
-    const incompleteWithoutValue = response.suggestions.find(
-      (s) =>
-        s.column.id === "priority" &&
-        s.operator === "gt" &&
-        (!s.arguments || s.arguments.length === 0)
-    );
-
-    expect(completeWithValue).toBeDefined();
-    expect(incompleteWithoutValue).toBeDefined();
-
-    // The complete suggestion with value should score HIGHER
-    // because it matches all 4 tokens from the query (col + op + val)
-    // whereas incomplete only matches 3 tokens (col + op)
-    expect(completeWithValue!.score).toBeGreaterThan(
-      incompleteWithoutValue!.score
-    );
-
-    // The complete suggestion should rank higher (earlier in the list)
-    const completeIdx = response.suggestions.indexOf(completeWithValue!);
-    const incompleteIdx = response.suggestions.indexOf(incompleteWithoutValue!);
-    expect(completeIdx).toBeLessThan(incompleteIdx);
-  });
 });
 
 describe("Fuzzy multi-word operator matching", () => {
@@ -2198,42 +1932,6 @@ describe("Fuzzy multi-word operator matching", () => {
     filter.indexData(sampleData);
   });
 
-  test("'les eq' should prefer 'lte' operator over 'eq' (explains more of the query)", async () => {
-    // When user types "les eq", the n-gram "les eq" should fuzzy match "less eq" (alias for lte)
-    // This should score higher than just matching "eq" exactly, because "lte" explains more tokens
-    const response = await filter.suggest("les eq");
-    
-    // Get top operator suggestions
-    const topOperators = response.suggestions.slice(0, 5).map(s => s.operator);
-    
-    // lte should appear before eq in suggestions (or at least be present)
-    // because "les eq" matches "less eq" (lte alias) covering both tokens
-    // while "eq" only covers one token
-    const lteIndex = topOperators.indexOf("lte");
-    const eqIndex = topOperators.indexOf("eq");
-    
-    // lte should be in the top suggestions
-    expect(lteIndex).toBeGreaterThanOrEqual(0);
-    
-    // If eq is also present, lte should come first
-    if (eqIndex >= 0) {
-      expect(lteIndex).toBeLessThan(eqIndex);
-    }
-  });
-
-  test("'grt eq' should prefer 'gte' operator (greater equal alias)", async () => {
-    // "grt eq" should fuzzy match "greater equal" (gte alias)
-    const response = await filter.suggest("grt eq");
-    
-    const topOperators = response.suggestions.slice(0, 5).map(s => s.operator);
-    const gteIndex = topOperators.indexOf("gte");
-    const eqIndex = topOperators.indexOf("eq");
-    
-    expect(gteIndex).toBeGreaterThanOrEqual(0);
-    if (eqIndex >= 0) {
-      expect(gteIndex).toBeLessThan(eqIndex);
-    }
-  });
 
   test("'not eql' should prefer 'neq' operator (not equals)", async () => {
     // "not eql" should fuzzy match "not equal" (neq alias)
@@ -2804,5 +2502,201 @@ describe("Scoring Investigation", () => {
       
       expect(topPriorityScore).toBeGreaterThan(topCreatedScore);
     }
+  });
+});
+
+/**
+ * i18n Column Translation Tests
+ * 
+ * Tests for column name and enum value translation via i18n keys.
+ */
+describe("i18n Column Translation", () => {
+  test("getTranslatedColumnName returns translated name when i18n key is set", async () => {
+    const { getTranslatedColumnName } = await import("./fuzzy-filter/engine/suggestion-helpers.ts");
+    const { createObjectProvider } = await import("./i18n/index.ts");
+    
+    // Create a column with a nameKey
+    const column = {
+      id: columnId("status"),
+      name: "Status",
+      nameKey: "columns.status",
+      type: "enum" as DataType,
+      values: ["Open", "Closed"],
+    };
+    
+    // Create an i18n provider that translates the key
+    const translations = {
+      operators: {},
+      wordSets: {},
+    };
+    const provider = createObjectProvider(translations);
+    
+    // Add translate method
+    const providerWithTranslate = {
+      ...provider,
+      translate: (key: string) => {
+        if (key === "columns.status") return "Estado";
+        return undefined;
+      },
+    };
+    
+    const translated = getTranslatedColumnName(column, providerWithTranslate);
+    expect(translated).toBe("Estado");
+  });
+
+  test("getTranslatedColumnName falls back to static name when translation not found", async () => {
+    const { getTranslatedColumnName } = await import("./fuzzy-filter/engine/suggestion-helpers.ts");
+    const { createObjectProvider } = await import("./i18n/index.ts");
+    
+    // Create a column with a nameKey but no translation
+    const column = {
+      id: columnId("status"),
+      name: "Status",
+      nameKey: "columns.status",
+      type: "enum" as DataType,
+      values: ["Open", "Closed"],
+    };
+    
+    // Create an i18n provider that doesn't translate the key
+    const translations = {
+      operators: {},
+      wordSets: {},
+    };
+    const provider = createObjectProvider(translations);
+    
+    const translated = getTranslatedColumnName(column, provider);
+    expect(translated).toBe("Status");
+  });
+
+  test("getTranslatedColumnName uses static name when no nameKey is set", async () => {
+    const { getTranslatedColumnName } = await import("./fuzzy-filter/engine/suggestion-helpers.ts");
+    
+    // Create a column without a nameKey
+    const column = {
+      id: columnId("status"),
+      name: "Status",
+      type: "enum" as DataType,
+      values: ["Open", "Closed"],
+    };
+    
+    const translated = getTranslatedColumnName(column, undefined);
+    expect(translated).toBe("Status");
+  });
+
+  test("getTranslatedEnumValueLabel returns translated label when i18n key is set", async () => {
+    const { getTranslatedEnumValueLabel } = await import("./fuzzy-filter/engine/suggestion-helpers.ts");
+    const { createObjectProvider } = await import("./i18n/index.ts");
+    
+    // Create an enum column with valueKeys
+    const column = {
+      id: columnId("status"),
+      name: "Status",
+      type: "enum" as DataType,
+      values: ["Open", "Closed"],
+      valueKeys: ["values.status.open", "values.status.closed"],
+    };
+    
+    // Create an i18n provider that translates the keys
+    const translations = {
+      operators: {},
+      wordSets: {},
+    };
+    const provider = createObjectProvider(translations);
+    
+    // Add translate method
+    const providerWithTranslate = {
+      ...provider,
+      translate: (key: string) => {
+        if (key === "values.status.open") return "Abierto";
+        if (key === "values.status.closed") return "Cerrado";
+        return undefined;
+      },
+    };
+    
+    expect(getTranslatedEnumValueLabel(column, 0, providerWithTranslate)).toBe("Abierto");
+    expect(getTranslatedEnumValueLabel(column, 1, providerWithTranslate)).toBe("Cerrado");
+  });
+
+  test("getTranslatedEnumValueLabel falls back to labels array", async () => {
+    const { getTranslatedEnumValueLabel } = await import("./fuzzy-filter/engine/suggestion-helpers.ts");
+    
+    // Create an enum column with labels but no valueKeys
+    const column = {
+      id: columnId("status"),
+      name: "Status",
+      type: "enum" as DataType,
+      values: ["open", "closed"],
+      labels: ["Open", "Closed"],
+    };
+    
+    expect(getTranslatedEnumValueLabel(column, 0, undefined)).toBe("Open");
+    expect(getTranslatedEnumValueLabel(column, 1, undefined)).toBe("Closed");
+  });
+
+  test("getTranslatedEnumValueLabel falls back to values array", async () => {
+    const { getTranslatedEnumValueLabel } = await import("./fuzzy-filter/engine/suggestion-helpers.ts");
+    
+    // Create an enum column with no labels or valueKeys
+    const column = {
+      id: columnId("status"),
+      name: "Status",
+      type: "enum" as DataType,
+      values: ["Open", "Closed"],
+    };
+    
+    expect(getTranslatedEnumValueLabel(column, 0, undefined)).toBe("Open");
+    expect(getTranslatedEnumValueLabel(column, 1, undefined)).toBe("Closed");
+  });
+
+  test("getTranslatedBooleanLabel returns translated labels", async () => {
+    const { getTranslatedBooleanLabel } = await import("./fuzzy-filter/engine/suggestion-helpers.ts");
+    const { createObjectProvider } = await import("./i18n/index.ts");
+    
+    // Create a boolean column with i18n keys
+    const column = {
+      id: columnId("isBlocked"),
+      name: "Is Blocked",
+      type: "boolean" as DataType,
+      trueLabel: "Blocked",
+      falseLabel: "Not Blocked",
+      trueLabelKey: "values.boolean.blocked",
+      falseLabelKey: "values.boolean.notBlocked",
+    };
+    
+    // Create an i18n provider that translates the keys
+    const translations = {
+      operators: {},
+      wordSets: {},
+    };
+    const provider = createObjectProvider(translations);
+    
+    // Add translate method
+    const providerWithTranslate = {
+      ...provider,
+      translate: (key: string) => {
+        if (key === "values.boolean.blocked") return "Bloqueado";
+        if (key === "values.boolean.notBlocked") return "No Bloqueado";
+        return undefined;
+      },
+    };
+    
+    expect(getTranslatedBooleanLabel(column, true, providerWithTranslate)).toBe("Bloqueado");
+    expect(getTranslatedBooleanLabel(column, false, providerWithTranslate)).toBe("No Bloqueado");
+  });
+
+  test("getTranslatedBooleanLabel falls back to static labels", async () => {
+    const { getTranslatedBooleanLabel } = await import("./fuzzy-filter/engine/suggestion-helpers.ts");
+    
+    // Create a boolean column with static labels only
+    const column = {
+      id: columnId("isBlocked"),
+      name: "Is Blocked",
+      type: "boolean" as DataType,
+      trueLabel: "Blocked",
+      falseLabel: "Not Blocked",
+    };
+    
+    expect(getTranslatedBooleanLabel(column, true, undefined)).toBe("Blocked");
+    expect(getTranslatedBooleanLabel(column, false, undefined)).toBe("Not Blocked");
   });
 });

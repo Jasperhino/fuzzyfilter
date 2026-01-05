@@ -108,6 +108,21 @@ export function createVueI18nProvider(
       return [];
     },
 
+    translate: (key: string): string | undefined => {
+      // Use the app namespace for column/value translations
+      const appKey = `app.${key}`;
+      try {
+        const translated = i18nInstance.global.t(appKey);
+        // If translation returns the key itself, it means translation not found
+        if (translated === appKey) {
+          return undefined;
+        }
+        return String(translated);
+      } catch {
+        return undefined;
+      }
+    },
+
     onChange: (callback: () => void): (() => void) => {
       // For vue-i18n, we watch the locale reactive value
       // Since we can't import Vue here (it's a peer dependency), we use polling

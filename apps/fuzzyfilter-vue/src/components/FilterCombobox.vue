@@ -31,7 +31,7 @@ const ROW_HEIGHT = 48
 
 // Get i18n composer for reactive locale access
 const i18nComposer = useI18n()
-const { locale } = i18nComposer
+const { locale, t } = i18nComposer
 
 // Create filter instance with i18n
 // Use the actual i18n instance (from createI18n) for the provider, not the useI18n() composer
@@ -533,44 +533,6 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
   <div class="w-full flex flex-col gap-6 min-h-0 flex-1">
     <!-- Filter controls -->
     <div class="space-y-4">
-      <!-- Applied filters -->
-      <div v-if="appliedFilters.length > 0" class="flex flex-wrap items-center gap-2">
-        <span class="text-xs text-muted-foreground font-medium">Active filters:</span>
-        <div
-          v-for="f in appliedFilters"
-          :key="f.id"
-          class="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 h-auto bg-secondary text-secondary-foreground rounded-md text-xs"
-        >
-          <span class="font-medium text-foreground truncate">
-            {{ f.parts.column.text }}
-          </span>
-          <span class="shrink-0 h-4 px-1 rounded inline-flex items-center font-medium bg-muted text-muted-foreground text-[10px]">
-            {{ f.parts.operator.matchedAlias ?? f.parts.operator.text }}
-          </span>
-          <!-- Render existing arguments (no placeholders for applied filters), use displayText with ellipsis for long values -->
-          <span 
-            v-for="(arg, i) in f.parts.arguments" 
-            :key="i"
-            class="shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground"
-            :title="arg.displayText ? arg.text : undefined"
-          >
-            {{ arg.displayText ?? arg.text }}
-          </span>
-          <button
-            @click="removeFilter(f.id)"
-            class="ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20 transition-colors"
-          >
-            <XIcon class="size-3" />
-          </button>
-        </div>
-        <button
-          @click="clearAllFilters"
-          class="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
-        >
-          Clear all
-        </button>
-      </div>
-
       <!-- Query visualization above combobox - always render to prevent layout jumping -->
       <QueryVisualization
         :query="query"
@@ -585,7 +547,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
           <input
             v-model="query"
             type="text"
-            placeholder="Filter by column, operator, or value..."
+            :placeholder="t('app.ui.filterPlaceholder')"
             class="flex-1 w-full bg-transparent placeholder:text-muted-foreground outline-none text-sm text-foreground"
             @focus="handleFocus"
             @blur="handleBlur"
@@ -607,9 +569,9 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
         >
           <!-- Column headers - matches item padding -->
           <div class="flex items-center w-full gap-2 pl-3 pr-3 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide border-b border-border/50 whitespace-nowrap">
-            <span class="flex-1">Suggestion</span>
-            <span class="w-10 shrink-0">Score</span>
-            <span class="w-14 shrink-0"># Results</span>
+            <span class="flex-1">{{ t("app.ui.suggestion") }}</span>
+            <span class="w-10 shrink-0">{{ t("app.ui.score") }}</span>
+            <span class="w-14 shrink-0">{{ t("app.ui.results") }}</span>
           </div>
           <div class="max-h-80 overflow-y-auto p-1">
             <div
@@ -670,28 +632,56 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
           </div>
         </div>
       </div>
+    </div>
 
-   
-
-      <!-- Help text -->
-      <p class="text-xs text-muted-foreground">
-        Try typing: <code class="bg-muted px-1 rounded">status</code>,
-        <code class="bg-muted px-1 rounded">neq</code>,
-        <code class="bg-muted px-1 rounded">Alice</code>, or
-        <code class="bg-muted px-1 rounded">Engineering</code>
-      </p>
+    <!-- Active filters -->
+    <div v-if="appliedFilters.length > 0" class="flex flex-wrap items-center gap-2">
+      <span class="text-xs text-muted-foreground font-medium">{{ t("app.ui.activeFilters") }}</span>
+      <div
+        v-for="f in appliedFilters"
+        :key="f.id"
+        class="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 h-auto bg-secondary text-secondary-foreground rounded-md text-xs"
+      >
+        <span class="font-medium text-foreground truncate">
+          {{ f.parts.column.text }}
+        </span>
+        <span class="shrink-0 h-4 px-1 rounded inline-flex items-center font-medium bg-muted text-muted-foreground text-[10px]">
+          {{ f.parts.operator.matchedAlias ?? f.parts.operator.text }}
+        </span>
+        <!-- Render existing arguments (no placeholders for applied filters), use displayText with ellipsis for long values -->
+        <span 
+          v-for="(arg, i) in f.parts.arguments" 
+          :key="i"
+          class="shrink-0 text-[10px] h-4 px-1.5 rounded inline-flex items-center border border-border text-muted-foreground"
+          :title="arg.displayText ? arg.text : undefined"
+        >
+          {{ arg.displayText ?? arg.text }}
+        </span>
+        <button
+          @click="removeFilter(f.id)"
+          class="ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20 transition-colors"
+        >
+          <XIcon class="size-3" />
+        </button>
+      </div>
+      <button
+        @click="clearAllFilters"
+        class="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+      >
+        {{ t("app.ui.clearAll") }}
+      </button>
     </div>
 
     <!-- Results summary -->
     <div class="flex items-center justify-between">
       <h3 class="text-sm font-medium">
-        Tasks
+        {{ t("app.ui.tasks") }}
         <span class="text-muted-foreground font-normal">
-          ({{ formatNumber(filteredData.length) }} of {{ formatNumber(LARGE_DATASET.length) }})
+          ({{ formatNumber(filteredData.length) }} / {{ formatNumber(LARGE_DATASET.length) }})
         </span>
       </h3>
       <span v-if="appliedFilters.length > 0" class="text-xs text-muted-foreground">
-        {{ appliedFilters.length }} filter{{ appliedFilters.length !== 1 ? 's' : '' }} applied
+        {{ t("app.ui.filtersApplied", { count: appliedFilters.length }) }}
       </span>
     </div>
 
@@ -708,7 +698,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                 <ColumnInfoPopover v-if="statusColumn" :column="statusColumn">
                   <div class="flex items-center gap-1">
                     <DataTypeIcon :type="statusColumn.type" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">Status</span>
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.status") }}</span>
                   </div>
                 </ColumnInfoPopover>
               </th>
@@ -716,7 +706,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                 <ColumnInfoPopover v-if="assigneeColumn" :column="assigneeColumn">
                   <div class="flex items-center gap-1">
                     <DataTypeIcon :type="assigneeColumn.type" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">Assignee</span>
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.assignee") }}</span>
                   </div>
                 </ColumnInfoPopover>
               </th>
@@ -724,7 +714,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                 <ColumnInfoPopover v-if="priorityColumn" :column="priorityColumn">
                   <div class="flex items-center gap-1">
                     <DataTypeIcon :type="priorityColumn.type" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">Priority</span>
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.priority") }}</span>
                   </div>
                 </ColumnInfoPopover>
               </th>
@@ -732,7 +722,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                 <ColumnInfoPopover v-if="departmentColumn" :column="departmentColumn">
                   <div class="flex items-center gap-1">
                     <DataTypeIcon :type="departmentColumn.type" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">Dept</span>
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.department") }}</span>
                   </div>
                 </ColumnInfoPopover>
               </th>
@@ -740,7 +730,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                 <ColumnInfoPopover v-if="createdColumn" :column="createdColumn">
                   <div class="flex items-center gap-1">
                     <DataTypeIcon :type="createdColumn.type" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">Created</span>
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.created") }}</span>
                   </div>
                 </ColumnInfoPopover>
               </th>
@@ -748,7 +738,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                 <ColumnInfoPopover v-if="isBlockedColumn" :column="isBlockedColumn">
                   <div class="flex items-center gap-1">
                     <DataTypeIcon :type="isBlockedColumn.type" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">Blocked</span>
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.isBlocked") }}</span>
                   </div>
                 </ColumnInfoPopover>
               </th>
@@ -756,7 +746,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                 <ColumnInfoPopover v-if="commentsColumn" :column="commentsColumn">
                   <div class="flex items-center gap-1">
                     <DataTypeIcon :type="commentsColumn.type" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">Comments</span>
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.comments") }}</span>
                   </div>
                 </ColumnInfoPopover>
               </th>
@@ -768,8 +758,8 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
               <td colspan="7">
                 <div class="flex flex-col items-center justify-center py-8 text-muted-foreground">
                   <FilterIcon class="size-10 mb-3 opacity-40" />
-                  <p class="text-sm font-medium">No rows matching your filters</p>
-                  <p class="text-xs mt-1">Try adjusting or removing some filters</p>
+                  <p class="text-sm font-medium">{{ t("app.ui.noRowsTitle") }}</p>
+                  <p class="text-xs mt-1">{{ t("app.ui.noRowsHint") }}</p>
                 </div>
               </td>
             </tr>
@@ -811,7 +801,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                 <td class="px-3 py-2 text-muted-foreground text-sm h-12 max-w-xs" :title="getRow(virtualRow.index).comments">
                   <span class="block truncate">
                     <template v-if="getRow(virtualRow.index).comments">{{ getRow(virtualRow.index).comments }}</template>
-                    <span v-else class="text-muted-foreground/50 italic">No comments</span>
+                    <span v-else class="text-muted-foreground/50 italic">{{ t("app.ui.noComments") }}</span>
                   </span>
                 </td>
               </tr>

@@ -94,24 +94,31 @@ export const COLUMN_IDS = {
 
 /**
  * Schema definition for the task data.
+ * 
+ * Column names and enum values use i18n keys for translation support.
+ * The static `name`/`values` properties serve as fallbacks when translations are not available.
  */
 export const TASK_SCHEMA: SchemaInput = {
   columns: [
     {
       id: COLUMN_IDS.status,
       name: "Status",
+      nameKey: "columns.status",
       type: "enum",
       values: ["Open", "In Progress", "Closed", "Blocked"],
+      valueKeys: ["values.status.open", "values.status.inProgress", "values.status.closed", "values.status.blocked"],
     },
     {
       id: COLUMN_IDS.assignee,
       name: "Assignee",
+      nameKey: "columns.assignee",
       type: "string",
       aliases: ["owner", "assigned to"],
     },
     {
       id: COLUMN_IDS.priority,
       name: "Priority",
+      nameKey: "columns.priority",
       type: "number",
       min: 1,
       max: 5,
@@ -120,25 +127,32 @@ export const TASK_SCHEMA: SchemaInput = {
     {
       id: COLUMN_IDS.department,
       name: "Department",
+      nameKey: "columns.department",
       type: "enum",
       values: ["Engineering", "Design", "Product"],
+      valueKeys: ["values.department.engineering", "values.department.design", "values.department.product"],
     },
     {
       id: COLUMN_IDS.created,
       name: "Created",
+      nameKey: "columns.created",
       type: "date",
       aliases: ["date"],
     },
     {
       id: COLUMN_IDS.isBlocked,
       name: "Is Blocked",
+      nameKey: "columns.isBlocked",
       type: "boolean",
       trueLabel: "Blocked",
       falseLabel: "Not Blocked",
+      trueLabelKey: "values.boolean.blocked",
+      falseLabelKey: "values.boolean.notBlocked",
     },
     {
       id: COLUMN_IDS.comments,
       name: "Comments",
+      nameKey: "columns.comments",
       type: "string",
       aliases: ["notes", "description", "text"],
     },

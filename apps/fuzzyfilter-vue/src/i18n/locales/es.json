@@ -1,0 +1,63 @@
+{
+  "columns": {
+    "status": "Estado",
+    "assignee": "Asignado",
+    "priority": "Prioridad",
+    "department": "Departamento",
+    "created": "Creado",
+    "isBlocked": "Está bloqueado",
+    "comments": "Comentarios"
+  },
+  "values": {
+    "status": {
+      "open": "Abierto",
+      "inProgress": "En progreso",
+      "closed": "Cerrado",
+      "blocked": "Bloqueado"
+    },
+    "department": {
+      "engineering": "Ingeniería",
+      "design": "Diseño",
+      "product": "Producto"
+    },
+    "boolean": {
+      "blocked": "Bloqueado",
+      "notBlocked": "No bloqueado"
+    }
+  },
+  "ui": {
+    "title": "FuzzyFilter Combobox con Tabla de Datos (Vue)",
+    "filterPlaceholder": "Filtrar por columna, operador o valor...",
+    "noResults": "Sin resultados",
+    "noRowsTitle": "No hay filas que coincidan con sus filtros",
+    "noRowsHint": "Intente ajustar o eliminar algunos filtros",
+    "clearAll": "Borrar todo",
+    "clearFilters": "Borrar filtros",
+    "selectLanguage": "Seleccionar idioma",
+    "showingResults": "Mostrando {count} resultados",
+    "activeFilters": "Filtros activos:",
+    "appliedFilters": "Filtros aplicados",
+    "noFilters": "Sin filtros aplicados",
+    "filtersApplied": "{count} filtro(s) aplicado(s)",
+    "suggestion": "Sugerencia",
+    "score": "Puntuación",
+    "results": "# Resultados",
+    "tasks": "Tareas",
+    "noComments": "Sin comentarios",
+    "apiDocs": "Documentación API",
+    "operators": "Operadores",
+    "usage": "Uso",
+    "dataTypes": "Tipos de datos"
+  },
+  "table": {
+    "headers": {
+      "status": "Estado",
+      "assignee": "Asignado",
+      "priority": "Prioridad",
+      "department": "Dep.",
+      "created": "Creado",
+      "isBlocked": "Bloqueado",
+      "comments": "Comentarios"
+    }
+  }
+}
