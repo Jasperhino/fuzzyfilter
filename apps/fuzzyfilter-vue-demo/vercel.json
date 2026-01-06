@@ -1,6 +1,6 @@
 {
-  "buildCommand": "bun run build",
+  "buildCommand": "",
   "outputDirectory": "dist",
-  "installCommand": "bun install --ignore-scripts",
-  "framework": "vite"
+  "installCommand": "",
+  "framework": null
 }

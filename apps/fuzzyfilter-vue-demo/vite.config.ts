@@ -32,6 +32,7 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       // Resolve local packages
+      "@jasperhino/fuzzyfilter": path.resolve(packagesPath, "fuzzyfilter/src/index.ts"),
       "fuzzyfilter": path.resolve(packagesPath, "fuzzyfilter/src/index.ts"),
       "fuzzyfilter/i18n/locales": path.resolve(packagesPath, "fuzzyfilter/src/i18n/locales/index.ts"),
       "fuzzyfilter/types/i18n": path.resolve(packagesPath, "fuzzyfilter/src/types/i18n.ts"),
@@ -41,6 +42,7 @@ export default defineConfig({
       // Resolve lucide-operators packages
       "lucide-operators/assets": path.resolve(packagesPath, "lucide-operators/assets"),
       "lucide-operators": path.resolve(packagesPath, "lucide-operators/src/index.ts"),
+      "lucide-operators-vue": path.resolve(packagesPath, "lucide-operators-vue/src/index.ts"),
       // Resolve axiom-exporter package
       "@fuzzyfilter/axiom-exporter": path.resolve(packagesPath, "axiom-exporter/src/index.ts"),
     },

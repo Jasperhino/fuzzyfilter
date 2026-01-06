@@ -8,7 +8,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
+      "@jasperhino/fuzzyfilter": ["../../packages/fuzzyfilter/src/index.ts"],
       "fuzzyfilter": ["../../packages/fuzzyfilter/src/index.ts"],
+      "@fuzzyfilter/axiom-exporter": ["../../packages/axiom-exporter/src/index.ts"],
       "fuzzyfilter-vue": ["../../packages/fuzzyfilter-vue/src/index.ts"],
       "@fuzzyfilter/sample-data": ["../../packages/sample-data/src/index.ts"],
       "lucide-operators": ["../../packages/lucide-operators/src/index.ts"],
