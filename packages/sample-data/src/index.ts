@@ -8,16 +8,37 @@
  */
 
 import { columnId, type SchemaInput } from "@jasperhino/fuzzyfilter";
-import { generateTasks } from "./generator.ts";
+import { generateTasks, type Task } from "./generator.ts";
 
-// Re-export generator utilities
+// Import pre-generated large dataset (10,000 rows with seed 42)
+// This is generated at build time to avoid loading faker at runtime
+import generatedData from "./generated-data.json";
+
+// Re-export generator utilities and Task type
 export {
   generateTasks,
   generateLargeDataset,
   createSeededGenerator,
   generateSingleTask,
   type GeneratorOptions,
+  type Task,
 } from "./generator.ts";
+
+// Re-export lazy-loaded async generator for runtime use
+export { generateSingleTaskAsync } from "./lazy-generator.ts";
+
+// ============================================================================
+// PRE-GENERATED LARGE DATASET
+// ============================================================================
+
+/**
+ * Pre-generated large dataset for demos and performance testing.
+ * Contains 10,000 tasks generated with seed 42 at build time.
+ * 
+ * Using this instead of `generateLargeDataset()` avoids loading faker.js
+ * at runtime, significantly improving initial page load performance.
+ */
+export const LARGE_DATASET: Task[] = generatedData as Task[];
 
 // ============================================================================
 // CONSTANTS
@@ -33,26 +54,6 @@ export const SAMPLE_DATA_SEED = 42;
  * Default number of sample tasks to generate.
  */
 export const SAMPLE_DATA_COUNT = 50;
-
-// ============================================================================
-// SAMPLE DATA
-// ============================================================================
-
-/**
- * Task type definition for filtering results.
- * Includes index signature for compatibility with Record<string, unknown>.
- */
-export interface Task {
-  id: number;
-  status: string;
-  assignee: string;
-  priority: number;
-  department: string;
-  created: string;
-  isBlocked: boolean;
-  comments: string;
-  [key: string]: string | number | boolean;
-}
 
 /**
  * Deterministic sample task data for demonstration.
@@ -84,6 +85,7 @@ export const COLUMN_IDS = {
   assignee: columnId("assignee"),
   priority: columnId("priority"),
   department: columnId("department"),
+  dueDate: columnId("dueDate"),
   created: columnId("created"),
   isBlocked: columnId("isBlocked"),
   comments: columnId("comments"),
@@ -134,11 +136,18 @@ export const TASK_SCHEMA: SchemaInput = {
       valueKeys: ["values.department.engineering", "values.department.design", "values.department.product"],
     },
     {
+      id: COLUMN_IDS.dueDate,
+      name: "Due Date",
+      nameKey: "columns.dueDate",
+      type: "date",
+      aliases: ["due", "deadline"],
+    },
+    {
       id: COLUMN_IDS.created,
       name: "Created",
       nameKey: "columns.created",
-      type: "date",
-      aliases: ["date"],
+      type: "string",
+      aliases: ["timestamp", "createdAt"],
     },
     {
       id: COLUMN_IDS.isBlocked,

@@ -1,0 +1,14 @@
+---
+alwaysApply: true
+---
+When ever you try to execute a command do not prefix it wit a cd command to ensure you are in the correct directory. This will cause the command to fail.
+
+For example, the following command will fail:
+```bash
+cd /Users/jasper/Work/fuzzyfilter/packages/fuzzyfilter && bun test src/fuzzy-filter.test.ts 
+```
+
+Instead, you should execute the command directly:
+```bash
+bun test src/fuzzy-filter.test.ts 
+```

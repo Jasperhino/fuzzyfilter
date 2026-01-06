@@ -16,7 +16,7 @@
  * Coverage: 3/3 = 100% │ Final Score: 1.0
  */
 import { computed } from "vue"
-import { tokenize, type QueryMatch, type FilterSuggestion, type ScoreExplanation, type TokenScoreInfo } from "@jasperhino/fuzzyfilter"
+import { tokenize, type QueryMatch, type FilterSuggestion, type TokenScoreInfo } from "@jasperhino/fuzzyfilter"
 
 /**
  * Represents a token segment with its match and score information
@@ -329,6 +329,7 @@ function getScoreDisplay(segment: TokenSegment): { text: string; class: string; 
     title: `Quality: ${scoreInfo.fuzzyQuality.toFixed(2)}`
   }
 }
+
 </script>
 
 <template>
@@ -337,68 +338,74 @@ function getScoreDisplay(segment: TokenSegment): { text: string; class: string; 
     class="flex flex-col gap-0.5 px-3 py-2 bg-muted/30 rounded-md border border-border/50 font-mono text-sm min-h-[6rem] min-w-0"
   >
     <template v-if="visibleSegments.length > 0">
-      <!-- Token row -->
-      <div class="flex items-center gap-0">
-        <template v-for="(segment, index) in visibleSegments" :key="index">
-          <!-- Separator: dot (·) for token separator, underscore (_) for space within value -->
-          <span
-            v-if="segment.isSeparator"
-            class="px-1 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors cursor-default select-none"
-            :title="segment.isValueSpace ? 'space within value' : 'token separator'"
-          >
-            {{ segment.isValueSpace ? '_' : '·' }}
-          </span>
-          <!-- Token text -->
-          <span v-else :class="getColorClass(segment.matchType)">
-            {{ segment.text }}
-          </span>
-        </template>
-      </div>
+      <!-- Grid layout: each segment gets its own column, rows for token/label/score -->
+      <div 
+        class="grid gap-y-0.5"
+        :style="{ gridTemplateColumns: `repeat(${visibleSegments.length}, auto)` }"
+      >
+        <!-- Token row -->
+        <div class="contents">
+          <template v-for="(segment, index) in visibleSegments" :key="index">
+            <!-- Separator: dot (·) for token separator, underscore (_) for space within value -->
+            <span
+              v-if="segment.isSeparator"
+              class="px-1 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors cursor-default select-none text-center"
+              :title="segment.isValueSpace ? 'space within value' : 'token separator'"
+            >
+              {{ segment.isValueSpace ? '_' : '·' }}
+            </span>
+            <!-- Token text -->
+            <span v-else :class="[getColorClass(segment.matchType), 'text-center']">
+              {{ segment.text }}
+            </span>
+          </template>
+        </div>
 
-      <!-- Labels row -->
-      <div class="flex items-center gap-0 text-xs text-muted-foreground/70">
-        <template v-for="(segment, index) in visibleSegments" :key="`label-${index}`">
-          <!-- Empty space for separator alignment -->
-          <span
-            v-if="segment.isSeparator"
-            class="px-1 select-none"
-            aria-hidden="true"
-          >
-            &nbsp;
-          </span>
-          <!-- Label aligned with token above -->
-          <span
-            v-else
-            class="text-center truncate"
-            :class="{ 'text-red-500/50 dark:text-red-400/50': segment.matchType === null }"
-            :style="{ width: `${segment.text.length}ch` }"
-          >
-            {{ getLabelForMatch(segment.matchType, segment.argIndex) }}
-          </span>
-        </template>
-      </div>
+        <!-- Labels row -->
+        <div class="contents">
+          <template v-for="(segment, index) in visibleSegments" :key="`label-${index}`">
+            <!-- Empty space for separator alignment -->
+            <span
+              v-if="segment.isSeparator"
+              class="px-1 select-none text-center"
+              aria-hidden="true"
+            >
+              &nbsp;
+            </span>
+            <!-- Label aligned with token above -->
+            <span
+              v-else
+              class="text-center text-xs"
+              :class="segment.matchType === null ? 'text-red-500/50 dark:text-red-400/50' : 'text-muted-foreground/70'"
+            >
+              {{ getLabelForMatch(segment.matchType, segment.argIndex) }}
+            </span>
+          </template>
+        </div>
 
-      <!-- Score row -->
-      <div v-if="scoreExplanation" class="flex items-center gap-0 text-xs">
-        <template v-for="(segment, index) in visibleSegments" :key="`score-${index}`">
-          <!-- Empty space for separator alignment -->
-          <span
-            v-if="segment.isSeparator"
-            class="px-1 select-none"
-            aria-hidden="true"
-          >
-            &nbsp;
-          </span>
-          <!-- Score aligned with token above -->
-          <span
-            v-else
-            class="text-center truncate"
-            :class="getScoreDisplay(segment).class"
-            :style="{ width: `${segment.text.length}ch` }"
-            :title="getScoreDisplay(segment).title"
-          >
-            {{ getScoreDisplay(segment).text }}
-          </span>
+        <!-- Score row -->
+        <template v-if="scoreExplanation">
+          <div class="contents">
+            <template v-for="(segment, index) in visibleSegments" :key="`score-${index}`">
+              <!-- Empty space for separator alignment -->
+              <span
+                v-if="segment.isSeparator"
+                class="px-1 select-none text-center"
+                aria-hidden="true"
+              >
+                &nbsp;
+              </span>
+              <!-- Score aligned with token above -->
+              <span
+                v-else
+                class="text-center text-xs"
+                :class="getScoreDisplay(segment).class"
+                :title="getScoreDisplay(segment).title"
+              >
+                {{ getScoreDisplay(segment).text }}
+              </span>
+            </template>
+          </div>
         </template>
       </div>
 

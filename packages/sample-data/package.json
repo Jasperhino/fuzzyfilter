@@ -13,6 +13,10 @@
       "types": "./src/index.ts"
     }
   },
+  "scripts": {
+    "generate-data": "bun run src/generate-data.ts",
+    "prebuild": "bun run generate-data"
+  },
   "dependencies": {
     "@faker-js/faker": "^10.1.0"
   },

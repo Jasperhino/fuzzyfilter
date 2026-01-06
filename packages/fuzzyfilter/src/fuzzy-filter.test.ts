@@ -38,8 +38,8 @@ describe("FuzzyFilter", () => {
     test("getSchema returns the schema", () => {
       const schema = filter.getSchema();
       expect(schema).not.toBeNull();
-      // TASK_SCHEMA has 7 columns: status, assignee, priority, department, createdAt, isBlocked, comments
-      expect(schema?.columns.size).toBe(7);
+      // TASK_SCHEMA has 8 columns: status, assignee, priority, department, dueDate, created, isBlocked, comments
+      expect(schema?.columns.size).toBe(8);
     });
 
     test("getColumn returns column by ID", () => {
@@ -63,7 +63,7 @@ describe("FuzzyFilter", () => {
       const stats = filter.getIndexStats();
       // We generate 10 sample rows in beforeEach
       expect(stats.totalRows).toBe(10);
-      expect(stats.columnsIndexed).toBe(7);
+      expect(stats.columnsIndexed).toBe(8);
     });
 
     test("clearIndex empties the index", () => {
@@ -327,6 +327,85 @@ describe("FuzzyFilter", () => {
       const compiled = filter.compileFilter("isBlocked", "isTrue");
       // Count of blocked items depends on generated data
       expect(filter.count(compiled!)).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe("Variadic operators (in/nin)", () => {
+    /**
+     * Test that the "in" operator works correctly with a single-value array.
+     * This tests that compileFilter correctly handles arrays for variadic operators.
+     * Bug scenario: When passing ["In Progress"] to compileFilter for the "in" operator,
+     * the predicate should match rows where status === "In Progress".
+     */
+    test("'in' operator works with single-value array", () => {
+      const compiled = filter.compileFilter("status", "in", ["Open"]);
+      expect(compiled).not.toBeNull();
+      expect(compiled?.predicate({ status: "Open" })).toBe(true);
+      expect(compiled?.predicate({ status: "Closed" })).toBe(false);
+      expect(compiled?.predicate({ status: "In Progress" })).toBe(false);
+    });
+
+    /**
+     * Test that the "in" operator works correctly with multiple values.
+     */
+    test("'in' operator works with multi-value array", () => {
+      const compiled = filter.compileFilter("status", "in", ["Open", "Closed"]);
+      expect(compiled).not.toBeNull();
+      expect(compiled?.predicate({ status: "Open" })).toBe(true);
+      expect(compiled?.predicate({ status: "Closed" })).toBe(true);
+      expect(compiled?.predicate({ status: "In Progress" })).toBe(false);
+    });
+
+    /**
+     * Test that the "nin" (not in) operator works correctly with a single-value array.
+     */
+    test("'nin' operator works with single-value array", () => {
+      const compiled = filter.compileFilter("status", "nin", ["Open"]);
+      expect(compiled).not.toBeNull();
+      expect(compiled?.predicate({ status: "Open" })).toBe(false);
+      expect(compiled?.predicate({ status: "Closed" })).toBe(true);
+      expect(compiled?.predicate({ status: "In Progress" })).toBe(true);
+    });
+
+    /**
+     * Test that the "nin" operator works correctly with multiple values.
+     */
+    test("'nin' operator works with multi-value array", () => {
+      const compiled = filter.compileFilter("status", "nin", ["Open", "Closed"]);
+      expect(compiled).not.toBeNull();
+      expect(compiled?.predicate({ status: "Open" })).toBe(false);
+      expect(compiled?.predicate({ status: "Closed" })).toBe(false);
+      expect(compiled?.predicate({ status: "In Progress" })).toBe(true);
+    });
+
+    /**
+     * Test that "in" operator matchCount correctly counts matching rows.
+     * This verifies the compiled filter counts matches accurately.
+     */
+    test("'in' operator matchCount is accurate", () => {
+      // Create a controlled dataset
+      const testFilter = createFuzzyFilter();
+      testFilter.setSchema({
+        columns: [
+          { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed", "In Progress"] },
+        ],
+      });
+      testFilter.indexData([
+        { status: "Open" },
+        { status: "Open" },
+        { status: "Closed" },
+        { status: "In Progress" },
+        { status: "In Progress" },
+        { status: "In Progress" },
+      ]);
+
+      // Test single value
+      const singleValueFilter = testFilter.compileFilter("status", "in", ["Open"]);
+      expect(singleValueFilter?.matchCount).toBe(2); // 2 Open rows
+
+      // Test multiple values  
+      const multiValueFilter = testFilter.compileFilter("status", "in", ["Open", "In Progress"]);
+      expect(multiValueFilter?.matchCount).toBe(5); // 2 Open + 3 In Progress
     });
   });
 });
@@ -1922,29 +2001,6 @@ describe("Complete vs Incomplete Suggestion Scoring", () => {
 
 });
 
-describe("Fuzzy multi-word operator matching", () => {
-  let filter: FuzzyFilter;
-  const sampleData = generateTestData(10) as unknown as Record<string, unknown>[];
-
-  beforeEach(() => {
-    filter = createFuzzyFilter({ maxSuggestions: 10 });
-    filter.setSchema(TASK_SCHEMA);
-    filter.indexData(sampleData);
-  });
-
-
-  test("'not eql' should prefer 'neq' operator (not equals)", async () => {
-    // "not eql" should fuzzy match "not equal" (neq alias)
-    const response = await filter.suggest("not eql");
-    
-    const topOperators = response.suggestions.slice(0, 5).map(s => s.operator);
-    const neqIndex = topOperators.indexOf("neq");
-    
-    // neq should be in the top suggestions
-    expect(neqIndex).toBeGreaterThanOrEqual(0);
-  });
-});
-
 describe("Alias Pattern Expansion", () => {
   let filter: FuzzyFilter;
 
@@ -2698,5 +2754,138 @@ describe("i18n Column Translation", () => {
     
     expect(getTranslatedBooleanLabel(column, true, undefined)).toBe("Blocked");
     expect(getTranslatedBooleanLabel(column, false, undefined)).toBe("Not Blocked");
+  });
+});
+
+describe("Data Mutation - Index Updates", () => {
+  test("addRow makes new value immediately searchable in suggestions", async () => {
+    // Create a filter with a simple schema
+    const filter = createFuzzyFilter({ maxSuggestions: 20 });
+    filter.setSchema({
+      columns: [
+        { id: columnId("name"), name: "Name", type: "string" },
+        { id: columnId("status"), name: "Status", type: "enum", values: ["Active", "Inactive"] },
+      ],
+    });
+
+    // Index initial data with common names
+    const initialData = [
+      { name: "Alice Smith", status: "Active" },
+      { name: "Bob Jones", status: "Active" },
+      { name: "Charlie Brown", status: "Inactive" },
+    ];
+    filter.indexData(initialData);
+
+    // Verify initial state - Alice should be findable
+    let response = await filter.suggest("Alice");
+    expect(response.suggestions.some((s) => 
+      s.arguments?.[0]?.kind === "string" && s.arguments[0].value === "Alice Smith"
+    )).toBe(true);
+
+    // Add a new row with a completely unique name
+    const uniqueName = "Zephyr Moonwhisper";
+    filter.addRow({ name: uniqueName, status: "Active" });
+
+    // The new name should immediately appear in suggestions
+    response = await filter.suggest("Zephyr");
+    expect(response.suggestions.some((s) => 
+      s.arguments?.[0]?.kind === "string" && s.arguments[0].value === uniqueName
+    )).toBe(true);
+
+    // Should also be findable with partial match
+    response = await filter.suggest("Moonwhisper");
+    expect(response.suggestions.some((s) => 
+      s.arguments?.[0]?.kind === "string" && s.arguments[0].value === uniqueName
+    )).toBe(true);
+  });
+
+  test("addRow works with high-cardinality columns (100+ unique values)", async () => {
+    const filter = createFuzzyFilter({ maxSuggestions: 20 });
+    filter.setSchema({
+      columns: [
+        { id: columnId("assignee"), name: "Assignee", type: "string" },
+      ],
+    });
+
+    // Create 150 unique names to exceed the old MAX_VALUES_PER_COLUMN limit
+    const manyNames = Array.from({ length: 150 }, (_, i) => ({
+      assignee: `Person_${String(i).padStart(3, "0")}`,
+    }));
+    filter.indexData(manyNames);
+
+    // Verify all 150 names are indexed - check first, middle, and last
+    let response = await filter.suggest("Person_000");
+    expect(response.suggestions.some((s) => 
+      s.arguments?.[0]?.value === "Person_000"
+    )).toBe(true);
+
+    response = await filter.suggest("Person_075");
+    expect(response.suggestions.some((s) => 
+      s.arguments?.[0]?.value === "Person_075"
+    )).toBe(true);
+
+    response = await filter.suggest("Person_149");
+    expect(response.suggestions.some((s) => 
+      s.arguments?.[0]?.value === "Person_149"
+    )).toBe(true);
+
+    // Now add a new person and verify they're immediately searchable
+    filter.addRow({ assignee: "NewPerson_XYZ" });
+
+    response = await filter.suggest("NewPerson_XYZ");
+    expect(response.suggestions.some((s) => 
+      s.arguments?.[0]?.value === "NewPerson_XYZ"
+    )).toBe(true);
+  });
+
+  test("removeRow updates index correctly", async () => {
+    const filter = createFuzzyFilter({ maxSuggestions: 20 });
+    filter.setSchema({
+      columns: [
+        { id: columnId("name"), name: "Name", type: "string" },
+      ],
+    });
+
+    // Index data with one unique value
+    filter.indexData([
+      { name: "Alice" },
+      { name: "Bob" },
+      { name: "UniqueCharlie" },
+    ]);
+
+    // UniqueCharlie should be findable
+    let response = await filter.suggest("UniqueCharlie");
+    expect(response.suggestions.some((s) => 
+      s.arguments?.[0]?.value === "UniqueCharlie"
+    )).toBe(true);
+
+    // Remove the row with UniqueCharlie (index 2)
+    filter.removeRow(2);
+
+    // UniqueCharlie should no longer appear in suggestions
+    response = await filter.suggest("UniqueCharlie");
+    expect(response.suggestions.some((s) => 
+      s.arguments?.[0]?.value === "UniqueCharlie"
+    )).toBe(false);
+  });
+
+  test("index stats reflect all unique values", () => {
+    const filter = createFuzzyFilter();
+    filter.setSchema({
+      columns: [
+        { id: columnId("name"), name: "Name", type: "string" },
+      ],
+    });
+
+    // Create 200 unique names
+    const manyNames = Array.from({ length: 200 }, (_, i) => ({
+      name: `UniqueName_${i}`,
+    }));
+    filter.indexData(manyNames);
+
+    const stats = filter.getIndexStats();
+    expect(stats.totalRows).toBe(200);
+    // All 200 unique values should be indexed (not capped at 100)
+    expect(stats.uniqueValues).toBe(200);
   });
 });

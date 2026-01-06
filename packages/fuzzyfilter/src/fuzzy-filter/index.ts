@@ -403,7 +403,6 @@ export class FuzzyFilterImpl implements FuzzyFilter {
 
       // Phase 2: Sort values by frequency
       const endSorting = event.startPhase("value_sorting_ms");
-      const MAX_VALUES_PER_COLUMN = 100;
       const sortedValuesMap = new Map<string, Array<[string, number]>>();
       const cardinalityPerColumn: Record<string, number> = {};
 
@@ -411,10 +410,9 @@ export class FuzzyFilterImpl implements FuzzyFilter {
         const counts = valueCounts.get(col.id as string)!;
         cardinalityPerColumn[col.id as string] = counts.size;
         
-        // Sort values by frequency and take top N
+        // Sort values by frequency (index ALL values for complete coverage)
         const sortedValues = [...counts.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, MAX_VALUES_PER_COLUMN);
+          .sort((a, b) => b[1] - a[1]);
         sortedValuesMap.set(col.id as string, sortedValues);
       }
       endSorting();
@@ -540,12 +538,11 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       }
 
       // Build value trie (fast operation, no need to chunk)
-      const MAX_VALUES_PER_COLUMN = 100;
+      // Index ALL values for complete coverage
       for (const col of getColumns(this.state.schema)) {
         const counts = valueCounts.get(col.id as string)!;
         const sortedValues = [...counts.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, MAX_VALUES_PER_COLUMN);
+          .sort((a, b) => b[1] - a[1]);
 
         for (const [value, count] of sortedValues) {
           this.state.valueTrie.insert(value, {
@@ -670,11 +667,37 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     
     try {
       this.state.data.push(row);
-      // Re-index to update value counts and track reindex time
-      const reindexStart = performance.now();
-      this.indexData(this.state.data);
-      const reindexDuration = performance.now() - reindexStart;
-      event.set("reindex_duration_ms", Math.round(reindexDuration * 100) / 100);
+      // Increment version and clear cache
+      this.state.dataVersion++;
+      this.state.contextCache.clear();
+      
+      // Incremental index update - add/update values in the trie
+      if (this.state.schema) {
+        for (const col of getColumns(this.state.schema)) {
+          const value = row[col.id as string];
+          if (value == null) continue;
+          
+          const strValue = String(value);
+          const existing = this.state.valueTrie.lookup(strValue);
+          
+          if (existing && existing.columnId === col.id) {
+            // Value exists for this column - update count by re-inserting with incremented count
+            this.state.valueTrie.insert(strValue, {
+              value: strValue,
+              columnId: col.id,
+              rowCount: existing.rowCount + 1,
+            });
+          } else {
+            // New value - insert into trie
+            this.state.valueTrie.insert(strValue, {
+              value: strValue,
+              columnId: col.id,
+              rowCount: 1,
+            });
+          }
+        }
+      }
+      
       event.success();
     } catch (error) {
       event.recordError(error instanceof Error ? error : String(error));

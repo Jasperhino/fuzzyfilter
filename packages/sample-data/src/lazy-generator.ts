@@ -1,35 +1,13 @@
 /**
- * Sample Data Generator
+ * Lazy Sample Data Generator
  *
- * Generates fake task data using Faker.js that follows the TASK_SCHEMA.
+ * Generates fake task data using dynamically imported Faker.js.
+ * This module avoids loading faker at initial bundle time by using dynamic imports.
  *
- * @module @fuzzyfilter/sample-data/generator
+ * @module @fuzzyfilter/sample-data/lazy-generator
  */
 
-import { faker } from "@faker-js/faker";
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-/**
- * Task type definition for filtering results.
- * Includes index signature for compatibility with Record<string, unknown>.
- */
-export interface Task {
-  id: number;
-  status: string;
-  assignee: string;
-  priority: number;
-  department: string;
-  /** Due date in YYYY-MM-DD format */
-  dueDate: string;
-  /** Creation timestamp in ISO format with second precision */
-  created: string;
-  isBlocked: boolean;
-  comments: string;
-  [key: string]: string | number | boolean;
-}
+import type { Task, GeneratorOptions } from "./generator.ts";
 
 // ============================================================================
 // CONFIGURATION
@@ -52,50 +30,29 @@ const PRIORITY_MIN = 1;
 const PRIORITY_MAX = 5;
 
 // ============================================================================
-// GENERATOR OPTIONS
+// LAZY GENERATOR FUNCTIONS
 // ============================================================================
 
 /**
- * Options for generating sample data
+ * Cached faker module to avoid repeated dynamic imports
  */
-export interface GeneratorOptions {
-  /**
-   * Number of tasks to generate
-   * @default 50
-   */
-  count?: number;
+let fakerModule: typeof import("@faker-js/faker") | null = null;
 
-  /**
-   * Seed for reproducible random data
-   * If provided, the same seed will always generate the same data
-   */
-  seed?: number;
-
-  /**
-   * Date range for created field
-   */
-  dateRange?: {
-    /** Start date for created range */
-    from?: Date;
-    /** End date for created range */
-    to?: Date;
-  };
-
-  /**
-   * Probability of a task being blocked (0-1)
-   * @default 0.15
-   */
-  blockedProbability?: number;
+/**
+ * Lazily load the faker module
+ */
+async function getFaker() {
+  if (!fakerModule) {
+    fakerModule = await import("@faker-js/faker");
+  }
+  return fakerModule.faker;
 }
 
-// ============================================================================
-// GENERATOR FUNCTIONS
-// ============================================================================
-
 /**
- * Generate a single fake task
+ * Generate a single fake task with lazy-loaded faker
  */
-function generateTask(id: number, options: GeneratorOptions = {}): Task {
+async function generateTaskAsync(id: number, options: GeneratorOptions = {}): Promise<Task> {
+  const faker = await getFaker();
   const { blockedProbability = 0.15, dateRange } = options;
 
   const isBlocked = faker.datatype.boolean({ probability: blockedProbability });
@@ -156,111 +113,31 @@ function generateTask(id: number, options: GeneratorOptions = {}): Task {
 }
 
 /**
- * Generate an array of fake tasks
- *
- * @param options - Configuration options for the generator
- * @returns Array of generated tasks
- *
- * @example
- * ```typescript
- * // Generate 100 tasks with a fixed seed for reproducibility
- * const tasks = generateTasks({ count: 100, seed: 42 });
- *
- * // Generate tasks within a specific date range
- * const recentTasks = generateTasks({
- *   count: 50,
- *   dateRange: {
- *     from: new Date("2024-06-01"),
- *     to: new Date("2024-12-31"),
- *   },
- * });
- * ```
- */
-export function generateTasks(options: GeneratorOptions = {}): Task[] {
-  const { count = 50, seed } = options;
-
-  // Set seed for reproducible results
-  if (seed !== undefined) {
-    faker.seed(seed);
-  }
-
-  const tasks: Task[] = [];
-
-  for (let i = 1; i <= count; i++) {
-    tasks.push(generateTask(i, options));
-  }
-
-  return tasks;
-}
-
-/**
- * Generate a large dataset for performance testing
- *
- * @param size - Number of tasks to generate (default: 1000)
- * @param seed - Optional seed for reproducibility
- * @returns Array of generated tasks
- *
- * @example
- * ```typescript
- * // Generate 10,000 tasks for stress testing
- * const largeTasks = generateLargeDataset(10000, 12345);
- * ```
- */
-export function generateLargeDataset(size = 1000, seed?: number): Task[] {
-  return generateTasks({
-    count: size,
-    seed,
-    dateRange: {
-      from: new Date("2020-01-01"),
-      to: new Date(),
-    },
-  });
-}
-
-/**
- * Create a seeded generator function for consistent test data
- *
- * @param seed - Seed value for the random generator
- * @returns A function that generates tasks with the given seed
- *
- * @example
- * ```typescript
- * const seededGenerator = createSeededGenerator(42);
- *
- * // Will always produce the same 10 tasks
- * const tasks1 = seededGenerator(10);
- * const tasks2 = seededGenerator(10); // Same as tasks1
- * ```
- */
-export function createSeededGenerator(
-  seed: number
-): (count?: number) => Task[] {
-  return (count = 50) => generateTasks({ count, seed });
-}
-
-/**
- * Generate a single task with a given ID.
+ * Generate a single task with a given ID (async version with lazy-loaded faker).
  *
  * Useful for dynamically adding rows to an existing dataset.
- * Uses current timestamp as seed for unique random data each time.
+ * This version dynamically imports faker.js only when called,
+ * avoiding the performance penalty of loading faker at initial page load.
  *
  * @param id - The unique ID for the task
  * @param options - Optional generator options (seed, dateRange, etc.)
- * @returns A single generated task
+ * @returns A promise resolving to a single generated task
  *
  * @example
  * ```typescript
  * // Generate a new task with the next available ID
- * const newTask = generateSingleTask(currentData.length + 1);
+ * const newTask = await generateSingleTaskAsync(currentData.length + 1);
  *
  * // Generate with a specific seed for reproducibility
- * const seededTask = generateSingleTask(100, { seed: 12345 });
+ * const seededTask = await generateSingleTaskAsync(100, { seed: 12345 });
  * ```
  */
-export function generateSingleTask(
+export async function generateSingleTaskAsync(
   id: number,
   options: GeneratorOptions = {}
-): Task {
+): Promise<Task> {
+  const faker = await getFaker();
+  
   // Use current timestamp as default seed for unique data
   if (options.seed === undefined) {
     faker.seed(Date.now() + Math.random());
@@ -268,7 +145,5 @@ export function generateSingleTask(
     faker.seed(options.seed);
   }
 
-  return generateTask(id, options);
+  return generateTaskAsync(id, options);
 }
-
-

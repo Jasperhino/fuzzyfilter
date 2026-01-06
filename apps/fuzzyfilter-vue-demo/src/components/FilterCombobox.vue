@@ -9,7 +9,7 @@ import { ref, onMounted, computed, watch } from "vue"
 import { useVirtualizer } from "@tanstack/vue-virtual"
 import { useFuzzyFilter } from "fuzzyfilter-vue"
 import { createFuzzyFilter, getOperator, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch, createVueI18nProvider } from "@jasperhino/fuzzyfilter"
-import { TASK_SCHEMA, COLUMN_IDS, generateLargeDataset, generateSingleTask, type Task as TaskRow } from "@fuzzyfilter/sample-data"
+import { TASK_SCHEMA, COLUMN_IDS, LARGE_DATASET, generateSingleTaskAsync, type Task as TaskRow } from "@fuzzyfilter/sample-data"
 import { useI18n } from "vue-i18n"
 import { i18n } from "@/i18n"
 import DataTypeIcon from "./DataTypeIcon.vue"
@@ -23,18 +23,35 @@ import {
   Loader2Icon,
   PlusIcon,
   Trash2Icon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  ChevronsUpDownIcon,
 } from "lucide-operators-vue"
 import { cn } from "@/lib/utils"
 import { attachAxiomExporter } from "@/lib/axiom-telemetry"
 
-// Generate 10,000 rows with a fixed seed for consistency
-const INITIAL_DATASET = generateLargeDataset(10000, 42)
+// Use pre-generated dataset (10,000 rows with seed 42)
+// This avoids loading faker.js at runtime, significantly improving LCP
+const INITIAL_DATASET = LARGE_DATASET
 
 // Version counter to trigger reactivity when data changes
 const dataVersion = ref(0)
 
 // Row height for virtual scroll
 const ROW_HEIGHT = 48
+
+/**
+ * Sort direction type for column sorting
+ */
+type SortDirection = "asc" | "desc"
+
+/**
+ * Sorting state for the data table
+ */
+interface SortState {
+  column: keyof TaskRow | null
+  direction: SortDirection
+}
 
 // Get i18n composer for reactive locale access
 const i18nComposer = useI18n()
@@ -81,8 +98,11 @@ const compiledFiltersForContext = computed(() => {
       return undefined
     }).filter((v: unknown) => v !== undefined)
     
-    // Pass array for variadic operators, single value for others
-    const compileValue = value && value.length === 1 ? value[0] : value
+    // Check if operator is variadic (in, nin, between) - always pass array for these
+    const opInfo = getOperator(f.operator)
+    const compileValue = opInfo.isVariadic 
+      ? value  // Always pass array for variadic operators
+      : (value && value.length === 1 ? value[0] : value)  // Unwrap single values for non-variadic
     const c = filter.compileFilter(f.column.id, f.operator, compileValue)
     if (c) compiled.push(c)
   }
@@ -111,13 +131,42 @@ const {
 // Selected row for deletion
 const selectedRowIndex = ref<number | null>(null)
 
-// Add a new random row using faker
-function handleAddRow() {
+// Sorting state for table columns
+const sortState = ref<SortState>({
+  column: null,
+  direction: "asc",
+})
+
+/**
+ * Handle column header click to toggle sorting
+ * @param columnId - The column to sort by
+ */
+function handleSort(columnId: keyof TaskRow) {
+  const current = sortState.value
+  if (current.column === columnId) {
+    // Toggle direction if same column, or clear if already desc
+    if (current.direction === "asc") {
+      sortState.value = { column: columnId, direction: "desc" }
+    } else {
+      // Clear sorting
+      sortState.value = { column: null, direction: "asc" }
+    }
+  } else {
+    // New column, start with ascending
+    sortState.value = { column: columnId, direction: "asc" }
+  }
+}
+
+// Add a new random row using faker (lazy-loaded)
+// Uses Date.now() for the created timestamp to show when the row was actually created
+async function handleAddRow() {
   const currentData = getData() as TaskRow[]
   const newId = currentData.length > 0 
     ? Math.max(...currentData.map(r => r.id)) + 1 
     : 1
-  const newTask = generateSingleTask(newId)
+  const newTask = await generateSingleTaskAsync(newId)
+  // Override the created timestamp with the current time (second precision)
+  newTask.created = new Date().toISOString().replace(/\.\d{3}Z$/, "Z")
   hookAddRow(newTask)
   dataVersion.value++
 }
@@ -176,35 +225,82 @@ const hoveredIndex = ref<number | null>(null)
 // Virtual scroll container ref
 const scrollContainerRef = ref<HTMLDivElement | null>(null)
 
-// Filtered data
+/**
+ * Compare two values for sorting based on their type
+ * Handles strings, numbers, booleans, and dates
+ */
+function compareValues(a: unknown, b: unknown, direction: SortDirection): number {
+  const multiplier = direction === "asc" ? 1 : -1
+
+  // Handle null/undefined
+  if (a == null && b == null) return 0
+  if (a == null) return 1
+  if (b == null) return -1
+
+  // Handle booleans (true comes before false in ascending)
+  if (typeof a === "boolean" && typeof b === "boolean") {
+    return (a === b ? 0 : a ? -1 : 1) * multiplier
+  }
+
+  // Handle numbers
+  if (typeof a === "number" && typeof b === "number") {
+    return (a - b) * multiplier
+  }
+
+  // Handle strings (including dates in YYYY-MM-DD format)
+  if (typeof a === "string" && typeof b === "string") {
+    return a.localeCompare(b) * multiplier
+  }
+
+  // Fallback: convert to string and compare
+  return String(a).localeCompare(String(b)) * multiplier
+}
+
+// Filtered and sorted data
 const filteredData = computed(() => {
   // Access dataVersion to create reactive dependency
   void dataVersion.value
   const currentData = getData() as TaskRow[]
-  if (appliedFilters.value.length === 0) return currentData
   
-  const compiledFilters: CompiledFilter[] = []
-  for (const f of appliedFilters.value) {
-    // Extract raw values from arguments array for compileFilter
-    const value = f.arguments?.map((arg: HypothesisValueType) => {
-      if (arg.kind === "string") return arg.value
-      if (arg.kind === "number") return arg.value
-      if (arg.kind === "boolean") return arg.value
-      if (arg.kind === "date") return arg.value
-      return undefined
-    }).filter((v: unknown) => v !== undefined)
-    
-    // Pass array for variadic operators, single value for others
-    const compileValue = value && value.length === 1 ? value[0] : value
-    const compiled = filter.compileFilter(f.column.id, f.operator, compileValue)
-    if (compiled) {
-      compiledFilters.push(compiled)
+  // Step 1: Apply filters
+  let result: TaskRow[]
+  if (appliedFilters.value.length === 0) {
+    result = [...currentData] // Clone to avoid mutating original
+  } else {
+    const compiledFilters: CompiledFilter[] = []
+    for (const f of appliedFilters.value) {
+      // Extract raw values from arguments array for compileFilter
+      const value = f.arguments?.map((arg: HypothesisValueType) => {
+        if (arg.kind === "string") return arg.value
+        if (arg.kind === "number") return arg.value
+        if (arg.kind === "boolean") return arg.value
+        if (arg.kind === "date") return arg.value
+        return undefined
+      }).filter((v: unknown) => v !== undefined)
+      
+      // Check if operator is variadic (in, nin, between) - always pass array for these
+      const opInfo = getOperator(f.operator)
+      const compileValue = opInfo.isVariadic 
+        ? value  // Always pass array for variadic operators
+        : (value && value.length === 1 ? value[0] : value)  // Unwrap single values for non-variadic
+      const compiled = filter.compileFilter(f.column.id, f.operator, compileValue)
+      if (compiled) {
+        compiledFilters.push(compiled)
+      }
     }
+    
+    result = currentData.filter((row) =>
+      compiledFilters.every((cf) => cf.predicate(row))
+    )
   }
-  
-  return currentData.filter((row) =>
-    compiledFilters.every((cf) => cf.predicate(row))
-  )
+
+  // Step 2: Apply sorting
+  if (sortState.value.column) {
+    const { column, direction } = sortState.value
+    result.sort((a, b) => compareValues(a[column], b[column], direction))
+  }
+
+  return result
 })
 
 // Set up virtualizer
@@ -620,6 +716,7 @@ const statusColumn = getColumnById(COLUMN_IDS.status)
 const assigneeColumn = getColumnById(COLUMN_IDS.assignee)
 const priorityColumn = getColumnById(COLUMN_IDS.priority)
 const departmentColumn = getColumnById(COLUMN_IDS.department)
+const dueDateColumn = getColumnById(COLUMN_IDS.dueDate)
 const createdColumn = getColumnById(COLUMN_IDS.created)
 const isBlockedColumn = getColumnById(COLUMN_IDS.isBlocked)
 const commentsColumn = getColumnById(COLUMN_IDS.comments)
@@ -826,67 +923,171 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
         <thead class="sticky top-0 z-10 bg-muted">
           <tr class="border-b">
             <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-              <ColumnInfoPopover v-if="statusColumn" :column="statusColumn">
-                <div class="flex items-center gap-1">
-                  <DataTypeIcon :type="statusColumn.type" size="size-3" class="shrink-0" />
-                  <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.status") }}</span>
-                </div>
-              </ColumnInfoPopover>
+              <button
+                v-if="statusColumn"
+                type="button"
+                @click="handleSort('status')"
+                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
+              >
+                <ColumnInfoPopover :column="statusColumn">
+                  <div class="flex items-center gap-1">
+                    <DataTypeIcon :type="statusColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.status") }}</span>
+                  </div>
+                </ColumnInfoPopover>
+                <span class="shrink-0">
+                  <ArrowUpIcon v-if="sortState.column === 'status' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
+                  <ArrowDownIcon v-else-if="sortState.column === 'status' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
+                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </span>
+              </button>
             </th>
             <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-              <ColumnInfoPopover v-if="assigneeColumn" :column="assigneeColumn">
-                <div class="flex items-center gap-1">
-                  <DataTypeIcon :type="assigneeColumn.type" size="size-3" class="shrink-0" />
-                  <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.assignee") }}</span>
-                </div>
-              </ColumnInfoPopover>
+              <button
+                v-if="assigneeColumn"
+                type="button"
+                @click="handleSort('assignee')"
+                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
+              >
+                <ColumnInfoPopover :column="assigneeColumn">
+                  <div class="flex items-center gap-1">
+                    <DataTypeIcon :type="assigneeColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.assignee") }}</span>
+                  </div>
+                </ColumnInfoPopover>
+                <span class="shrink-0">
+                  <ArrowUpIcon v-if="sortState.column === 'assignee' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
+                  <ArrowDownIcon v-else-if="sortState.column === 'assignee' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
+                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </span>
+              </button>
             </th>
             <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-              <ColumnInfoPopover v-if="priorityColumn" :column="priorityColumn">
-                <div class="flex items-center gap-1">
-                  <DataTypeIcon :type="priorityColumn.type" size="size-3" class="shrink-0" />
-                  <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.priority") }}</span>
-                </div>
-              </ColumnInfoPopover>
+              <button
+                v-if="priorityColumn"
+                type="button"
+                @click="handleSort('priority')"
+                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
+              >
+                <ColumnInfoPopover :column="priorityColumn">
+                  <div class="flex items-center gap-1">
+                    <DataTypeIcon :type="priorityColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.priority") }}</span>
+                  </div>
+                </ColumnInfoPopover>
+                <span class="shrink-0">
+                  <ArrowUpIcon v-if="sortState.column === 'priority' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
+                  <ArrowDownIcon v-else-if="sortState.column === 'priority' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
+                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </span>
+              </button>
             </th>
             <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-              <ColumnInfoPopover v-if="departmentColumn" :column="departmentColumn">
-                <div class="flex items-center gap-1">
-                  <DataTypeIcon :type="departmentColumn.type" size="size-3" class="shrink-0" />
-                  <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.department") }}</span>
-                </div>
-              </ColumnInfoPopover>
+              <button
+                v-if="departmentColumn"
+                type="button"
+                @click="handleSort('department')"
+                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
+              >
+                <ColumnInfoPopover :column="departmentColumn">
+                  <div class="flex items-center gap-1">
+                    <DataTypeIcon :type="departmentColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.department") }}</span>
+                  </div>
+                </ColumnInfoPopover>
+                <span class="shrink-0">
+                  <ArrowUpIcon v-if="sortState.column === 'department' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
+                  <ArrowDownIcon v-else-if="sortState.column === 'department' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
+                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </span>
+              </button>
             </th>
             <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-              <ColumnInfoPopover v-if="createdColumn" :column="createdColumn">
-                <div class="flex items-center gap-1">
-                  <DataTypeIcon :type="createdColumn.type" size="size-3" class="shrink-0" />
-                  <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.created") }}</span>
-                </div>
-              </ColumnInfoPopover>
+              <button
+                v-if="dueDateColumn"
+                type="button"
+                @click="handleSort('dueDate')"
+                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
+              >
+                <ColumnInfoPopover :column="dueDateColumn">
+                  <div class="flex items-center gap-1">
+                    <DataTypeIcon :type="dueDateColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.dueDate") }}</span>
+                  </div>
+                </ColumnInfoPopover>
+                <span class="shrink-0">
+                  <ArrowUpIcon v-if="sortState.column === 'dueDate' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
+                  <ArrowDownIcon v-else-if="sortState.column === 'dueDate' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
+                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </span>
+              </button>
             </th>
             <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-              <ColumnInfoPopover v-if="isBlockedColumn" :column="isBlockedColumn">
-                <div class="flex items-center gap-1">
-                  <DataTypeIcon :type="isBlockedColumn.type" size="size-3" class="shrink-0" />
-                  <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.isBlocked") }}</span>
-                </div>
-              </ColumnInfoPopover>
+              <button
+                v-if="createdColumn"
+                type="button"
+                @click="handleSort('created')"
+                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
+              >
+                <ColumnInfoPopover :column="createdColumn">
+                  <div class="flex items-center gap-1">
+                    <DataTypeIcon :type="createdColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.created") }}</span>
+                  </div>
+                </ColumnInfoPopover>
+                <span class="shrink-0">
+                  <ArrowUpIcon v-if="sortState.column === 'created' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
+                  <ArrowDownIcon v-else-if="sortState.column === 'created' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
+                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </span>
+              </button>
+            </th>
+            <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+              <button
+                v-if="isBlockedColumn"
+                type="button"
+                @click="handleSort('isBlocked')"
+                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
+              >
+                <ColumnInfoPopover :column="isBlockedColumn">
+                  <div class="flex items-center gap-1">
+                    <DataTypeIcon :type="isBlockedColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.isBlocked") }}</span>
+                  </div>
+                </ColumnInfoPopover>
+                <span class="shrink-0">
+                  <ArrowUpIcon v-if="sortState.column === 'isBlocked' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
+                  <ArrowDownIcon v-else-if="sortState.column === 'isBlocked' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
+                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </span>
+              </button>
             </th>
             <th class="px-3 py-3 text-left font-normal">
-              <ColumnInfoPopover v-if="commentsColumn" :column="commentsColumn">
-                <div class="flex items-center gap-1">
-                  <DataTypeIcon :type="commentsColumn.type" size="size-3" class="shrink-0" />
-                  <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.comments") }}</span>
-                </div>
-              </ColumnInfoPopover>
+              <button
+                v-if="commentsColumn"
+                type="button"
+                @click="handleSort('comments')"
+                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
+              >
+                <ColumnInfoPopover :column="commentsColumn">
+                  <div class="flex items-center gap-1">
+                    <DataTypeIcon :type="commentsColumn.type" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.comments") }}</span>
+                  </div>
+                </ColumnInfoPopover>
+                <span class="shrink-0">
+                  <ArrowUpIcon v-if="sortState.column === 'comments' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
+                  <ArrowDownIcon v-else-if="sortState.column === 'comments' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
+                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </span>
+              </button>
             </th>
           </tr>
         </thead>
         <tbody>
           <!-- Empty state -->
           <tr v-if="filteredData.length === 0">
-            <td colspan="7">
+            <td colspan="8">
               <div class="flex flex-col items-center justify-center py-8 text-muted-foreground">
                 <FilterIcon class="size-10 mb-3 opacity-40" />
                 <p class="text-sm font-medium">{{ t("app.ui.noRowsTitle") }}</p>
@@ -926,7 +1127,8 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                 </div>
               </td>
               <td class="px-3 py-2 text-muted-foreground whitespace-nowrap h-12">{{ translateDepartment(getRow(virtualRow.index).department) }}</td>
-              <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">{{ getRow(virtualRow.index).created }}</td>
+              <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">{{ getRow(virtualRow.index).dueDate }}</td>
+              <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12 text-xs">{{ getRow(virtualRow.index).created }}</td>
               <td class="px-3 py-2 text-center whitespace-nowrap h-12">
                 <XIcon v-if="getRow(virtualRow.index).isBlocked" class="size-4 text-rose-500 mx-auto" />
                 <CheckIcon v-else class="size-4 text-emerald-500 mx-auto" />

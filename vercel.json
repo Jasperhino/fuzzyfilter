@@ -1,7 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "bun run build --filter=fuzzyfilter-react-demo",
-  "outputDirectory": "apps/fuzzyfilter-react-demo/dist",
-  "installCommand": "bun install",
-  "framework": "vite"
+  "installCommand": "bun install"
 }

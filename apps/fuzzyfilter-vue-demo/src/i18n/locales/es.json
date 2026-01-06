@@ -4,6 +4,7 @@
     "assignee": "Asignado",
     "priority": "Prioridad",
     "department": "Departamento",
+    "dueDate": "Fecha de vencimiento",
     "created": "Creado",
     "isBlocked": "Está bloqueado",
     "comments": "Comentarios"
@@ -65,6 +66,7 @@
       "assignee": "Asignado",
       "priority": "Prioridad",
       "department": "Dep.",
+      "dueDate": "Vence",
       "created": "Creado",
       "isBlocked": "Bloqueado",
       "comments": "Comentarios"

@@ -4,6 +4,7 @@
     "assignee": "Assignee",
     "priority": "Priority",
     "department": "Department",
+    "dueDate": "Due Date",
     "created": "Created",
     "isBlocked": "Is Blocked",
     "comments": "Comments"
@@ -65,6 +66,7 @@
       "assignee": "Assignee",
       "priority": "Priority",
       "department": "Department",
+      "dueDate": "Due Date",
       "created": "Created",
       "isBlocked": "Blocked",
       "comments": "Comments"

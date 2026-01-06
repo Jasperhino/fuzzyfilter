@@ -294,9 +294,7 @@ export {
   createI18nextProvider,
   /** Create an i18n provider from a vue-i18n instance */
   createVueI18nProvider,
-} from "./i18n/adapters/index.ts";
-
-/**
+} from "./i18n/adapters/index.ts";/**
  * Pre-built locale translations.
  *
  * The core package only includes English translations.
