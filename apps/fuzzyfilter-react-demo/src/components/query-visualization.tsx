@@ -298,7 +298,7 @@ export function QueryVisualization({
         <>
           {/* Grid layout: each segment gets its own column, rows for token/label/score */}
           <div 
-            className="grid gap-y-0.5"
+            className="grid gap-y-0.5 justify-start"
             style={{ gridTemplateColumns: `repeat(${visibleSegments.length}, auto)` }}
           >
             {/* Token row */}
@@ -310,7 +310,7 @@ export function QueryVisualization({
                   return (
                     <span
                       key={`sep-${index}`}
-                      className="px-1 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors cursor-default select-none text-center"
+                      className="px-1 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors cursor-default select-none"
                       title={tooltip}
                     >
                       {separatorChar}
@@ -333,7 +333,7 @@ export function QueryVisualization({
                 return (
                   <span 
                     key={`token-${index}`} 
-                    className={`${textClass} text-center`}
+                    className={textClass}
                   >
                     {segment.text}
                   </span>
@@ -348,7 +348,7 @@ export function QueryVisualization({
                   return (
                     <span
                       key={`label-sep-${index}`}
-                      className="px-1 select-none text-center"
+                      className="px-1 select-none"
                       aria-hidden="true"
                     >
                       &nbsp;
@@ -362,7 +362,7 @@ export function QueryVisualization({
                 return (
                   <span
                     key={`label-${index}`}
-                    className={`text-center text-xs ${isUnmatched ? "text-red-500/50 dark:text-red-400/50" : "text-muted-foreground/70"}`}
+                    className={`text-xs ${isUnmatched ? "text-red-500/50 dark:text-red-400/50" : "text-muted-foreground/70"}`}
                   >
                     {label}
                   </span>
@@ -378,7 +378,7 @@ export function QueryVisualization({
                     return (
                       <span
                         key={`score-sep-${index}`}
-                        className="px-1 select-none text-center"
+                        className="px-1 select-none"
                         aria-hidden="true"
                       >
                         &nbsp;
@@ -403,7 +403,7 @@ export function QueryVisualization({
                   return (
                     <span
                       key={`score-${index}`}
-                      className={`text-center text-xs ${scoreClass}`}
+                      className={`text-xs ${scoreClass}`}
                       title={scoreInfo ? `Quality: ${scoreInfo.fuzzyQuality.toFixed(2)}` : undefined}
                     >
                       {scoreDisplay}
@@ -416,7 +416,7 @@ export function QueryVisualization({
 
           {/* Summary row */}
           {scoreExplanation && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground/60 mt-1 pt-1 border-t border-border/30">
+            <div className="flex items-center justify-start gap-2 text-xs text-muted-foreground/60 mt-1 pt-1 border-t border-border/30">
               <span>
                 Coverage: {scoreExplanation.explainedTokens}/{scoreExplanation.totalTokens} = {(scoreExplanation.coverageRatio * 100).toFixed(0)}%
               </span>

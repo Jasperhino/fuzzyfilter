@@ -340,7 +340,7 @@ function getScoreDisplay(segment: TokenSegment): { text: string; class: string; 
     <template v-if="visibleSegments.length > 0">
       <!-- Grid layout: each segment gets its own column, rows for token/label/score -->
       <div 
-        class="grid gap-y-0.5"
+        class="grid gap-y-0.5 justify-start"
         :style="{ gridTemplateColumns: `repeat(${visibleSegments.length}, auto)` }"
       >
         <!-- Token row -->
@@ -349,13 +349,13 @@ function getScoreDisplay(segment: TokenSegment): { text: string; class: string; 
             <!-- Separator: dot (·) for token separator, underscore (_) for space within value -->
             <span
               v-if="segment.isSeparator"
-              class="px-1 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors cursor-default select-none text-center"
+              class="px-1 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors cursor-default select-none"
               :title="segment.isValueSpace ? 'space within value' : 'token separator'"
             >
               {{ segment.isValueSpace ? '_' : '·' }}
             </span>
             <!-- Token text -->
-            <span v-else :class="[getColorClass(segment.matchType), 'text-center']">
+            <span v-else :class="getColorClass(segment.matchType)">
               {{ segment.text }}
             </span>
           </template>
@@ -367,7 +367,7 @@ function getScoreDisplay(segment: TokenSegment): { text: string; class: string; 
             <!-- Empty space for separator alignment -->
             <span
               v-if="segment.isSeparator"
-              class="px-1 select-none text-center"
+              class="px-1 select-none"
               aria-hidden="true"
             >
               &nbsp;
@@ -375,7 +375,7 @@ function getScoreDisplay(segment: TokenSegment): { text: string; class: string; 
             <!-- Label aligned with token above -->
             <span
               v-else
-              class="text-center text-xs"
+              class="text-xs"
               :class="segment.matchType === null ? 'text-red-500/50 dark:text-red-400/50' : 'text-muted-foreground/70'"
             >
               {{ getLabelForMatch(segment.matchType, segment.argIndex) }}
@@ -390,7 +390,7 @@ function getScoreDisplay(segment: TokenSegment): { text: string; class: string; 
               <!-- Empty space for separator alignment -->
               <span
                 v-if="segment.isSeparator"
-                class="px-1 select-none text-center"
+                class="px-1 select-none"
                 aria-hidden="true"
               >
                 &nbsp;
@@ -398,7 +398,7 @@ function getScoreDisplay(segment: TokenSegment): { text: string; class: string; 
               <!-- Score aligned with token above -->
               <span
                 v-else
-                class="text-center text-xs"
+                class="text-xs"
                 :class="getScoreDisplay(segment).class"
                 :title="getScoreDisplay(segment).title"
               >
@@ -412,7 +412,7 @@ function getScoreDisplay(segment: TokenSegment): { text: string; class: string; 
       <!-- Summary row -->
       <div 
         v-if="scoreExplanation" 
-        class="flex items-center gap-2 text-xs text-muted-foreground/60 mt-1 pt-1 border-t border-border/30"
+        class="flex items-center justify-start gap-2 text-xs text-muted-foreground/60 mt-1 pt-1 border-t border-border/30"
       >
         <span>
           Coverage: {{ scoreExplanation.explainedTokens }}/{{ scoreExplanation.totalTokens }} = {{ (scoreExplanation.coverageRatio * 100).toFixed(0) }}%

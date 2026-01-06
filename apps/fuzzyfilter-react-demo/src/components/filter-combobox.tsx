@@ -483,29 +483,27 @@ function SuggestionItem({ suggestion }: { suggestion: FilterSuggestion }) {
 // Table row component with virtualization support
 function TableRow({ 
   row, 
-  isFiltered, 
   isSelected, 
-  rowIndex,
   onSelect 
 }: { 
   row: TaskRow; 
-  isFiltered: boolean;
   isSelected: boolean;
-  rowIndex: number;
-  onSelect: (index: number | null) => void;
+  onSelect: (rowId: number | null) => void;
 }) {
   const { t } = useTranslation();
   
   const handleClick = () => {
-    onSelect(isSelected ? null : rowIndex);
+    onSelect(isSelected ? null : row.id);
   };
   
   return (
     <tr
       onClick={handleClick}
-      className={`border-b transition-colors h-12 cursor-pointer hover:bg-accent/50 ${
-        isFiltered ? "bg-primary/5" : ""
-      } ${isSelected ? "bg-primary/20 ring-2 ring-primary ring-inset" : ""} ${row.id % 2 === 0 ? "" : "bg-muted/30"}`}
+      className={`border-b transition-all h-12 cursor-pointer ${
+        isSelected 
+          ? "border-l-4 border-l-primary" 
+          : "border-l-2 border-l-transparent hover:border-l-primary/40"
+      }`}
     >
       <td className="px-3 py-2 whitespace-nowrap h-12">
         <StatusBadge status={row.status} />
@@ -587,16 +585,14 @@ function SortableColumnHeader({
 // Virtual data table component
 function VirtualDataTable({ 
   data, 
-  isFiltered,
-  selectedRowIndex,
+  selectedRowId,
   onRowSelect,
   sortState,
   onSort,
 }: { 
   data: TaskRow[]; 
-  isFiltered: boolean;
-  selectedRowIndex: number | null;
-  onRowSelect: (index: number | null) => void;
+  selectedRowId: number | null;
+  onRowSelect: (rowId: number | null) => void;
   sortState: SortState;
   onSort: (columnId: keyof TaskRow) => void;
 }) {
@@ -724,9 +720,7 @@ function VirtualDataTable({
                     <TableRow
                       key={row.id}
                       row={row}
-                      isFiltered={isFiltered}
-                      isSelected={selectedRowIndex === virtualRow.index}
-                      rowIndex={virtualRow.index}
+                      isSelected={selectedRowId === row.id}
                       onSelect={onRowSelect}
                     />
                   );
@@ -778,8 +772,8 @@ export function FilterCombobox() {
   const [appliedFilters, setAppliedFilters] = React.useState<FilterSuggestion[]>([]);
   const [selectedValue, setSelectedValue] = React.useState<string | null>(null);
   
-  // Track selected row for deletion
-  const [selectedRowIndex, setSelectedRowIndex] = React.useState<number | null>(null);
+  // Track selected row for deletion - stores the row ID (not display index)
+  const [selectedRowId, setSelectedRowId] = React.useState<number | null>(null);
 
   // Sorting state for table columns
   const [sortState, setSortState] = React.useState<SortState>({
@@ -863,14 +857,21 @@ export function FilterCombobox() {
   }, [getData, hookAddRow]);
 
   /**
-   * Delete the selected row
+   * Delete the selected row by finding its actual index in the original data
    */
   const handleDeleteRow = React.useCallback(() => {
-    if (selectedRowIndex === null) return;
-    hookDeleteRow(selectedRowIndex);
-    setDataVersion(v => v + 1);
-    setSelectedRowIndex(null);
-  }, [selectedRowIndex, hookDeleteRow]);
+    if (selectedRowId === null) return;
+    
+    // Find the actual index in the original data array using the row's ID
+    const originalData = getData() as TaskRow[];
+    const originalIndex = originalData.findIndex(row => row.id === selectedRowId);
+    
+    if (originalIndex !== -1) {
+      hookDeleteRow(originalIndex);
+      setDataVersion(v => v + 1);
+    }
+    setSelectedRowId(null);
+  }, [selectedRowId, hookDeleteRow, getData]);
 
   // Refetch suggestions when language changes
   // This ensures suggestions update with new translations immediately
@@ -1118,14 +1119,13 @@ export function FilterCombobox() {
             {t("ui.addRow")}
           </button>
           
-          {selectedRowIndex !== null && (
+          {selectedRowId !== null && (
             <button
               onClick={handleDeleteRow}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-destructive text-destructive-foreground text-xs font-medium hover:bg-destructive/90 transition-colors focus:outline-none focus:ring-2 focus:ring-destructive focus:ring-offset-2 animate-in fade-in zoom-in-95 duration-200"
+              className="inline-flex items-center justify-center size-8 rounded-md bg-destructive hover:bg-destructive/90 transition-colors focus:outline-none focus:ring-2 focus:ring-destructive focus:ring-offset-2 animate-in fade-in zoom-in-95 duration-200"
               title={t("ui.deleteRow")}
             >
-              <Trash2Icon className="size-4" />
-              {t("ui.deleteRow")}
+              <Trash2Icon className="size-4 text-white" />
             </button>
           )}
         </div>
@@ -1148,9 +1148,8 @@ export function FilterCombobox() {
       {/* Virtual data table with row selection and sorting */}
       <VirtualDataTable 
         data={filteredData} 
-        isFiltered={appliedFilters.length > 0}
-        selectedRowIndex={selectedRowIndex}
-        onRowSelect={setSelectedRowIndex}
+        selectedRowId={selectedRowId}
+        onRowSelect={setSelectedRowId}
         sortState={sortState}
         onSort={handleSort}
       />

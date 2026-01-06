@@ -128,8 +128,8 @@ const {
   filterContext: compiledFiltersForContext,
 })
 
-// Selected row for deletion
-const selectedRowIndex = ref<number | null>(null)
+// Selected row for deletion - stores the row ID (not display index)
+const selectedRowId = ref<number | null>(null)
 
 // Sorting state for table columns
 const sortState = ref<SortState>({
@@ -171,17 +171,24 @@ async function handleAddRow() {
   dataVersion.value++
 }
 
-// Delete the selected row
+// Delete the selected row by finding its actual index in the original data
 function handleDeleteRow() {
-  if (selectedRowIndex.value === null) return
-  hookDeleteRow(selectedRowIndex.value)
-  dataVersion.value++
-  selectedRowIndex.value = null
+  if (selectedRowId.value === null) return
+  
+  // Find the actual index in the original data array using the row's ID
+  const originalData = getData() as TaskRow[]
+  const originalIndex = originalData.findIndex(row => row.id === selectedRowId.value)
+  
+  if (originalIndex !== -1) {
+    hookDeleteRow(originalIndex)
+    dataVersion.value++
+  }
+  selectedRowId.value = null
 }
 
-// Handle row click for selection
-function handleRowClick(index: number) {
-  selectedRowIndex.value = selectedRowIndex.value === index ? null : index
+// Handle row click for selection - receives the row ID
+function handleRowClick(rowId: number) {
+  selectedRowId.value = selectedRowId.value === rowId ? null : rowId
 }
 
 // Refetch suggestions when language changes
@@ -886,13 +893,12 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
         </button>
         
         <button
-          v-if="selectedRowIndex !== null"
+          v-if="selectedRowId !== null"
           @click="handleDeleteRow"
-          class="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-destructive text-destructive-foreground text-xs font-medium hover:bg-destructive/90 transition-colors focus:outline-none focus:ring-2 focus:ring-destructive focus:ring-offset-2 animate-in fade-in zoom-in-95 duration-200"
+          class="inline-flex items-center justify-center size-8 rounded-md bg-destructive hover:bg-destructive/90 transition-colors focus:outline-none focus:ring-2 focus:ring-destructive focus:ring-offset-2 animate-in fade-in zoom-in-95 duration-200"
           :title="t('app.ui.deleteRow')"
         >
-          <Trash2Icon class="size-4" />
-          {{ t('app.ui.deleteRow') }}
+          <Trash2Icon class="size-4 text-white" />
         </button>
       </div>
 
@@ -1103,12 +1109,12 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
               v-for="virtualRow in virtualizer.getVirtualItems()"
               :key="getRow(virtualRow.index).id"
               :class="cn(
-                'border-b transition-colors h-12 cursor-pointer hover:bg-accent/50',
-                appliedFilters.length > 0 ? 'bg-primary/5' : '',
-                selectedRowIndex === virtualRow.index ? 'bg-primary/20 ring-2 ring-primary ring-inset' : '',
-                getRow(virtualRow.index).id % 2 !== 0 ? 'bg-muted/30' : ''
+                'border-b transition-all h-12 cursor-pointer',
+                selectedRowId === getRow(virtualRow.index).id 
+                  ? 'border-l-4 border-l-primary' 
+                  : 'border-l-2 border-l-transparent hover:border-l-primary/40'
               )"
-              @click="handleRowClick(virtualRow.index)"
+              @click="handleRowClick(getRow(virtualRow.index).id)"
             >
               <td class="px-3 py-2 whitespace-nowrap h-12">
                 <span :class="cn(

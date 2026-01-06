@@ -19,7 +19,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "docs:generate": "bunx mint-tsdocs generate"
+    "docs:generate": "mint-tsdocs generate"
   },
   "peerDependencies": {
     "@jasperhino/fuzzyfilter": ">=0.1.3",
