@@ -25,7 +25,7 @@ The core library exports:
 Creates a new FuzzyFilter instance with the specified options.
 
 ```typescript
-import { createFuzzyFilter } from "fuzzyfilter";
+import { createFuzzyFilter } from "@jasperhino/fuzzyfilter";
 
 const filter = createFuzzyFilter({
   maxSuggestions: 10,
@@ -50,6 +50,8 @@ const filter = createFuzzyFilter({
 Defines the schema for filtering.
 
 ```typescript
+import { columnId } from "@jasperhino/fuzzyfilter";
+
 filter.setSchema({
   columns: [
     { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
@@ -98,7 +100,7 @@ const compiled = filter.compileFilter("priority", "gte", 3);
 A branded type for type-safe column identifiers.
 
 ```typescript
-import { columnId } from "fuzzyfilter";
+import { columnId } from "@jasperhino/fuzzyfilter";
 
 const statusId = columnId("status"); // ColumnId type
 ```
@@ -130,7 +132,7 @@ All supported filter operators:
 Parse natural language date expressions:
 
 ```typescript
-import { parseDate, COMMON_DATE_SUGGESTIONS } from "fuzzyfilter";
+import { parseDate, COMMON_DATE_SUGGESTIONS } from "@jasperhino/fuzzyfilter";
 
 const result = parseDate("two weeks ago");
 // → { date: Date, isRange: false, text: "two weeks ago" }
@@ -144,7 +146,7 @@ const range = parseDate("last month");
 ### Custom Provider
 
 ```typescript
-import { createObjectProvider } from "fuzzyfilter";
+import { createObjectProvider } from "@jasperhino/fuzzyfilter";
 
 const spanishProvider = createObjectProvider({
   operators: {
@@ -159,7 +161,7 @@ const filter = createFuzzyFilter({ i18nProvider: spanishProvider });
 
 ```typescript
 // With i18next
-import { createI18nextProvider } from "fuzzyfilter/i18n/adapters/i18next";
+import { createI18nextProvider } from "@jasperhino/fuzzyfilter/i18n/adapters/i18next";
 
 const provider = createI18nextProvider(i18n);
 const filter = createFuzzyFilter({ i18nProvider: provider });

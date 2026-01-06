@@ -12,7 +12,7 @@ This guide covers the fundamental concepts and patterns for using FuzzyFilter.
 The `createFuzzyFilter` factory function creates a new filter instance:
 
 ```typescript
-import { createFuzzyFilter } from "fuzzyfilter";
+import { createFuzzyFilter } from "@jasperhino/fuzzyfilter";
 
 const filter = createFuzzyFilter();
 ```
@@ -32,7 +32,7 @@ const filter = createFuzzyFilter({
 The schema describes your data structure. FuzzyFilter uses this to generate intelligent suggestions.
 
 ```typescript
-import { columnId } from "fuzzyfilter";
+import { columnId } from "@jasperhino/fuzzyfilter";
 
 filter.setSchema({
   columns: [

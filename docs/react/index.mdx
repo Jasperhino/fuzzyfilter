@@ -10,7 +10,7 @@ The `fuzzyfilter-react` package provides a React hook for building filter interf
 ## Installation
 
 ```bash
-npm install fuzzyfilter fuzzyfilter-react
+npm install @jasperhino/fuzzyfilter fuzzyfilter-react
 ```
 
 ## useFuzzyFilter Hook
@@ -21,7 +21,7 @@ The main export is the `useFuzzyFilter` hook which provides reactive state manag
 
 ```tsx
 import { useFuzzyFilter } from "fuzzyfilter-react";
-import { createFuzzyFilter, columnId } from "fuzzyfilter";
+import { createFuzzyFilter, columnId } from "@jasperhino/fuzzyfilter";
 
 // Create and configure the filter (outside component or with useMemo)
 const filter = createFuzzyFilter();
@@ -39,8 +39,9 @@ function FilterBox() {
     setQuery,
     suggestions,
     selectedIndex,
-    setSelectedIndex,
+    selectSuggestion,
     applySuggestion,
+    navigateSuggestions,
     isLoading,
   } = useFuzzyFilter(filter);
 
@@ -49,6 +50,11 @@ function FilterBox() {
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") navigateSuggestions("down");
+          if (e.key === "ArrowUp") navigateSuggestions("up");
+          if (e.key === "Enter") applySuggestion();
+        }}
         placeholder="Type to filter..."
       />
       {isLoading && <span>Loading...</span>}
@@ -56,7 +62,10 @@ function FilterBox() {
         {suggestions.map((suggestion, index) => (
           <li
             key={suggestion.id}
-            onClick={() => applySuggestion(suggestion)}
+            onClick={() => {
+              selectSuggestion(index);
+              applySuggestion();
+            }}
             className={index === selectedIndex ? "selected" : ""}
           >
             {suggestion.label}
@@ -78,7 +87,7 @@ function FilterBox() {
     setQuery,
     suggestions,
     selectedIndex,
-    setSelectedIndex,
+    navigateSuggestions,
     applySuggestion,
   } = useFuzzyFilter(filter);
 
@@ -86,17 +95,15 @@ function FilterBox() {
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        setSelectedIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
+        navigateSuggestions("down");
         break;
       case "ArrowUp":
         e.preventDefault();
-        setSelectedIndex((prev) => Math.max(prev - 1, 0));
+        navigateSuggestions("up");
         break;
       case "Enter":
         e.preventDefault();
-        if (suggestions[selectedIndex]) {
-          applySuggestion(suggestions[selectedIndex]);
-        }
+        applySuggestion();
         break;
     }
   };
@@ -124,8 +131,8 @@ interface UseFuzzyFilterOptions {
   /** Callback when a suggestion is applied */
   onApply?: (suggestion: FilterSuggestion) => void;
 
-  /** Callback when the query changes */
-  onQueryChange?: (query: string) => void;
+  /** Filter context (already-applied filters for stacked counts) */
+  filterContext?: CompiledFilter[];
 }
 ```
 
@@ -138,10 +145,28 @@ const { query, suggestions } = useFuzzyFilter(filter, {
   onApply: (suggestion) => {
     console.log("Applied:", suggestion.label);
   },
-  onQueryChange: (query) => {
-    // Track analytics, update URL, etc.
+});
+```
+
+### With Stacked Filter Counts
+
+Use `filterContext` to show counts that reflect already-applied filters:
+
+```tsx
+const [appliedFilters, setAppliedFilters] = useState<CompiledFilter[]>([]);
+
+const { query, suggestions, applySuggestion } = useFuzzyFilter(filter, {
+  filterContext: appliedFilters,
+  onApply: (suggestion) => {
+    const compiled = filter.compileFilter(
+      suggestion.column.id,
+      suggestion.operator,
+      suggestion.value?.value
+    );
+    if (compiled) setAppliedFilters((prev) => [...prev, compiled]);
   },
 });
+// Suggestion counts now reflect the subset of data matching appliedFilters
 ```
 
 ## Return Value
@@ -151,13 +176,50 @@ The hook returns an object with the following properties:
 | Property | Type | Description |
 |----------|------|-------------|
 | `query` | `string` | Current query string |
+| `suggestionsQuery` | `string` | The query used to generate current suggestions (after debounce) |
 | `setQuery` | `(query: string) => void` | Update the query |
 | `suggestions` | `FilterSuggestion[]` | Current suggestions |
 | `selectedIndex` | `number` | Currently selected suggestion index |
-| `setSelectedIndex` | `(index: number) => void` | Set selected index |
-| `applySuggestion` | `(suggestion: FilterSuggestion) => void` | Apply a suggestion |
+| `selectedSuggestion` | `FilterSuggestion \| null` | The currently selected suggestion |
+| `selectSuggestion` | `(index: number) => void` | Select a suggestion by index |
+| `navigateSuggestions` | `(direction: "up" \| "down") => void` | Navigate suggestions with wrap-around |
+| `applySuggestion` | `() => void` | Apply the selected suggestion |
+| `reset` | `() => void` | Reset all state to initial values |
 | `isLoading` | `boolean` | Whether suggestions are being generated |
-| `compiledFilter` | `CompiledFilter \| null` | The compiled filter if query is complete |
+| `error` | `Error \| null` | Error state if suggestion fetch failed |
+
+### Indexing & Data Mutation
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `isIndexing` | `boolean` | True while async indexing is in progress |
+| `indexProgress` | `IndexProgress \| null` | Progress of current indexing operation |
+| `telemetryEvents` | `WideEvent[]` | Telemetry events (when `benchmark: true`) |
+| `addRow` | `(row: Record<string, unknown>) => void` | Add a row and re-index |
+| `deleteRow` | `(index: number) => void` | Delete a row by index and re-index |
+| `reindex` | `() => Promise<void>` | Trigger async re-indexing |
+| `getData` | `() => Array<Record<string, unknown>>` | Get current data array |
+
+### Example with Data Mutations
+
+```tsx
+const { isIndexing, indexProgress, addRow, deleteRow } = useFuzzyFilter(filter);
+
+// Show indexing indicator
+if (isIndexing) {
+  return <div>Indexing... {indexProgress?.percentage}%</div>;
+}
+
+// Add a new row
+const handleAdd = () => {
+  addRow({ status: "Open", assignee: "New Person" });
+};
+
+// Delete row at index 5
+const handleDelete = () => {
+  deleteRow(5);
+};
+```
 
 ## TypeScript
 
@@ -167,9 +229,14 @@ The hook is fully typed. Import types as needed:
 import type {
   UseFuzzyFilterOptions,
   UseFuzzyFilterReturn,
+} from "fuzzyfilter-react";
+
+import type {
   FilterSuggestion,
   CompiledFilter,
-} from "fuzzyfilter-react";
+  IndexProgress,
+  WideEvent,
+} from "@jasperhino/fuzzyfilter";
 ```
 
 ## Best Practices
@@ -201,9 +268,14 @@ function App({ schema, data }) {
 
 ### 2. Update Data When It Changes
 
+Use the built-in `addRow` and `deleteRow` methods, or re-index when data changes:
+
 ```tsx
+const { reindex } = useFuzzyFilter(filter);
+
 useEffect(() => {
   filter.indexData(data);
+  // Or use: reindex();
 }, [data]);
 ```
 

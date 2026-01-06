@@ -12,19 +12,19 @@ This guide will walk you through building a basic filter interface with FuzzyFil
 <CodeGroup>
 
 ```bash npm
-npm install fuzzyfilter
+npm install @jasperhino/fuzzyfilter
 ```
 
 ```bash yarn
-yarn add fuzzyfilter
+yarn add @jasperhino/fuzzyfilter
 ```
 
 ```bash pnpm
-pnpm add fuzzyfilter
+pnpm add @jasperhino/fuzzyfilter
 ```
 
 ```bash bun
-bun add fuzzyfilter
+bun add @jasperhino/fuzzyfilter
 ```
 
 </CodeGroup>
@@ -34,11 +34,11 @@ For React or Vue, also install the framework-specific package:
 <CodeGroup>
 
 ```bash React
-npm install fuzzyfilter fuzzyfilter-react
+npm install @jasperhino/fuzzyfilter fuzzyfilter-react
 ```
 
 ```bash Vue
-npm install fuzzyfilter-vue
+npm install @jasperhino/fuzzyfilter fuzzyfilter-vue
 ```
 
 </CodeGroup>
@@ -46,7 +46,7 @@ npm install fuzzyfilter-vue
 ## 2. Create a filter instance
 
 ```typescript
-import { createFuzzyFilter, columnId } from "fuzzyfilter";
+import { createFuzzyFilter, columnId } from "@jasperhino/fuzzyfilter";
 
 const filter = createFuzzyFilter();
 ```

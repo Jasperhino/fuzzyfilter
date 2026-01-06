@@ -10,7 +10,7 @@ The `fuzzyfilter-vue` package provides a Vue 3 composable for building filter in
 ## Installation
 
 ```bash
-npm install fuzzyfilter fuzzyfilter-vue
+npm install @jasperhino/fuzzyfilter fuzzyfilter-vue
 ```
 
 ## useFuzzyFilter Composable
@@ -22,7 +22,7 @@ The main export is the `useFuzzyFilter` composable which provides reactive state
 ```vue
 <script setup lang="ts">
 import { useFuzzyFilter } from "fuzzyfilter-vue";
-import { createFuzzyFilter, columnId } from "fuzzyfilter";
+import { createFuzzyFilter, columnId } from "@jasperhino/fuzzyfilter";
 
 // Create and configure the filter
 const filter = createFuzzyFilter();
@@ -38,6 +38,7 @@ const {
   query,
   suggestions,
   selectedIndex,
+  navigateSuggestions,
   applySuggestion,
   isLoading,
 } = useFuzzyFilter(filter);
@@ -45,14 +46,20 @@ const {
 
 <template>
   <div>
-    <input v-model="query" placeholder="Type to filter..." />
+    <input
+      v-model="query"
+      placeholder="Type to filter..."
+      @keydown.down.prevent="navigateSuggestions('down')"
+      @keydown.up.prevent="navigateSuggestions('up')"
+      @keydown.enter="applySuggestion"
+    />
     <span v-if="isLoading">Loading...</span>
     <ul>
       <li
         v-for="(suggestion, index) in suggestions"
         :key="suggestion.id"
         :class="{ selected: index === selectedIndex }"
-        @click="applySuggestion(suggestion)"
+        @click="selectSuggestion(index); applySuggestion()"
       >
         {{ suggestion.label }}
         <span class="count">({{ suggestion.resultCount }})</span>
@@ -68,23 +75,21 @@ const {
 <script setup lang="ts">
 import { useFuzzyFilter } from "fuzzyfilter-vue";
 
-const { query, suggestions, selectedIndex, applySuggestion } = useFuzzyFilter(filter);
+const { query, suggestions, selectedIndex, navigateSuggestions, applySuggestion } = useFuzzyFilter(filter);
 
 function handleKeyDown(e: KeyboardEvent) {
   switch (e.key) {
     case "ArrowDown":
       e.preventDefault();
-      selectedIndex.value = Math.min(selectedIndex.value + 1, suggestions.value.length - 1);
+      navigateSuggestions("down");
       break;
     case "ArrowUp":
       e.preventDefault();
-      selectedIndex.value = Math.max(selectedIndex.value - 1, 0);
+      navigateSuggestions("up");
       break;
     case "Enter":
       e.preventDefault();
-      if (suggestions.value[selectedIndex.value]) {
-        applySuggestion(suggestions.value[selectedIndex.value]);
-      }
+      applySuggestion();
       break;
   }
 }
@@ -108,8 +113,8 @@ interface UseFuzzyFilterOptions {
   /** Callback when a suggestion is applied */
   onApply?: (suggestion: FilterSuggestion) => void;
 
-  /** Callback when the query changes */
-  onQueryChange?: (query: string) => void;
+  /** Reactive filter context (already-applied filters for stacked counts) */
+  filterContext?: Ref<CompiledFilter[]>;
 }
 ```
 
@@ -123,10 +128,33 @@ const { query, suggestions } = useFuzzyFilter(filter, {
   onApply: (suggestion) => {
     console.log("Applied:", suggestion.label);
   },
-  onQueryChange: (query) => {
-    // Track analytics, update URL, etc.
+});
+</script>
+```
+
+### With Stacked Filter Counts
+
+Use `filterContext` to show counts that reflect already-applied filters:
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue";
+import type { CompiledFilter } from "@jasperhino/fuzzyfilter";
+
+const appliedFilters = ref<CompiledFilter[]>([]);
+
+const { query, suggestions } = useFuzzyFilter(filter, {
+  filterContext: appliedFilters,
+  onApply: (suggestion) => {
+    const compiled = filter.compileFilter(
+      suggestion.column.id,
+      suggestion.operator,
+      suggestion.value?.value
+    );
+    if (compiled) appliedFilters.value.push(compiled);
   },
 });
+// Suggestion counts now reflect the subset of data matching appliedFilters
 </script>
 ```
 
@@ -137,11 +165,52 @@ The composable returns an object with the following reactive properties:
 | Property | Type | Description |
 |----------|------|-------------|
 | `query` | `Ref<string>` | Current query string (v-model compatible) |
+| `suggestionsQuery` | `Ref<string>` | The query used to generate current suggestions (after debounce) |
 | `suggestions` | `Ref<FilterSuggestion[]>` | Current suggestions |
 | `selectedIndex` | `Ref<number>` | Currently selected suggestion index |
-| `applySuggestion` | `(suggestion: FilterSuggestion) => void` | Apply a suggestion |
+| `selectedSuggestion` | `ComputedRef<FilterSuggestion \| null>` | The currently selected suggestion |
+| `setQuery` | `(query: string) => void` | Set the query programmatically |
+| `selectSuggestion` | `(index: number) => void` | Select a suggestion by index |
+| `navigateSuggestions` | `(direction: "up" \| "down") => void` | Navigate suggestions with wrap-around |
+| `applySuggestion` | `() => void` | Apply the selected suggestion |
+| `reset` | `() => void` | Reset all state to initial values |
 | `isLoading` | `Ref<boolean>` | Whether suggestions are being generated |
-| `compiledFilter` | `Ref<CompiledFilter \| null>` | The compiled filter if query is complete |
+| `error` | `Ref<Error \| null>` | Error state if suggestion fetch failed |
+
+### Indexing & Data Mutation
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `isIndexing` | `Ref<boolean>` | True while async indexing is in progress |
+| `indexProgress` | `Ref<IndexProgress \| null>` | Progress of current indexing operation |
+| `telemetryEvents` | `Ref<WideEvent[]>` | Telemetry events (when `benchmark: true`) |
+| `addRow` | `(row: Record<string, unknown>) => void` | Add a row and re-index |
+| `deleteRow` | `(index: number) => void` | Delete a row by index and re-index |
+| `reindex` | `() => Promise<void>` | Trigger async re-indexing |
+| `getData` | `() => Array<Record<string, unknown>>` | Get current data array |
+
+### Example with Data Mutations
+
+```vue
+<script setup lang="ts">
+const { isIndexing, indexProgress, addRow, deleteRow } = useFuzzyFilter(filter);
+
+// Add a new row
+function handleAdd() {
+  addRow({ status: "Open", assignee: "New Person" });
+}
+
+// Delete row at index 5
+function handleDelete() {
+  deleteRow(5);
+}
+</script>
+
+<template>
+  <div v-if="isIndexing">Indexing... {{ indexProgress?.percentage }}%</div>
+  <button @click="handleAdd">Add Row</button>
+</template>
+```
 
 ## TypeScript
 
@@ -151,8 +220,14 @@ The composable is fully typed. Import types as needed:
 import type {
   UseFuzzyFilterOptions,
   UseFuzzyFilterReturn,
-  FilterSuggestion,
 } from "fuzzyfilter-vue";
+
+import type {
+  FilterSuggestion,
+  CompiledFilter,
+  IndexProgress,
+  WideEvent,
+} from "@jasperhino/fuzzyfilter";
 ```
 
 ## Best Practices
@@ -165,7 +240,7 @@ Create the FuzzyFilter instance in your setup function or as a singleton:
 <script setup lang="ts">
 import { computed, watch } from "vue";
 import { useFuzzyFilter } from "fuzzyfilter-vue";
-import { createFuzzyFilter, columnId } from "fuzzyfilter";
+import { createFuzzyFilter, columnId } from "@jasperhino/fuzzyfilter";
 
 const props = defineProps<{
   data: Record<string, any>[];
@@ -193,7 +268,7 @@ const { query, suggestions } = useFuzzyFilter(filter);
 ```vue
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
-import { createVueI18nProvider } from "fuzzyfilter/i18n/adapters/vue-i18n";
+import { createVueI18nProvider } from "@jasperhino/fuzzyfilter/i18n/adapters/vue-i18n";
 
 const i18n = useI18n();
 const provider = createVueI18nProvider(i18n);
@@ -224,7 +299,7 @@ For sharing a filter across components:
 <!-- Parent component -->
 <script setup lang="ts">
 import { provide } from "vue";
-import { createFuzzyFilter } from "fuzzyfilter";
+import { createFuzzyFilter } from "@jasperhino/fuzzyfilter";
 
 const filter = createFuzzyFilter();
 // ... configure filter
@@ -236,7 +311,7 @@ provide("fuzzyFilter", filter);
 <script setup lang="ts">
 import { inject } from "vue";
 import { useFuzzyFilter } from "fuzzyfilter-vue";
-import type { FuzzyFilter } from "fuzzyfilter";
+import type { FuzzyFilter } from "@jasperhino/fuzzyfilter";
 
 const filter = inject<FuzzyFilter>("fuzzyFilter")!;
 const { query, suggestions } = useFuzzyFilter(filter);

@@ -138,7 +138,7 @@ By default, FuzzyFilter uses the column ID as the property key.
 ## Complete Schema Example
 
 ```typescript
-import { createFuzzyFilter, columnId } from "fuzzyfilter";
+import { createFuzzyFilter, columnId } from "@jasperhino/fuzzyfilter";
 
 const filter = createFuzzyFilter();
 
@@ -238,7 +238,7 @@ filter.indexData(data);
 The `columnId` function creates a branded type for compile-time safety:
 
 ```typescript
-import { columnId, type ColumnId } from "fuzzyfilter";
+import { columnId, type ColumnId } from "@jasperhino/fuzzyfilter";
 
 const statusId: ColumnId = columnId("status");
 const priorityId: ColumnId = columnId("priority");

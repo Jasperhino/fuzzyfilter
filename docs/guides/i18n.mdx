@@ -24,7 +24,7 @@ Available locales:
 ### Using a Built-in Locale
 
 ```typescript
-import { createFuzzyFilter, createObjectProvider } from "fuzzyfilter";
+import { createFuzzyFilter, createObjectProvider } from "@jasperhino/fuzzyfilter";
 import { es } from "@fuzzyfilter/i18n-locales";
 
 const spanishProvider = createObjectProvider(es);
@@ -36,7 +36,7 @@ const filter = createFuzzyFilter({ i18nProvider: spanishProvider });
 Create a custom translation object:
 
 ```typescript
-import { createFuzzyFilter, createObjectProvider } from "fuzzyfilter";
+import { createFuzzyFilter, createObjectProvider } from "@jasperhino/fuzzyfilter";
 
 const myTranslations = {
   operators: {
@@ -76,8 +76,8 @@ If you're using i18next, create a provider that pulls from your i18next instance
 
 ```typescript
 import i18n from "i18next";
-import { createI18nextProvider } from "fuzzyfilter/i18n/adapters/i18next";
-import { createFuzzyFilter } from "fuzzyfilter";
+import { createI18nextProvider } from "@jasperhino/fuzzyfilter/i18n/adapters/i18next";
+import { createFuzzyFilter } from "@jasperhino/fuzzyfilter";
 
 const provider = createI18nextProvider(i18n);
 const filter = createFuzzyFilter({ i18nProvider: provider });
@@ -106,8 +106,8 @@ For Vue applications using vue-i18n:
 
 ```typescript
 import { createI18n } from "vue-i18n";
-import { createVueI18nProvider } from "fuzzyfilter/i18n/adapters/vue-i18n";
-import { createFuzzyFilter } from "fuzzyfilter";
+import { createVueI18nProvider } from "@jasperhino/fuzzyfilter/i18n/adapters/vue-i18n";
+import { createFuzzyFilter } from "@jasperhino/fuzzyfilter";
 
 const i18n = createI18n({
   locale: "es",
@@ -192,7 +192,7 @@ All operator IDs that need translations:
 Date parsing uses chrono-node which has its own locale support:
 
 ```typescript
-import { parseDate, getDateSuggestionsForLocale } from "fuzzyfilter";
+import { parseDate, getDateSuggestionsForLocale } from "@jasperhino/fuzzyfilter";
 
 // Get date suggestions in Spanish
 const spanishDateSuggestions = getDateSuggestionsForLocale("es");
