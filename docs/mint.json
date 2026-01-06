@@ -53,23 +53,37 @@
   "navigation": [
     {
       "group": "Getting Started",
-      "pages": ["introduction", "quickstart", "installation"]
+      "pages": [
+        "introduction",
+        "quickstart",
+        "installation"
+      ]
     },
     {
       "group": "Guides",
-      "pages": ["guides/basic-usage", "guides/schema-definition", "guides/i18n"]
+      "pages": [
+        "guides/basic-usage",
+        "guides/schema-definition",
+        "guides/i18n"
+      ]
     },
     {
       "group": "Core API",
-      "pages": ["core/index"]
+      "pages": [
+        "core/index"
+      ]
     },
     {
       "group": "React",
-      "pages": ["react/index"]
+      "pages": [
+        "react/index"
+      ]
     },
     {
       "group": "Vue",
-      "pages": ["vue/index"]
+      "pages": [
+        "vue/index"
+      ]
     }
   ],
   "footerSocials": {
