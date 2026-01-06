@@ -1,6 +1,6 @@
 # FuzzyFilter
 
-A powerful TypeScript library for building intelligent fuzzy filter interfaces with natural language support. Type-ahead suggestions, automatic result counting, and smart ranking powered by Roaring Bitmaps.
+A powerful TypeScript library for building intelligent fuzzy filter interfaces with natural language support. Type-ahead suggestions, automatic result counting, and smart indexing and ranking powered by Roaring Bitmaps.
 
 ## Features
 
