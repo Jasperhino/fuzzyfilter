@@ -6,7 +6,7 @@
  * by both React and Vue examples.
  */
 
-import type { Operator } from "fuzzyfilter";
+import type { Operator } from "@jasperhino/fuzzyfilter";
 
 /**
  * Lucide icon names that correspond to operators.

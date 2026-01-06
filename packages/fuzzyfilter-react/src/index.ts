@@ -4,12 +4,12 @@
  * A React hook for building filter interfaces with FuzzyFilter.
  * Provides state management and actions for fuzzy filter suggestions.
  *
- * @module react-fuzzy-filter
+ * @module fuzzyfilter-react
  *
  * @example
  * ```tsx
- * import { useFuzzyFilter } from "react-fuzzy-filter";
- * import { createFuzzyFilter, columnId } from "fuzzyfilter";
+ * import { useFuzzyFilter } from "fuzzyfilter-react";
+ * import { createFuzzyFilter, columnId } from "@jasperhino/fuzzyfilter";
  *
  * const filter = createFuzzyFilter();
  * filter.setSchema({
@@ -43,5 +43,5 @@ export {
 } from "./use-fuzzy-filter.ts";
 
 // Re-export commonly used types from fuzzyfilter for convenience
-export type { FuzzyFilter, FilterSuggestion, CompiledFilter } from "fuzzyfilter";
+export type { FuzzyFilter, FilterSuggestion, CompiledFilter } from "@jasperhino/fuzzyfilter";
 

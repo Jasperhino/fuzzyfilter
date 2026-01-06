@@ -1,4 +1,4 @@
-# react-fuzzy-filter
+# fuzzyfilter-vue
 
 ## 0.1.2
 

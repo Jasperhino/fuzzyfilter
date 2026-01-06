@@ -9,7 +9,7 @@
       "fuzzyfilter": ["../../packages/fuzzyfilter/src/index.ts"],
       "fuzzyfilter/i18n/locales": ["../../packages/fuzzyfilter/src/i18n/locales/index.ts"],
       "fuzzyfilter/types/i18n": ["../../packages/fuzzyfilter/src/types/i18n.ts"],
-      "vue-fuzzy-filter": ["../../packages/vue-fuzzy-filter/src/index.ts"],
+      "fuzzyfilter-vue": ["../../packages/fuzzyfilter-vue/src/index.ts"],
       "@fuzzyfilter/sample-data": ["../../packages/sample-data/src/index.ts"],
       "@fuzzyfilter/i18n-locales": ["../../packages/i18n-locales/src/index.ts"],
       "lucide-operators": ["../../packages/lucide-operators/src/index.ts"],

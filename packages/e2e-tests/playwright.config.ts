@@ -25,14 +25,14 @@ export default defineConfig({
   webServer: [
     {
       command: "bun run dev",
-      cwd: "../../example/fuzzyfilter-react",
+      cwd: "../../apps/fuzzyfilter-react-demo",
       port: 5173,
       reuseExistingServer: !process.env.CI,
       timeout: 120 * 1000,
     },
     {
       command: "bun run dev",
-      cwd: "../../example/fuzzyfilter-vue",
+      cwd: "../../apps/fuzzyfilter-vue",
       port: 5174,
       reuseExistingServer: !process.env.CI,
       timeout: 120 * 1000,

@@ -16,7 +16,7 @@
  * Coverage: 3/3 = 100% │ Final Score: 1.0
  */
 import { computed } from "vue"
-import { tokenize, type QueryMatch, type FilterSuggestion, type ScoreExplanation, type TokenScoreInfo } from "fuzzyfilter"
+import { tokenize, type QueryMatch, type FilterSuggestion, type ScoreExplanation, type TokenScoreInfo } from "@jasperhino/fuzzyfilter"
 
 /**
  * Represents a token segment with its match and score information

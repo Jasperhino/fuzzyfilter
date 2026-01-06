@@ -4,11 +4,11 @@
  * Provides reactive state management for FuzzyFilter in Vue 3 applications
  * using the Composition API.
  *
- * @module vue-fuzzy-filter
+ * @module fuzzyfilter-vue
  */
 
 import { ref, computed, watch, onUnmounted, type Ref, type ComputedRef } from "vue";
-import type { FuzzyFilter, FilterSuggestion, CompiledFilter, WideEvent, IndexProgress } from "fuzzyfilter";
+import type { FuzzyFilter, FilterSuggestion, CompiledFilter, WideEvent, IndexProgress } from "@jasperhino/fuzzyfilter";
 
 /**
  * Options for the useFuzzyFilter composable
@@ -91,8 +91,8 @@ export interface UseFuzzyFilterReturn {
  * @example Basic usage
  * ```vue
  * <script setup lang="ts">
- * import { useFuzzyFilter } from "vue-fuzzy-filter";
- * import { createFuzzyFilter, columnId } from "fuzzyfilter";
+ * import { useFuzzyFilter } from "fuzzyfilter-vue";
+ * import { createFuzzyFilter, columnId } from "@jasperhino/fuzzyfilter";
  *
  * const filter = createFuzzyFilter();
  * filter.setSchema({

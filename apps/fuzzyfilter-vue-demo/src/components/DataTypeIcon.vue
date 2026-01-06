@@ -14,7 +14,7 @@ import {
   LayersIcon,
 } from "lucide-operators-vue"
 import { cn } from "@/lib/utils"
-import type { DataType } from "fuzzyfilter"
+import type { DataType } from "@jasperhino/fuzzyfilter"
 
 const props = withDefaults(
   defineProps<{

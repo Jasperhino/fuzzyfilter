@@ -35,7 +35,7 @@ export default defineConfig({
       "fuzzyfilter": path.resolve(packagesPath, "fuzzyfilter/src/index.ts"),
       "fuzzyfilter/i18n/locales": path.resolve(packagesPath, "fuzzyfilter/src/i18n/locales/index.ts"),
       "fuzzyfilter/types/i18n": path.resolve(packagesPath, "fuzzyfilter/src/types/i18n.ts"),
-      "vue-fuzzy-filter": path.resolve(packagesPath, "vue-fuzzy-filter/src/index.ts"),
+      "fuzzyfilter-vue": path.resolve(packagesPath, "fuzzyfilter-vue/src/index.ts"),
       "@fuzzyfilter/sample-data": path.resolve(packagesPath, "sample-data/src/index.ts"),
       "@fuzzyfilter/i18n-locales": path.resolve(packagesPath, "i18n-locales/src/index.ts"),
       // Resolve lucide-operators packages
@@ -55,6 +55,6 @@ export default defineConfig({
   // Pre-bundle fuzzyfilter dependencies
   optimizeDeps: {
     include: ["fuzzysort", "chrono-node"],
-    exclude: ["fuzzyfilter", "vue-fuzzy-filter", "@fuzzyfilter/sample-data", "@fuzzyfilter/i18n-locales", "lucide-operators", "@fuzzyfilter/axiom-exporter"],
+    exclude: ["fuzzyfilter", "fuzzyfilter-vue", "@fuzzyfilter/sample-data", "@fuzzyfilter/i18n-locales", "lucide-operators", "@fuzzyfilter/axiom-exporter"],
   },
 })

@@ -5,7 +5,7 @@
  * lucide-operators-react and lucide-operators-vue packages.
  */
 
-import type { Operator } from "fuzzyfilter";
+import type { Operator } from "@jasperhino/fuzzyfilter";
 
 /**
  * Custom icon names for operators that don't have Lucide equivalents.

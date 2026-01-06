@@ -9,7 +9,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "fuzzyfilter": ["../../packages/fuzzyfilter/src/index.ts"],
-      "vue-fuzzy-filter": ["../../packages/vue-fuzzy-filter/src/index.ts"],
+      "fuzzyfilter-vue": ["../../packages/fuzzyfilter-vue/src/index.ts"],
       "@fuzzyfilter/sample-data": ["../../packages/sample-data/src/index.ts"],
       "lucide-operators": ["../../packages/lucide-operators/src/index.ts"],
       "lucide-operators-vue": ["../../packages/lucide-operators-vue/src/index.ts"],

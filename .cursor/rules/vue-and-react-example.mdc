@@ -1,5 +1,5 @@
 ---
 alwaysApply: true
 ---
-You always have to adapt both the Vue and the React example for the usage of the react-fuzzy-filters hook and the vue-fuzzy-filters composable to the changes you make and how they render things.
+You always have to adapt both the Vue and the React example for the usage of the fuzzyfilter-react hook and the fuzzyfilter-vue composable to the changes you make and how they render things.
 They should always be perfectly aligned with how components look and behave.

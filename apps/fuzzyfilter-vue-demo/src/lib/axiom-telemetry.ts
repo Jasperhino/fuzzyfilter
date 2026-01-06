@@ -8,7 +8,7 @@
  */
 
 import { createAxiomExporter, type AxiomExporter } from "@fuzzyfilter/axiom-exporter";
-import type { TelemetryCollector } from "fuzzyfilter";
+import type { TelemetryCollector } from "@jasperhino/fuzzyfilter";
 
 /**
  * Axiom configuration from environment variables.

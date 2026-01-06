@@ -4,13 +4,13 @@
  * A Vue 3 composable for building filter interfaces with FuzzyFilter.
  * Provides reactive state management using the Composition API.
  *
- * @module vue-fuzzy-filter
+ * @module fuzzyfilter-vue
  *
  * @example
  * ```vue
  * <script setup lang="ts">
- * import { useFuzzyFilter } from "vue-fuzzy-filter";
- * import { createFuzzyFilter, columnId } from "fuzzyfilter";
+ * import { useFuzzyFilter } from "fuzzyfilter-vue";
+ * import { createFuzzyFilter, columnId } from "@jasperhino/fuzzyfilter";
  *
  * const filter = createFuzzyFilter();
  * filter.setSchema({
@@ -39,6 +39,6 @@ export {
 } from "./use-fuzzy-filter.ts";
 
 // Re-export commonly used types from fuzzyfilter for convenience
-export type { FuzzyFilter, FilterSuggestion } from "fuzzyfilter";
+export type { FuzzyFilter, FilterSuggestion } from "@jasperhino/fuzzyfilter";
 
 

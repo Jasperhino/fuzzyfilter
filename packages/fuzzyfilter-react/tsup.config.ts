@@ -7,5 +7,5 @@ export default defineConfig({
   splitting: false,
   clean: true,
   treeshake: true,
-  external: ["react", "fuzzyfilter"],
+  external: ["react", "@jasperhino/fuzzyfilter"],
 });

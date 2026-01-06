@@ -3,7 +3,7 @@
  *
  * Provides state management for FuzzyFilter in React applications.
  *
- * @module react-fuzzy-filter
+ * @module fuzzyfilter-react
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
@@ -13,7 +13,7 @@ import type {
   CompiledFilter,
   WideEvent,
   IndexProgress,
-} from "fuzzyfilter";
+} from "@jasperhino/fuzzyfilter";
 
 /**
  * Options for the useFuzzyFilter hook
@@ -94,8 +94,8 @@ export interface UseFuzzyFilterReturn {
  *
  * @example Basic usage
  * ```tsx
- * import { useFuzzyFilter } from "react-fuzzy-filter";
- * import { createFuzzyFilter, columnId } from "fuzzyfilter";
+ * import { useFuzzyFilter } from "fuzzyfilter-react";
+ * import { createFuzzyFilter, columnId } from "@jasperhino/fuzzyfilter";
  *
  * const filter = createFuzzyFilter();
  * filter.setSchema({

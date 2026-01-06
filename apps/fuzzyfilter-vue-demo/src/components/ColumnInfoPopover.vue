@@ -19,7 +19,7 @@ import {
   DataType,
   type OperatorInfo,
   type AnyColumnDefinition,
-} from "fuzzyfilter"
+} from "@jasperhino/fuzzyfilter"
 import { cn } from "@/lib/utils"
 
 const props = defineProps<{

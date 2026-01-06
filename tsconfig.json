@@ -29,8 +29,8 @@
     // Path mapping for monorepo
     "baseUrl": ".",
     "paths": {
-      "fuzzyfilter": ["./packages/fuzzyfilter/src/index.ts"],
-      "vue-fuzzy-filter": ["./packages/vue-fuzzy-filter/src/index.ts"],
+      "@jasperhino/fuzzyfilter": ["./packages/fuzzyfilter/src/index.ts"],
+      "fuzzyfilter-vue": ["./packages/fuzzyfilter-vue/src/index.ts"],
       "@fuzzyfilter/sample-data": ["./packages/sample-data/src/index.ts"],
       "@fuzzyfilter/axiom-exporter": ["./packages/axiom-exporter/src/index.ts"]
     }

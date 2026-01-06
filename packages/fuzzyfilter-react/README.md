@@ -1,18 +1,18 @@
-# react-fuzzy-filter
+# fuzzyfilter-react
 
 React hook for [FuzzyFilter](https://github.com/your-username/fuzzyfilter) - build intelligent filter interfaces with fuzzy matching and type-aware suggestions.
 
 ## Installation
 
 ```bash
-bun add react-fuzzy-filter fuzzyfilter
+bun add fuzzyfilter fuzzyfilter-react
 ```
 
 ## Usage
 
 ```tsx
-import { useFuzzyFilter } from "react-fuzzy-filter";
-import { createFuzzyFilter, columnId } from "fuzzyfilter";
+import { useFuzzyFilter } from "fuzzyfilter-react";
+import { createFuzzyFilter, column  Id } from "@jasperhino/fuzzyfilter";
 
 // Create and configure filter
 const filter = createFuzzyFilter();
@@ -78,8 +78,8 @@ When building filter interfaces with multiple stacked filters, pass the compiled
 
 ```tsx
 import { useState } from "react";
-import { useFuzzyFilter } from "react-fuzzy-filter";
-import type { CompiledFilter } from "fuzzyfilter";
+import { useFuzzyFilter } from "fuzzyfilter-react";
+import type { CompiledFilter } from "@jasperhino/fuzzyfilter";
 
 function MultiFilterInput() {
   const [appliedFilters, setAppliedFilters] = useState<CompiledFilter[]>([]);

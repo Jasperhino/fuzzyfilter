@@ -1,21 +1,21 @@
-# vue-fuzzy-filter
+# fuzzyfilter-vue
 
 Vue 3 composable for [FuzzyFilter](https://github.com/your-username/fuzzyfilter) - build intelligent filter interfaces with fuzzy matching and natural language support.
 
 ## Installation
 
 ```bash
-bun add vue-fuzzy-filter fuzzyfilter
+bun add fuzzyfilter-vue fuzzyfilter
 # or
-npm install vue-fuzzy-filter fuzzyfilter
+npm install fuzzyfilter-vue fuzzyfilter
 ```
 
 ## Usage
 
 ```vue
 <script setup lang="ts">
-import { useFuzzyFilter } from "vue-fuzzy-filter";
-import { createFuzzyFilter, columnId } from "fuzzyfilter";
+import { useFuzzyFilter } from "fuzzyfilter-vue";
+import { createFuzzyFilter, columnId } from "@jasperhino/fuzzyfilter";
 import { onMounted } from "vue";
 
 // Create and configure the filter
@@ -91,19 +91,19 @@ const {
 
 #### Returns
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `query` | `Ref<string>` | Current query (v-model compatible) |
-| `suggestions` | `Ref<FilterSuggestion[]>` | Current suggestions |
-| `isLoading` | `Ref<boolean>` | Loading state |
-| `error` | `Ref<Error \| null>` | Error state |
-| `selectedIndex` | `Ref<number>` | Selected suggestion index |
-| `selectedSuggestion` | `ComputedRef<FilterSuggestion \| null>` | Currently selected suggestion |
-| `setQuery` | `(query: string) => void` | Set the query value |
-| `selectSuggestion` | `(index: number) => void` | Select a suggestion by index |
-| `navigateSuggestions` | `(direction: "up" \| "down") => void` | Navigate suggestions |
-| `applySuggestion` | `() => void` | Apply the selected suggestion |
-| `reset` | `() => void` | Reset all state |
+| Property              | Type                                    | Description                        |
+| --------------------- | --------------------------------------- | ---------------------------------- |
+| `query`               | `Ref<string>`                           | Current query (v-model compatible) |
+| `suggestions`         | `Ref<FilterSuggestion[]>`               | Current suggestions                |
+| `isLoading`           | `Ref<boolean>`                          | Loading state                      |
+| `error`               | `Ref<Error \| null>`                    | Error state                        |
+| `selectedIndex`       | `Ref<number>`                           | Selected suggestion index          |
+| `selectedSuggestion`  | `ComputedRef<FilterSuggestion \| null>` | Currently selected suggestion      |
+| `setQuery`            | `(query: string) => void`               | Set the query value                |
+| `selectSuggestion`    | `(index: number) => void`               | Select a suggestion by index       |
+| `navigateSuggestions` | `(direction: "up" \| "down") => void`   | Navigate suggestions               |
+| `applySuggestion`     | `() => void`                            | Apply the selected suggestion      |
+| `reset`               | `() => void`                            | Reset all state                    |
 
 ## License
 

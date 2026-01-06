@@ -1,7 +1,7 @@
 {
-  "name": "vue-fuzzy-filter",
+  "name": "fuzzyfilter-react",
   "version": "0.1.2",
-  "description": "Vue 3 composable for FuzzyFilter",
+  "description": "React hook for FuzzyFilter",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -23,17 +23,17 @@
   },
   "peerDependencies": {
     "@jasperhino/fuzzyfilter": ">=0.1.2",
-    "vue": "^3.0.0"
+    "react": "^18 || ^19"
   },
   "devDependencies": {
     "@jasperhino/fuzzyfilter": "workspace:*",
-    "typescript": "^5.7.3",
-    "vue": "^3.5.24"
+    "@types/react": "^19.2.5",
+    "react": "^19.2.0",
+    "typescript": "^5.7.3"
   },
   "keywords": [
-    "vue",
-    "vue3",
-    "composable",
+    "react",
+    "hook",
     "fuzzy",
     "filter",
     "search",
@@ -43,7 +43,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Jasperhino/fuzzyfilter",
-    "directory": "packages/vue-fuzzy-filter"
+    "directory": "packages/fuzzyfilter-react"
   },
   "homepage": "https://github.com/Jasperhino/fuzzyfilter#readme",
   "bugs": {

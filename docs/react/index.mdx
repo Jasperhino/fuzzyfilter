@@ -5,12 +5,12 @@ description: "useFuzzyFilter hook for React applications"
 
 # React Integration
 
-The `react-fuzzy-filter` package provides a React hook for building filter interfaces with FuzzyFilter.
+The `fuzzyfilter-react` package provides a React hook for building filter interfaces with FuzzyFilter.
 
 ## Installation
 
 ```bash
-npm install fuzzyfilter react-fuzzy-filter
+npm install fuzzyfilter fuzzyfilter-react
 ```
 
 ## useFuzzyFilter Hook
@@ -20,7 +20,7 @@ The main export is the `useFuzzyFilter` hook which provides reactive state manag
 ### Basic Usage
 
 ```tsx
-import { useFuzzyFilter } from "react-fuzzy-filter";
+import { useFuzzyFilter } from "fuzzyfilter-react";
 import { createFuzzyFilter, columnId } from "fuzzyfilter";
 
 // Create and configure the filter (outside component or with useMemo)
@@ -169,7 +169,7 @@ import type {
   UseFuzzyFilterReturn,
   FilterSuggestion,
   CompiledFilter,
-} from "react-fuzzy-filter";
+} from "fuzzyfilter-react";
 ```
 
 ## Best Practices

@@ -1,5 +1,5 @@
 {
-  "name": "fuzzyfilter-vue",
+  "name": "fuzzyfilter-vue-demo",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -28,7 +28,7 @@
     "@jasperhino/fuzzyfilter": "workspace:*",
     "@fuzzyfilter/sample-data": "workspace:*",
     "@fuzzyfilter/i18n-locales": "workspace:*",
-    "vue-fuzzy-filter": "workspace:*",
+    "fuzzyfilter-vue": "workspace:*",
     "lucide-operators": "workspace:*",
     "lucide-operators-vue": "workspace:*",
     "@fuzzyfilter/axiom-exporter": "workspace:*",

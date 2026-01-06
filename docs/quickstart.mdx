@@ -34,11 +34,11 @@ For React or Vue, also install the framework-specific package:
 <CodeGroup>
 
 ```bash React
-npm install react-fuzzy-filter
+npm install fuzzyfilter fuzzyfilter-react
 ```
 
 ```bash Vue
-npm install vue-fuzzy-filter
+npm install fuzzyfilter-vue
 ```
 
 </CodeGroup>
@@ -122,7 +122,7 @@ const matches = myData.filter(compiled.predicate);
 ### React
 
 ```tsx
-import { useFuzzyFilter } from "react-fuzzy-filter";
+import { useFuzzyFilter } from "fuzzyfilter-react";
 
 function FilterBox({ filter }) {
   const { query, setQuery, suggestions, applySuggestion } = useFuzzyFilter(filter);
@@ -150,7 +150,7 @@ function FilterBox({ filter }) {
 
 ```vue
 <script setup lang="ts">
-import { useFuzzyFilter } from "vue-fuzzy-filter";
+import { useFuzzyFilter } from "fuzzyfilter-vue";
 
 const props = defineProps<{ filter: FuzzyFilter }>();
 const { query, suggestions, applySuggestion } = useFuzzyFilter(props.filter);

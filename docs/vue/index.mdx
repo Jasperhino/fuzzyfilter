@@ -5,12 +5,12 @@ description: "useFuzzyFilter composable for Vue 3 applications"
 
 # Vue Integration
 
-The `vue-fuzzy-filter` package provides a Vue 3 composable for building filter interfaces with FuzzyFilter.
+The `fuzzyfilter-vue` package provides a Vue 3 composable for building filter interfaces with FuzzyFilter.
 
 ## Installation
 
 ```bash
-npm install fuzzyfilter vue-fuzzy-filter
+npm install fuzzyfilter fuzzyfilter-vue
 ```
 
 ## useFuzzyFilter Composable
@@ -21,7 +21,7 @@ The main export is the `useFuzzyFilter` composable which provides reactive state
 
 ```vue
 <script setup lang="ts">
-import { useFuzzyFilter } from "vue-fuzzy-filter";
+import { useFuzzyFilter } from "fuzzyfilter-vue";
 import { createFuzzyFilter, columnId } from "fuzzyfilter";
 
 // Create and configure the filter
@@ -66,7 +66,7 @@ const {
 
 ```vue
 <script setup lang="ts">
-import { useFuzzyFilter } from "vue-fuzzy-filter";
+import { useFuzzyFilter } from "fuzzyfilter-vue";
 
 const { query, suggestions, selectedIndex, applySuggestion } = useFuzzyFilter(filter);
 
@@ -152,7 +152,7 @@ import type {
   UseFuzzyFilterOptions,
   UseFuzzyFilterReturn,
   FilterSuggestion,
-} from "vue-fuzzy-filter";
+} from "fuzzyfilter-vue";
 ```
 
 ## Best Practices
@@ -164,7 +164,7 @@ Create the FuzzyFilter instance in your setup function or as a singleton:
 ```vue
 <script setup lang="ts">
 import { computed, watch } from "vue";
-import { useFuzzyFilter } from "vue-fuzzy-filter";
+import { useFuzzyFilter } from "fuzzyfilter-vue";
 import { createFuzzyFilter, columnId } from "fuzzyfilter";
 
 const props = defineProps<{
@@ -235,7 +235,7 @@ provide("fuzzyFilter", filter);
 <!-- Child component -->
 <script setup lang="ts">
 import { inject } from "vue";
-import { useFuzzyFilter } from "vue-fuzzy-filter";
+import { useFuzzyFilter } from "fuzzyfilter-vue";
 import type { FuzzyFilter } from "fuzzyfilter";
 
 const filter = inject<FuzzyFilter>("fuzzyFilter")!;

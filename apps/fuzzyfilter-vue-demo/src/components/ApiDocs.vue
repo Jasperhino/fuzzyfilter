@@ -14,7 +14,7 @@ import {
   getAllCategories,
   DataType,
   type OperatorInfo,
-} from "fuzzyfilter"
+} from "@jasperhino/fuzzyfilter"
 import {
   BookOpenIcon,
   CodeIcon,
@@ -136,7 +136,7 @@ const options = [
         <h2 class="font-semibold text-sm">API Reference</h2>
       </div>
       <p class="text-xs text-muted-foreground mt-1">
-        vue-fuzzy-filter documentation
+        fuzzyfilter-vue documentation
       </p>
     </div>
 

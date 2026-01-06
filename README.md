@@ -271,15 +271,15 @@ function FilterCombobox({ data, schema }) {
 
 ### Vue Integration
 
-For Vue 3 applications, use the separate [vue-fuzzy-filter](./packages/vue-fuzzy-filter) package:
+For Vue 3 applications, use the separate [fuzzyfilter-vue](./packages/fuzzyfilter-vue) package:
 
 ```bash
-bun add vue-fuzzy-filter fuzzyfilter
+bun add fuzzyfilter-vue fuzzyfilter
 ```
 
 ```vue
 <script setup lang="ts">
-import { useFuzzyFilter } from "vue-fuzzy-filter";
+import { useFuzzyFilter } from "fuzzyfilter-vue";
 import { createFuzzyFilter, columnId } from "fuzzyfilter";
 
 const filter = createFuzzyFilter();
@@ -293,7 +293,7 @@ const { query, suggestions, applySuggestion } = useFuzzyFilter(filter);
 </template>
 ```
 
-See the [vue-fuzzy-filter README](./packages/vue-fuzzy-filter/README.md) for full documentation.
+See the [fuzzyfilter-vue README](./packages/fuzzyfilter-vue/README.md) for full documentation.
 
 ## Advanced Usage
 

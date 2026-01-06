@@ -2,13 +2,13 @@
 /**
  * FilterCombobox - Vue Component for FuzzyFilter
  * 
- * Demonstrates the vue-fuzzy-filter composable with a combobox interface.
+ * Demonstrates the fuzzyfilter-vue composable with a combobox interface.
  * Uses virtual scrolling to handle large datasets (10,000+ rows).
  */
 import { ref, onMounted, computed, watch } from "vue"
 import { useVirtualizer } from "@tanstack/vue-virtual"
-import { useFuzzyFilter } from "vue-fuzzy-filter"
-import { createFuzzyFilter, getOperator, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch, createVueI18nProvider } from "fuzzyfilter"
+import { useFuzzyFilter } from "fuzzyfilter-vue"
+import { createFuzzyFilter, getOperator, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch, createVueI18nProvider } from "@jasperhino/fuzzyfilter"
 import { TASK_SCHEMA, COLUMN_IDS, generateLargeDataset, generateSingleTask, type Task as TaskRow } from "@fuzzyfilter/sample-data"
 import { useI18n } from "vue-i18n"
 import { i18n } from "@/i18n"

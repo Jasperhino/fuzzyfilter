@@ -7,7 +7,7 @@
  * @module @fuzzyfilter/sample-data
  */
 
-import { columnId, type SchemaInput } from "fuzzyfilter";
+import { columnId, type SchemaInput } from "@jasperhino/fuzzyfilter";
 import { generateTasks } from "./generator.ts";
 
 // Re-export generator utilities
