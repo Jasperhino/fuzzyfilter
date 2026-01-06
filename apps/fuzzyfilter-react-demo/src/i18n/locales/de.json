@@ -1,0 +1,83 @@
+{
+  "columns": {
+    "status": "Status",
+    "assignee": "Zuständiger",
+    "priority": "Priorität",
+    "department": "Abteilung",
+    "dueDate": "Fälligkeitsdatum",
+    "created": "Erstellt",
+    "isBlocked": "Ist blockiert",
+    "comments": "Kommentare"
+  },
+  "values": {
+    "status": {
+      "open": "Offen",
+      "inProgress": "In Bearbeitung",
+      "closed": "Geschlossen",
+      "blocked": "Blockiert"
+    },
+    "department": {
+      "engineering": "Technik",
+      "design": "Design",
+      "product": "Produkt"
+    },
+    "boolean": {
+      "blocked": "Blockiert",
+      "notBlocked": "Nicht blockiert"
+    }
+  },
+  "ui": {
+    "title": "FuzzyFilter Combobox mit Datentabelle (React)",
+    "filterPlaceholder": "Nach Spalte, Operator oder Wert filtern...",
+    "noResults": "Keine Ergebnisse",
+    "noRowsTitle": "Keine Zeilen entsprechen Ihren Filtern",
+    "noRowsHint": "Versuchen Sie, einige Filter anzupassen oder zu entfernen",
+    "clearAll": "Alle löschen",
+    "clearFilters": "Filter löschen",
+    "selectLanguage": "Sprache auswählen",
+    "showingResults": "{{count}} Ergebnisse angezeigt",
+    "activeFilters": "Aktive Filter:",
+    "appliedFilters": "Angewendete Filter",
+    "noFilters": "Keine Filter angewendet",
+    "filtersApplied_one": "{{count}} Filter angewendet",
+    "filtersApplied_other": "{{count}} Filter angewendet",
+    "suggestion": "Vorschlag",
+    "score": "Score",
+    "results": "# Ergebnisse",
+    "tasks": "Aufgaben",
+    "ofTotal": "({{count}} von {{total}})",
+    "filterSummary": "{{filterCount}} Filter angewendet, {{filteredCount}}/{{totalCount}} Einträge",
+    "itemCount": "{{filteredCount}}/{{totalCount}} Einträge",
+    "noComments": "Keine Kommentare",
+    "apiDocs": "API-Dokumentation",
+    "operators": "Operatoren",
+    "usage": "Verwendung",
+    "dataTypes": "Datentypen",
+    "indexing": "Indizierung...",
+    "indexingProgress": "Indizierung {{percentage}}%",
+    "addRow": "Zeile hinzufügen",
+    "deleteRow": "Zeile löschen",
+    "addingRow": "Hinzufügen...",
+    "deletingRow": "Löschen...",
+    "rowAdded": "Zeile hinzugefügt",
+    "rowDeleted": "Zeile gelöscht"
+  },
+  "table": {
+    "headers": {
+      "status": "Status",
+      "assignee": "Zuständiger",
+      "priority": "Priorität",
+      "department": "Abteilung",
+      "dueDate": "Fällig",
+      "created": "Erstellt",
+      "isBlocked": "Blockiert",
+      "comments": "Kommentare"
+    }
+  },
+  "languages": {
+    "en": "English",
+    "es": "Español",
+    "fr": "Français",
+    "de": "Deutsch"
+  }
+}

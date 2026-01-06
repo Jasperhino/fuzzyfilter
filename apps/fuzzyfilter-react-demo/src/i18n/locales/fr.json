@@ -1,0 +1,83 @@
+{
+  "columns": {
+    "status": "Statut",
+    "assignee": "Responsable",
+    "priority": "Priorité",
+    "department": "Département",
+    "dueDate": "Date d'échéance",
+    "created": "Créé",
+    "isBlocked": "Est bloqué",
+    "comments": "Commentaires"
+  },
+  "values": {
+    "status": {
+      "open": "Ouvert",
+      "inProgress": "En cours",
+      "closed": "Fermé",
+      "blocked": "Bloqué"
+    },
+    "department": {
+      "engineering": "Ingénierie",
+      "design": "Design",
+      "product": "Produit"
+    },
+    "boolean": {
+      "blocked": "Bloqué",
+      "notBlocked": "Non bloqué"
+    }
+  },
+  "ui": {
+    "title": "FuzzyFilter Combobox avec Table de Données (React)",
+    "filterPlaceholder": "Filtrer par colonne, opérateur ou valeur...",
+    "noResults": "Aucun résultat",
+    "noRowsTitle": "Aucune ligne ne correspond à vos filtres",
+    "noRowsHint": "Essayez d'ajuster ou de supprimer certains filtres",
+    "clearAll": "Tout effacer",
+    "clearFilters": "Effacer les filtres",
+    "selectLanguage": "Sélectionner la langue",
+    "showingResults": "{{count}} résultats affichés",
+    "activeFilters": "Filtres actifs :",
+    "appliedFilters": "Filtres appliqués",
+    "noFilters": "Aucun filtre appliqué",
+    "filtersApplied_one": "{{count}} filtre appliqué",
+    "filtersApplied_other": "{{count}} filtres appliqués",
+    "suggestion": "Suggestion",
+    "score": "Score",
+    "results": "# Résultats",
+    "tasks": "Tâches",
+    "ofTotal": "({{count}} sur {{total}})",
+    "filterSummary": "{{filterCount}} filtres appliqués, {{filteredCount}}/{{totalCount}} éléments",
+    "itemCount": "{{filteredCount}}/{{totalCount}} éléments",
+    "noComments": "Pas de commentaires",
+    "apiDocs": "Documentation API",
+    "operators": "Opérateurs",
+    "usage": "Utilisation",
+    "dataTypes": "Types de données",
+    "indexing": "Indexation...",
+    "indexingProgress": "Indexation {{percentage}}%",
+    "addRow": "Ajouter une ligne",
+    "deleteRow": "Supprimer la ligne",
+    "addingRow": "Ajout...",
+    "deletingRow": "Suppression...",
+    "rowAdded": "Ligne ajoutée",
+    "rowDeleted": "Ligne supprimée"
+  },
+  "table": {
+    "headers": {
+      "status": "Statut",
+      "assignee": "Responsable",
+      "priority": "Priorité",
+      "department": "Dép.",
+      "dueDate": "Échéance",
+      "created": "Créé",
+      "isBlocked": "Bloqué",
+      "comments": "Commentaires"
+    }
+  },
+  "languages": {
+    "en": "English",
+    "es": "Español",
+    "fr": "Français",
+    "de": "Deutsch"
+  }
+}

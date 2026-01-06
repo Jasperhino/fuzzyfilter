@@ -1,0 +1,46 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "types": ["vite/client", "node"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "erasableSyntaxOnly": false,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@jasperhino/fuzzyfilter": ["../../packages/fuzzyfilter/src/index.ts"],
+      "fuzzyfilter": ["../../packages/fuzzyfilter/src/index.ts"],
+      "@fuzzyfilter/axiom-exporter": ["../../packages/axiom-exporter/src/index.ts"],
+      "fuzzyfilter/i18n/locales": ["../../packages/fuzzyfilter/src/i18n/locales/index.ts"],
+      "fuzzyfilter/i18n/adapters": ["../../packages/fuzzyfilter/src/i18n/adapters/index.ts"],
+      "fuzzyfilter/i18n/adapters/i18next": ["../../packages/fuzzyfilter/src/i18n/adapters/i18next.ts"],
+      "fuzzyfilter/i18n/adapters/vue-i18n": ["../../packages/fuzzyfilter/src/i18n/adapters/vue-i18n.ts"],
+      "fuzzyfilter-react": ["../../packages/fuzzyfilter-react/src/index.ts"],
+      "@fuzzyfilter/sample-data": ["../../packages/sample-data/src/index.ts"],
+      "@fuzzyfilter/i18n-locales": ["../../packages/i18n-locales/src/index.ts"],
+      "fuzzyfilter/types/i18n": ["../../packages/fuzzyfilter/src/types/i18n.ts"],
+      "lucide-operators": ["../../packages/lucide-operators/src/index.ts"],
+      "lucide-operators-react": ["../../packages/lucide-operators-react/src/index.tsx"],
+      "lucide-operators/assets/*": ["../../packages/lucide-operators/assets/*"]
+    }
+  },
+  "include": ["src"]
+}

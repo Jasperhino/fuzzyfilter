@@ -1,0 +1,83 @@
+{
+  "columns": {
+    "status": "Status",
+    "assignee": "Assignee",
+    "priority": "Priority",
+    "department": "Department",
+    "dueDate": "Due Date",
+    "created": "Created",
+    "isBlocked": "Is Blocked",
+    "comments": "Comments"
+  },
+  "values": {
+    "status": {
+      "open": "Open",
+      "inProgress": "In Progress",
+      "closed": "Closed",
+      "blocked": "Blocked"
+    },
+    "department": {
+      "engineering": "Engineering",
+      "design": "Design",
+      "product": "Product"
+    },
+    "boolean": {
+      "blocked": "Blocked",
+      "notBlocked": "Not Blocked"
+    }
+  },
+  "ui": {
+    "title": "FuzzyFilter Combobox with Data Table (React)",
+    "filterPlaceholder": "Filter by column, operator, or value...",
+    "noResults": "No results",
+    "noRowsTitle": "No rows matching your filters",
+    "noRowsHint": "Try adjusting or removing some filters",
+    "clearAll": "Clear all",
+    "clearFilters": "Clear filters",
+    "selectLanguage": "Select language",
+    "showingResults": "Showing {{count}} results",
+    "activeFilters": "Active filters:",
+    "appliedFilters": "Applied filters",
+    "noFilters": "No filters applied",
+    "filtersApplied_one": "{{count}} filter applied",
+    "filtersApplied_other": "{{count}} filters applied",
+    "suggestion": "Suggestion",
+    "score": "Score",
+    "results": "# Results",
+    "tasks": "Tasks",
+    "ofTotal": "({{count}} of {{total}})",
+    "filterSummary": "{{filterCount}} filters applied, {{filteredCount}}/{{totalCount}} items",
+    "itemCount": "{{filteredCount}}/{{totalCount}} items",
+    "noComments": "No comments",
+    "apiDocs": "API Documentation",
+    "operators": "Operators",
+    "usage": "Usage",
+    "dataTypes": "Data Types",
+    "indexing": "Indexing...",
+    "indexingProgress": "Indexing {{percentage}}%",
+    "addRow": "Add row",
+    "deleteRow": "Delete row",
+    "addingRow": "Adding...",
+    "deletingRow": "Deleting...",
+    "rowAdded": "Row added",
+    "rowDeleted": "Row deleted"
+  },
+  "table": {
+    "headers": {
+      "status": "Status",
+      "assignee": "Assignee",
+      "priority": "Priority",
+      "department": "Department",
+      "dueDate": "Due Date",
+      "created": "Created",
+      "isBlocked": "Blocked",
+      "comments": "Comments"
+    }
+  },
+  "languages": {
+    "en": "English",
+    "es": "Español",
+    "fr": "Français",
+    "de": "Deutsch"
+  }
+}

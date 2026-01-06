@@ -1,0 +1,83 @@
+{
+  "columns": {
+    "status": "Estado",
+    "assignee": "Asignado",
+    "priority": "Prioridad",
+    "department": "Departamento",
+    "dueDate": "Fecha de vencimiento",
+    "created": "Creado",
+    "isBlocked": "Está bloqueado",
+    "comments": "Comentarios"
+  },
+  "values": {
+    "status": {
+      "open": "Abierto",
+      "inProgress": "En progreso",
+      "closed": "Cerrado",
+      "blocked": "Bloqueado"
+    },
+    "department": {
+      "engineering": "Ingeniería",
+      "design": "Diseño",
+      "product": "Producto"
+    },
+    "boolean": {
+      "blocked": "Bloqueado",
+      "notBlocked": "No bloqueado"
+    }
+  },
+  "ui": {
+    "title": "FuzzyFilter Combobox con Tabla de Datos (React)",
+    "filterPlaceholder": "Filtrar por columna, operador o valor...",
+    "noResults": "Sin resultados",
+    "noRowsTitle": "No hay filas que coincidan con sus filtros",
+    "noRowsHint": "Intente ajustar o eliminar algunos filtros",
+    "clearAll": "Borrar todo",
+    "clearFilters": "Borrar filtros",
+    "selectLanguage": "Seleccionar idioma",
+    "showingResults": "Mostrando {{count}} resultados",
+    "activeFilters": "Filtros activos:",
+    "appliedFilters": "Filtros aplicados",
+    "noFilters": "Sin filtros aplicados",
+    "filtersApplied_one": "{{count}} filtro aplicado",
+    "filtersApplied_other": "{{count}} filtros aplicados",
+    "suggestion": "Sugerencia",
+    "score": "Puntuación",
+    "results": "# Resultados",
+    "tasks": "Tareas",
+    "ofTotal": "({{count}} de {{total}})",
+    "filterSummary": "{{filterCount}} filtros aplicados, {{filteredCount}}/{{totalCount}} elementos",
+    "itemCount": "{{filteredCount}}/{{totalCount}} elementos",
+    "noComments": "Sin comentarios",
+    "apiDocs": "Documentación API",
+    "operators": "Operadores",
+    "usage": "Uso",
+    "dataTypes": "Tipos de datos",
+    "indexing": "Indexando...",
+    "indexingProgress": "Indexando {{percentage}}%",
+    "addRow": "Añadir fila",
+    "deleteRow": "Eliminar fila",
+    "addingRow": "Añadiendo...",
+    "deletingRow": "Eliminando...",
+    "rowAdded": "Fila añadida",
+    "rowDeleted": "Fila eliminada"
+  },
+  "table": {
+    "headers": {
+      "status": "Estado",
+      "assignee": "Asignado",
+      "priority": "Prioridad",
+      "department": "Dep.",
+      "dueDate": "Vence",
+      "created": "Creado",
+      "isBlocked": "Bloqueado",
+      "comments": "Comentarios"
+    }
+  },
+  "languages": {
+    "en": "English",
+    "es": "Español",
+    "fr": "Français",
+    "de": "Deutsch"
+  }
+}
