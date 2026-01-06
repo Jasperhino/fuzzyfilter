@@ -41,3 +41,4 @@ test-results
 .vercel
 .vercel-output
 .turbo
+.env*.local

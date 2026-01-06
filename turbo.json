@@ -32,15 +32,11 @@
       "outputs": []
     },
     "deploy": {
-      "dependsOn": [
-        "build"
-      ],
+      "dependsOn": ["build"],
       "cache": false
     },
     "deploy:preview": {
-      "dependsOn": [
-        "build"
-      ],
+      "dependsOn": ["build"],
       "cache": false
     },
     "deploy:link": {

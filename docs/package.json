@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "mintlify dev",
-    "deploy": "VERCEL_PROJECT_ID=prj_a4Q7ZKMezQSj9PTR5uA3St0fINVu VERCEL_ORG_ID=team_5uSLDb7Dz52wDBrbUI43M3g7 vercel --prod --yes",
-    "deploy:preview": "VERCEL_PROJECT_ID=prj_a4Q7ZKMezQSj9PTR5uA3St0fINVu VERCEL_ORG_ID=team_5uSLDb7Dz52wDBrbUI43M3g7 vercel --yes",
+    "deploy": "vercel --prod --yes",
+    "deploy:preview": "vercel --yes",
     "deploy:link": "vercel link --yes"
   },
   "devDependencies": {
