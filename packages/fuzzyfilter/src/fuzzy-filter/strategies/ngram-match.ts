@@ -17,7 +17,7 @@ import { getColumns, getColumn } from "../../schema-builder.ts";
 import { getAllOperators, getOperator } from "../../operators.ts";
 import { DataType } from "../../types/index.ts";
 import { parseDate, formatDateForDisplay, getDateSuggestionsForLocale } from "../../date-parser.ts";
-import { detectValueTokens, selectNonOverlappingMatches, toHypothesisValue } from "../engine/helpers.ts";
+import { detectValueTokens, selectNonOverlappingMatches, toHypothesisValue, createTypedValue } from "../engine/helpers.ts";
 import {
   createSuggestion,
   createDateSuggestion,
@@ -1021,7 +1021,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
           createSuggestion(
             col,
             bestOpForValue,
-            [{ kind: "string", value: match.value.value }],
+            [createTypedValue(match.value.value, col.type)],
             0, // Score will be calculated by createSuggestion using matchMetadata
             rowCount,
             bestOpEntry?.matchedAlias,
@@ -1234,7 +1234,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 createSuggestion(
                   col,
                   op,
-                  [{ kind: "string", value: match.value.value }],
+                  [createTypedValue(match.value.value, col.type)],
                   0, // Score will be calculated by createSuggestion using matchMetadata
                   rowCount,
                   undefined,
@@ -1376,7 +1376,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
               }, 0) / matchedValues.length;
 
             const args: import("../../types/index.ts").HypothesisValueType[] =
-              matchedValues.map((v) => ({ kind: "string", value: v.value }));
+              matchedValues.map((v) => createTypedValue(v.value, col.type));
             const key = `${col.id}:${op}:${matchedValues.map((v) => v.value).join(",")}`;
 
             const colToken = parsed.column!.token;
@@ -1499,7 +1499,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                   createSuggestion(
                     col,
                     op,
-                    [{ kind: "string", value: match.value.value }],
+                    [createTypedValue(match.value.value, col.type)],
                     0, // Score will be calculated by createSuggestion using matchMetadata
                     rowCount,
                     undefined,
@@ -1536,7 +1536,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
               createSuggestion(
                 col,
                 op,
-                [{ kind: "string", value: entry.value.value }],
+                [createTypedValue(entry.value.value, col.type)],
                 parsed.column!.match.score,
                 rowCount,
                 undefined,

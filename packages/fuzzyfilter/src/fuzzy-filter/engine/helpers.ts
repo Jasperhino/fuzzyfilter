@@ -167,3 +167,38 @@ export function toHypothesisValue(val: unknown, parsed?: ParsedDate): Hypothesis
   }
   return { kind: "string", value: String(val) };
 }
+
+/**
+ * Creates a HypothesisValueType from a string value, converting to the appropriate
+ * type based on the column's data type.
+ *
+ * @param value - The string value to convert
+ * @param columnType - The column's data type (number, date, boolean, string, enum)
+ * @returns A properly typed HypothesisValueType
+ */
+export function createTypedValue(
+  value: string,
+  columnType: string | undefined
+): HypothesisValueType {
+  // For number columns, try to parse as number
+  if (columnType === "number") {
+    const num = parseFloat(value);
+    if (!isNaN(num)) {
+      return { kind: "number", value: num };
+    }
+  }
+  
+  // For boolean columns, try to parse as boolean
+  if (columnType === "boolean") {
+    const lower = value.toLowerCase();
+    if (lower === "true" || lower === "yes" || lower === "1") {
+      return { kind: "boolean", value: true };
+    }
+    if (lower === "false" || lower === "no" || lower === "0") {
+      return { kind: "boolean", value: false };
+    }
+  }
+  
+  // Default to string
+  return { kind: "string", value };
+}

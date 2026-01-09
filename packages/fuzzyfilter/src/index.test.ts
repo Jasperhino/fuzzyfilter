@@ -229,6 +229,75 @@ describe("Operator Predicates", () => {
 });
 
 // =============================================================================
+// i18n Adapter Tests
+// =============================================================================
+
+describe("i18n Adapter - Nested Structure Handling", () => {
+  test("i18next adapter extracts label and aliases from { label, aliases } structure", () => {
+    const { createI18nextAdapter } = require("./i18n/adapters.ts");
+    
+    // Mock i18next instance with nested operator translations
+    const mockI18n = {
+      language: "de",
+      t: (key: string, options?: { returnObjects?: boolean }) => {
+        if (key === "operators.lt" && options?.returnObjects) {
+          return {
+            label: "kleiner",
+            aliases: ["<", "vor", "weniger", "unter", "kleiner als"],
+          };
+        }
+        if (key === "operators.gt" && options?.returnObjects) {
+          return {
+            label: "größer",
+            aliases: [">", "nach", "mehr", "über", "größer als"],
+          };
+        }
+        return key;
+      },
+      on: () => {},
+      off: () => {},
+    };
+    
+    const adapter = createI18nextAdapter(mockI18n);
+    
+    // Should include both label and aliases
+    const ltAliases = adapter.getAliases("operators.lt");
+    expect(ltAliases).toContain("kleiner");  // label
+    expect(ltAliases).toContain("<");         // alias
+    expect(ltAliases).toContain("kleiner als"); // alias
+    
+    const gtAliases = adapter.getAliases("operators.gt");
+    expect(gtAliases).toContain("größer");  // label
+    expect(gtAliases).toContain(">");       // alias
+    expect(gtAliases).toContain("größer als"); // alias
+  });
+  
+  test("i18next adapter handles array-only aliases (backwards compatible)", () => {
+    const { createI18nextAdapter } = require("./i18n/adapters.ts");
+    
+    // Mock i18next with array-only aliases (old format)
+    const mockI18n = {
+      language: "en",
+      t: (key: string, options?: { returnObjects?: boolean }) => {
+        if (key === "operators.eq" && options?.returnObjects) {
+          return ["=", "equals", "is"];
+        }
+        return key;
+      },
+      on: () => {},
+      off: () => {},
+    };
+    
+    const adapter = createI18nextAdapter(mockI18n);
+    
+    const eqAliases = adapter.getAliases("operators.eq");
+    expect(eqAliases).toContain("=");
+    expect(eqAliases).toContain("equals");
+    expect(eqAliases).toContain("is");
+  });
+});
+
+// =============================================================================
 // Schema Type Tests (Compile-time type checking)
 // =============================================================================
 

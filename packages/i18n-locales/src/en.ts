@@ -11,87 +11,87 @@ export const en: FuzzyFilterTranslations = {
   operators: {
     eq: {
       label: "equals",
-      aliases: ["equal", "equals", "is"],
+      aliases: ["=", "==", "===", "equal", "equals", "is"],
     },
     neq: {
       label: "not equals",
-      aliases: ["not equals", "not equal", "is not", "isn't", "doesn't equal", "does not equal"],
+      aliases: ["!=", "!==", "<>", "≠", "not equals", "not equal", "is not", "isn't", "doesn't equal", "does not equal"],
     },
     eqIgnoreCase: {
       label: "equals (ignore case)",
-      aliases: ["equals ignore case", "equal ignore case"],
+      aliases: ["~=", "≈", "equals ignore case", "equal ignore case"],
     },
     neqIgnoreCase: {
       label: "not equals (ignore case)",
-      aliases: ["not equals ignore case", "not equal ignore case"],
+      aliases: ["≉", "not equals ignore case", "not equal ignore case"],
     },
     lt: {
       label: "less than",
-      aliases: ["less than", "smaller than", "lower than"],
+      aliases: ["<", "less than", "smaller than", "lower than", "under", "before"],
     },
     lte: {
       label: "less than or equal",
-      aliases: ["less than or equal", "at most", "no more than"],
+      aliases: ["<=", "≤", "less than or equal", "at most", "no more than"],
     },
     gt: {
       label: "greater than",
-      aliases: ["greater than", "bigger than", "larger than", "more than"],
+      aliases: [">", "greater than", "bigger than", "larger than", "more than", "over", "above", "after"],
     },
     gte: {
       label: "greater than or equal",
-      aliases: ["greater than or equal", "at least", "no less than"],
+      aliases: [">=", "≥", "greater than or equal", "at least", "no less than"],
     },
     in: {
       label: "in",
-      aliases: ["one of", "any of"],
+      aliases: ["∈", "in", "one of", "any of", "includes"],
     },
     nin: {
       label: "not in",
-      aliases: ["not in", "not one of", "none of"],
+      aliases: ["∉", "not in", "not one of", "none of", "excludes"],
     },
     contains: {
       label: "contains",
-      aliases: ["contains", "has", "includes"],
+      aliases: ["~", "⊃", "contains", "has", "includes", "like"],
     },
     notContains: {
       label: "does not contain",
-      aliases: ["does not contain", "doesn't contain", "not contains"],
+      aliases: ["!~", "⊅", "does not contain", "doesn't contain", "not contains", "excludes"],
     },
     startsWith: {
       label: "starts with",
-      aliases: ["starts with", "begins with"],
+      aliases: ["^", "starts with", "begins with", "prefix"],
     },
     endsWith: {
       label: "ends with",
-      aliases: ["ends with"],
+      aliases: ["$", "ends with", "suffix"],
     },
     isEmpty: {
       label: "is empty",
-      aliases: ["is empty", "is blank", "is null", "is missing"],
+      aliases: ["is empty", "is blank", "is null", "is missing", "empty", "null", "blank", "missing"],
     },
     isNotEmpty: {
       label: "is not empty",
-      aliases: ["is not empty", "is not blank", "has value"],
+      aliases: ["is not empty", "is not blank", "has value", "not empty", "exists", "present"],
     },
     isTrue: {
       label: "is true",
-      aliases: ["is true", "is yes", "is on", "is enabled", "is active"],
+      aliases: ["✓", "is true", "is yes", "is on", "is enabled", "is active", "true", "yes", "on", "enabled", "active"],
     },
     isFalse: {
       label: "is false",
-      aliases: ["is false", "is no", "is off", "is disabled", "is inactive"],
+      aliases: ["✗", "is false", "is no", "is off", "is disabled", "is inactive", "false", "no", "off", "disabled", "inactive"],
     },
     before: {
       label: "before",
-      aliases: ["before", "earlier than", "prior to"],
+      aliases: ["←", "before", "earlier than", "prior to", "until", "up to"],
     },
     after: {
       label: "after",
-      aliases: ["after", "later than", "since"],
+      aliases: ["→", "after", "later than", "since", "from", "starting"],
     },
     between: {
       label: "between",
-      aliases: ["between", "in range", "within"],
+      aliases: ["↔", "between", "in range", "within"],
     },
   },
 };

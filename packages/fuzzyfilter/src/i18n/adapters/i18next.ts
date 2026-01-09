@@ -78,6 +78,27 @@ export function createI18nextProvider(
         return [fuzzyTranslated];
       }
       
+      // Handle nested { label, aliases } structure from operator translations
+      if (fuzzyTranslated && typeof fuzzyTranslated === "object" && !Array.isArray(fuzzyTranslated)) {
+        const obj = fuzzyTranslated as Record<string, unknown>;
+        const aliases: string[] = [];
+        // Include label as an alias (e.g., "kleiner" for lt operator)
+        if (typeof obj.label === "string" && obj.label) {
+          aliases.push(obj.label);
+        }
+        // Include all aliases from the aliases array
+        if (Array.isArray(obj.aliases)) {
+          for (const alias of obj.aliases) {
+            if (typeof alias === "string") {
+              aliases.push(alias);
+            }
+          }
+        }
+        if (aliases.length > 0) {
+          return aliases;
+        }
+      }
+      
       // Fallback: return key as single-item array
       const parts = key.split(".");
       return [parts[parts.length - 1] ?? key];

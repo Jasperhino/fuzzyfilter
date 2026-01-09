@@ -1,5 +1,5 @@
 /**
- * French locale translations for FuzzyFilter
+ * German locale translations for FuzzyFilter
  */
 import type { FuzzyFilterTranslations } from "../../fuzzyfilter/src/types/i18n.ts";
 
@@ -34,8 +34,8 @@ export const de: FuzzyFilterTranslations = {
       aliases: [">", "nach", "mehr", "über", "größer als"],
     },
     gte: {
-      label: "supérieur ou égal à",
-      aliases: [">=", "minimum", "au moins", "≥"],
+      label: "größer gleich",
+      aliases: [">=", "≥", "mindestens", "wenigstens", "größer oder gleich"],
     },
     in: {
       label: "in",
