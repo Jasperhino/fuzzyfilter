@@ -7,9 +7,9 @@ description: "Learn the fundamentals of FuzzyFilter"
 
 This guide covers the fundamental concepts and patterns for using FuzzyFilter.
 
-## Creating a Filter Instance (V2 API)
+## Creating a Filter Instance
 
-The `createFuzzyFilter` factory function creates a new filter instance. In V2, `columns` and `i18n` are required:
+The `createFuzzyFilter` factory function creates a new filter instance.
 
 ```typescript
 import { createFuzzyFilter, createDefaultEnglishProvider } from "fuzzyfilter";
@@ -60,22 +60,10 @@ const filter = createFuzzyFilter({
       type: "boolean",
     },
   ],
-  i18n: createDefaultEnglishProvider(), // Required in V2
+  i18n: createDefaultEnglishProvider(),
   maxSuggestions: 15,      // Optional: Maximum suggestions to return
   debounceMs: 200,         // Optional: Debounce delay for suggestions
   benchmark: true,         // Optional: Enable performance telemetry
-});
-```
-
-## Defining a Schema (Optional)
-
-In V2, columns are defined in the config. You can still update the schema later:
-
-```typescript
-filter.setSchema({
-  columns: [
-    // Updated columns
-  ],
 });
 ```
 

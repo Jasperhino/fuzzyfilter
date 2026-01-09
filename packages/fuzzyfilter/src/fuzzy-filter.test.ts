@@ -30,7 +30,6 @@ describe("FuzzyFilter", () => {
   >[];
 
   beforeEach(() => {
-    // V2 API: columns and i18n are required in config
     filter = createFuzzyFilter({
       columns: TASK_SCHEMA.columns,
       i18n: createDefaultEnglishProvider(),
@@ -2615,7 +2614,7 @@ describe("i18n Column Translation", () => {
     const { getTranslatedColumnName } = await import("./fuzzy-filter/engine/suggestion-helpers.ts");
     const { createObjectProvider } = await import("./i18n/index.ts");
     
-    // Create a column with labelKey (V2 API)
+    // Create a column with labelKey
     const column = {
       id: "status"),
       labelKey: "columns.status",
@@ -2676,7 +2675,7 @@ describe("i18n Column Translation", () => {
     const { getTranslatedEnumValueLabel } = await import("./fuzzy-filter/engine/suggestion-helpers.ts");
     const { createObjectProvider } = await import("./i18n/index.ts");
     
-    // Create an enum column with valuesI18nPrefix (V2 API)
+    // Create an enum column with valuesI18nPrefix
     const column = {
       id: "status"),
       labelKey: "columns.status",
@@ -2732,7 +2731,7 @@ describe("i18n Column Translation", () => {
     const { getTranslatedBooleanLabel } = await import("./fuzzy-filter/engine/suggestion-helpers.ts");
     const { createObjectProvider } = await import("./i18n/index.ts");
     
-    // Create a boolean column (V2 API - uses column.id.true/false pattern)
+    // Create a boolean column
     const column = {
       id: "isBlocked"),
       labelKey: "columns.isBlocked",
@@ -2756,7 +2755,7 @@ describe("i18n Column Translation", () => {
   test("getTranslatedBooleanLabel falls back to static labels", async () => {
     const { getTranslatedBooleanLabel } = await import("./fuzzy-filter/engine/suggestion-helpers.ts");
     
-    // Create a boolean column without i18n provider (V2 API)
+    // Create a boolean column without i18n provider
     const column = {
       id: "isBlocked"),
       labelKey: "columns.isBlocked",
@@ -2771,7 +2770,7 @@ describe("i18n Column Translation", () => {
 
 describe("Data Mutation - Index Updates", () => {
   test("addRow makes new value immediately searchable in suggestions", async () => {
-    // Create a filter with a simple schema (V2 API)
+    // Create a filter with a simple schema
     const filter = createFuzzyFilter({ 
       columns: [
         { id: "name"), labelKey: "columns.name", type: "string" },

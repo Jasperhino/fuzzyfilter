@@ -88,7 +88,7 @@ export interface UseFuzzyFilterReturn {
  * @param options - Configuration options
  * @returns Reactive state and actions
  *
- * @example Basic usage (V2 API)
+ * @example Basic usage
  * ```vue
  * <script setup lang="ts">
  * import { useFuzzyFilter } from "fuzzyfilter-vue";

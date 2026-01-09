@@ -108,7 +108,7 @@ export const COLUMN_IDS = {
 // ============================================================================
 
 /**
- * Schema definition for the task data (V2 API).
+ * Schema definition for the task data.
  * 
  * Column labels and enum values use i18n keys for translation support.
  * Native enums are defined using the `values` array - no `type: "enum"` needed.

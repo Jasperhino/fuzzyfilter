@@ -92,7 +92,7 @@ export interface UseFuzzyFilterReturn {
  * @param options - Configuration options
  * @returns State and actions
  *
- * @example Basic usage (V2 API)
+ * @example Basic usage
  * ```tsx
  * import { useFuzzyFilter } from "fuzzyfilter-react";
  * import { createFuzzyFilter, createDefaultEnglishProvider } from "fuzzyfilter";

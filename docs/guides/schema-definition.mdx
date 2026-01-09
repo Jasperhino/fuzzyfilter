@@ -3,13 +3,13 @@ title: Schema Definition
 description: "Learn about column types, options, and schema configuration"
 ---
 
-# Schema Definition (V2 API)
+# Schema Definition
 
-This guide explains how to define schemas for FuzzyFilter V2, including native enum support and column types.
+This guide explains how to define schemas for FuzzyFilter, including native enum support and column types.
 
 ## Column Types
 
-FuzzyFilter V2 supports built-in types and native TypeScript enums:
+FuzzyFilter supports built-in types and native TypeScript enums:
 
 ### String Columns
 
@@ -55,7 +55,7 @@ For date/datetime fields:
 
 Date columns automatically support natural language expressions like "today", "last week", etc.
 
-### Native Enum Columns (V2)
+### Native Enum Columns
 
 For fields with a known set of values - **no `type: "enum"` needed!**
 
@@ -148,7 +148,7 @@ enum Status {
 }
 ```
 
-## Complete Schema Example (V2)
+## Complete Schema Example
 
 ```typescript
 import { createFuzzyFilter, createDefaultEnglishProvider } from "fuzzyfilter";

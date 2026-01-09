@@ -67,11 +67,11 @@ function getMinArguments(op: OperatorDefinition | undefined): number {
 /**
  * Get the translated column name using i18n.
  * 
- * In V2, columns always have a labelKey which is resolved via i18n provider.
+ * Columns always have a labelKey which is resolved via i18n provider.
  * Falls back to extracting the last part of the labelKey if translation fails.
  * 
  * @param column - The column definition
- * @param i18nProvider - i18n provider for translations (required in V2)
+ * @param i18nProvider - i18n provider for translations
  * @returns The translated column name
  */
 export function getTranslatedColumnName(
@@ -91,12 +91,12 @@ export function getTranslatedColumnName(
 /**
  * Get the translated enum value label using i18n.
  * 
- * In V2, enum values use the pattern {valuesI18nPrefix ?? column.id}.{value}
+ * Enum values use the pattern {valuesI18nPrefix ?? column.id}.{value}
  * to generate i18n keys.
  * 
  * @param column - The column definition with values
  * @param value - The enum value to get label for
- * @param i18nProvider - i18n provider for translations (required in V2)
+ * @param i18nProvider - i18n provider for translations
  * @returns The translated label, or the value itself if no translation found
  */
 export function getTranslatedEnumValueLabel(

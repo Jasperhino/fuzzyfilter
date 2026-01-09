@@ -124,25 +124,7 @@ export interface FuzzyFilterConfig<TCustom extends Record<string, FuzzyFilterabl
   i18n: I18nProvider;
 }
 
-/**
- * Default configuration.
- * 
- * Note: In V2, `columns` and `i18n` are required and must be provided
- * when creating a FuzzyFilter instance.
- */
-export const DEFAULT_CONFIG: Partial<FuzzyFilterConfig> = {
-  maxSuggestions: 10,
-  minScore: 0.1,
-  scoringWeights: {
-    column: 0.4,
-    operator: 0.35,
-    arguments: 0.4,
-  },
-  enableCache: true,
-  maxCacheSize: 1000,
-  debounceMs: 150,
-  debug: true,
-} as const;
+/*
 
 /**
  * Main FuzzyFilter interface.
@@ -218,7 +200,7 @@ export interface FuzzyFilter<TCustom extends Record<string, FuzzyFilterable<any>
    * Sets the schema definition for the filter.
    *
    * The schema defines the available columns, their types, and valid values.
-   * In V2, columns are defined in the config, but this method can be used
+   * Columns are defined in the config, but this method can be used
    * to update the schema after creation.
    *
    * @param schema - The schema definition

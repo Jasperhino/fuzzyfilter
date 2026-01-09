@@ -12,11 +12,11 @@ import type { ColumnId, DataType } from "./core.ts";
 import type { OperatorKey } from "../operators.ts";
 
 // ============================================================================
-// COLUMN DEFINITION - Unified V2 API
+// COLUMN DEFINITION
 // ============================================================================
 
 /**
- * Column definition for FuzzyFilter V2.
+ * Column definition for FuzzyFilter.
  * 
  * Supports automatic enum handling when `values` is provided, or explicit
  * type specification for built-in types (string, number, date) or custom

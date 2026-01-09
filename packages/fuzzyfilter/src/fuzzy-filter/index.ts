@@ -167,7 +167,7 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
    * Stores them for use in type resolution.
    */
   private extractCustomTypes(): void {
-    // In V2, custom types are passed via generic parameter, not extracted from columns
+    // Custom types are passed via generic parameter, not extracted from columns
     // This method is a placeholder for future enhancement if needed
     // For now, custom types must be registered separately if needed
   }
@@ -205,7 +205,6 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
     }
 
     // 4. Check custom FuzzyFilterable types
-    // Note: In V2, custom types are handled via generic parameter
     // This would need runtime type registration if we want to support it
     // For now, we assume custom types are handled elsewhere
 
@@ -687,7 +686,7 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
    * Adds translated enum values to the value trie.
    * This allows fuzzy searching by translated value names.
    * 
-   * Uses the new V2 pattern: {valuesI18nPrefix ?? column.id}.{value}
+   * Uses the pattern: {valuesI18nPrefix ?? column.id}.{value}
    */
   private addTranslatedValuesToTrie(): void {
     if (!this.state.schema) return;
@@ -1180,7 +1179,7 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
  *                     Only needed when using custom FuzzyFilterable types.
  *                     Native enums don't need to be declared here.
  * 
- * @param config - Configuration including columns and i18n provider (required in V2)
+ * @param config - Configuration including columns and i18n provider
  * @returns FuzzyFilter instance
  * 
  * @example With native enums

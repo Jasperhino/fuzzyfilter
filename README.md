@@ -34,7 +34,7 @@ enum Status {
   CLOSED = "Closed",
 }
 
-// 1. Create a filter instance with columns and i18n (V2 API)
+// 1. Create a filter instance with columns and i18n 
 const filter = createFuzzyFilter({
   columns: [
     { 
@@ -60,7 +60,7 @@ const filter = createFuzzyFilter({
       type: "date" 
     },
   ],
-  i18n: createDefaultEnglishProvider(), // Required in V2
+  i18n: createDefaultEnglishProvider(),
 });
 
 // 2. Index your data
@@ -85,9 +85,9 @@ const compiled = filter.compileFilter("status", "eq", Status.OPEN);
 
 ## Core Concepts
 
-### Schema Definition (V2 API)
+### Schema Definition
 
-Define your filterable columns with the new V2 API:
+Define your filterable columns:
 
 ```typescript
 import { createFuzzyFilter, createDefaultEnglishProvider } from "fuzzyfilter";
@@ -353,9 +353,9 @@ console.log(stats);
 
 ## API Reference
 
-### `createFuzzyFilter<TCustom>(config)` (V2 API)
+### `createFuzzyFilter<TCustom>(config)`
 
-Creates a new FuzzyFilter instance. In V2, `columns` and `i18n` are required.
+Creates a new FuzzyFilter instance.
 
 ```typescript
 // With native enums (no generic needed)
@@ -379,19 +379,6 @@ const filter = createFuzzyFilter<{ amount: Amount }>({
     { id: "weight", labelKey: "columns.weight", type: "amount" },
   ],
   i18n: createDefaultEnglishProvider(),
-});
-```
-
-### `filter.setSchema(schema)` (Optional in V2)
-
-In V2, columns are defined in the config when creating the filter. You can still use `setSchema()` to update the schema after creation:
-
-Sets the schema definition.
-
-```typescript
-filter.setSchema({
-  columns: AnyColumnDefinition[],
-  defaultColumns?: string[],  // Column IDs to show by default
 });
 ```
 
