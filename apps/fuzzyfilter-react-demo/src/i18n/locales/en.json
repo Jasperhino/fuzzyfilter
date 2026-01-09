@@ -7,7 +7,8 @@
     "dueDate": "Due Date",
     "created": "Created",
     "isBlocked": "Is Blocked",
-    "comments": "Comments"
+    "comments": "Comments",
+    "amount": "Amount"
   },
   "values": {
     "status": {
@@ -71,7 +72,8 @@
       "dueDate": "Due Date",
       "created": "Created",
       "isBlocked": "Blocked",
-      "comments": "Comments"
+      "comments": "Comments",
+      "amount": "Amount"
     }
   },
   "languages": {

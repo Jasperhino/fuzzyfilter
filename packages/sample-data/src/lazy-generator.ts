@@ -8,6 +8,7 @@
  */
 
 import type { Task, GeneratorOptions } from "./generator.ts";
+import { Amount, type WeightUnit } from "./amount.ts";
 
 // ============================================================================
 // CONFIGURATION
@@ -99,16 +100,26 @@ async function generateTaskAsync(id: number, options: GeneratorOptions = {}): Pr
   ];
   const comments = faker.helpers.arrayElement(commentOptions) as string;
 
+  // Generate an amount with realistic weights
+  const priority = faker.number.int({ min: PRIORITY_MIN, max: PRIORITY_MAX });
+  const useKg = faker.datatype.boolean({ probability: 0.7 });
+  const weightValue = useKg
+    ? faker.number.int({ min: 10, max: 5000 })  // 10-5000 kg
+    : faker.number.float({ min: 0.5, max: 50, fractionDigits: 1 });  // 0.5-50 tonnes
+  const weightUnit = useKg ? "kg" : "t";
+  const amount = new Amount(weightValue, weightUnit as WeightUnit);
+
   return {
     id,
     status,
     assignee: faker.person.fullName(),
-    priority: faker.number.int({ min: PRIORITY_MIN, max: PRIORITY_MAX }),
+    priority,
     department: faker.helpers.arrayElement(DEPARTMENTS as unknown as string[]),
     dueDate,
     created,
     isBlocked,
     comments,
+    amount: amount.toJSON(),
   };
 }
 

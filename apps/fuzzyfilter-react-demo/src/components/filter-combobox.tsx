@@ -27,6 +27,7 @@ import {
   LARGE_DATASET,
   generateSingleTaskAsync,
   COLUMN_IDS,
+  Amount,
   type Task as TaskRow,
 } from "@fuzzyfilter/sample-data";
 import { ColumnHeader } from "./column-info-popover";
@@ -531,6 +532,9 @@ function TableRow({
           {row.comments || <span className="text-muted-foreground/50 italic">{t("ui.noComments")}</span>}
         </span>
       </td>
+      <td className="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">
+        {row.amount ? `${row.amount.value.toLocaleString()} ${row.amount.unit}` : "-"}
+      </td>
     </tr>
   );
 }
@@ -617,6 +621,7 @@ function VirtualDataTable({
   const createdColumn = getColumnById(COLUMN_IDS.created);
   const isBlockedColumn = getColumnById(COLUMN_IDS.isBlocked);
   const commentsColumn = getColumnById(COLUMN_IDS.comments);
+  const amountColumn = getColumnById(COLUMN_IDS.amount);
 
   return (
     <div className="overflow-hidden rounded-lg border border-border flex flex-col max-h-full">
@@ -699,12 +704,21 @@ function VirtualDataTable({
                   columnKey="comments"
                 />
               </th>
+              <th className="px-3 py-3 text-left font-normal whitespace-nowrap">
+                <SortableColumnHeader
+                  column={amountColumn}
+                  label={t("table.headers.amount")}
+                  sortState={sortState}
+                  onSort={onSort}
+                  columnKey="amount"
+                />
+              </th>
             </tr>
           </thead>
           <tbody>
             {data.length === 0 ? (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={9}>
                   <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                     <FilterIcon className="size-10 mb-3 opacity-40" />
                     <p className="text-sm font-medium">{t("ui.noRowsTitle")}</p>
@@ -749,9 +763,10 @@ export function FilterCombobox() {
   
   // Create FuzzyFilter instance with i18n
   // Set benchmark: true to enable telemetry spans (accessible via filter.getTelemetry())
-  const [filter] = React.useState<FuzzyFilter>(() => {
+  // Using generic type parameter to declare custom Amount type
+  const [filter] = React.useState<FuzzyFilter<{ amount: Amount }>>(() => {
     const i18n = createI18nextProvider(i18nInstance);
-    const f = createFuzzyFilter({ 
+    const f = createFuzzyFilter<{ amount: Amount }>({ 
       ...DEFAULT_CONFIG,
       maxSuggestions: 12,
       columns: TASK_SCHEMA.columns,
@@ -762,7 +777,8 @@ export function FilterCombobox() {
     
     // Expose filter globally for debugging
     // Access in console: window.__filter.getTelemetry()?.getSpans()
-    (window as unknown as { __filter: FuzzyFilter }).__filter = f;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__filter = f;
     
     // Attach Axiom telemetry exporter if configured
     // Set VITE_AXIOM_API_KEY and VITE_AXIOM_DATASET environment variables to enable

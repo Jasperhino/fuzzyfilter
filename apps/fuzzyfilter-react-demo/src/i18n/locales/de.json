@@ -7,7 +7,8 @@
     "dueDate": "Fälligkeitsdatum",
     "created": "Erstellt",
     "isBlocked": "Ist blockiert",
-    "comments": "Kommentare"
+    "comments": "Kommentare",
+    "amount": "Menge"
   },
   "values": {
     "status": {
@@ -71,7 +72,8 @@
       "dueDate": "Fällig",
       "created": "Erstellt",
       "isBlocked": "Blockiert",
-      "comments": "Kommentare"
+      "comments": "Kommentare",
+      "amount": "Menge"
     }
   },
   "languages": {

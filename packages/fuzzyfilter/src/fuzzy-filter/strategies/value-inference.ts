@@ -728,7 +728,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
         if (forType && forType !== col.type) continue;
         if (!col.type) continue;
 
-        if (!opInfo.supportedTypes.includes(col.type)) continue;
+        if (!(opInfo.supportedTypes as readonly string[]).includes(col.type as string)) continue;
         if (!isVariadic || minArgs !== 1) continue;
 
         const matchesForCol = allValueMatchesByColumnForOp.get(col.id);

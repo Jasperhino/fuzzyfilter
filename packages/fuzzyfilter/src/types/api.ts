@@ -61,27 +61,27 @@ import type {
  * };
  * ```
  */
-export interface FuzzyFilterConfig<TCustom extends Record<string, FuzzyFilterable<any>> = Record<string, never>> {
-  /** Maximum suggestions to return */
-  maxSuggestions: number;
+export interface FuzzyFilterConfig<TCustom extends Record<string, FuzzyFilterable<any>> = {}> {
+  /** Maximum suggestions to return. Defaults to 10. */
+  maxSuggestions?: number;
 
-  /** Minimum score to include (fuzzysort scale) */
-  minScore: number;
+  /** Minimum score to include (fuzzysort scale). Defaults to 0.1. */
+  minScore?: number;
 
-  /** Scoring weights for ranking */
-  scoringWeights: ScoringWeights;
+  /** Scoring weights for ranking. Uses sensible defaults if not provided. */
+  scoringWeights?: ScoringWeights;
 
-  /** Enable caching */
-  enableCache: boolean;
+  /** Enable caching. Defaults to true. */
+  enableCache?: boolean;
 
-  /** Cache size limit */
-  maxCacheSize: number;
+  /** Cache size limit. Defaults to 1000. */
+  maxCacheSize?: number;
 
-  /** Debounce time for suggestions (ms) */
-  debounceMs: number;
+  /** Debounce time for suggestions (ms). Defaults to 150. */
+  debounceMs?: number;
 
-  /** Enable debug logging */
-  debug: boolean;
+  /** Enable debug logging. Defaults to true. */
+  debug?: boolean;
 
 
   /**
@@ -199,7 +199,7 @@ export const DEFAULT_CONFIG: Partial<FuzzyFilterConfig> = {
  * });
  * ```
  */
-export interface FuzzyFilter<TCustom extends Record<string, FuzzyFilterable<any>> = Record<string, never>> {
+export interface FuzzyFilter<TCustom extends Record<string, FuzzyFilterable<any>> = {}> {
   // -------------------------------------------------------------------------
   // Configuration
   // -------------------------------------------------------------------------

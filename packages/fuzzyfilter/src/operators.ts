@@ -343,11 +343,11 @@ export function getOperator(id: OperatorKey | string): OperatorDefinition | unde
 }
 
 /**
- * Get operators valid for a data type
+ * Get operators valid for a data type.
  * 
- * @param type - The data type
+ * @param type - The data type (built-in DataType or custom type string)
  */
-export function getOperatorsForType(type: DataType): OperatorDefinition[] {
+export function getOperatorsForType(type: DataType | string): OperatorDefinition[] {
   return getAllOperators().filter(op => 
     (op.supportedTypes as readonly string[]).includes(type)
   );

@@ -56,7 +56,7 @@ import type { OperatorKey } from "../operators.ts";
  * };
  * ```
  */
-export interface ColumnDefinition<TTypes extends Record<string, any> = Record<string, never>> {
+export interface ColumnDefinition<TTypes extends Record<string, any> = {}> {
   /**
    * Unique identifier for this column.
    */
@@ -77,7 +77,7 @@ export interface ColumnDefinition<TTypes extends Record<string, any> = Record<st
    * Built-in types: 'string', 'number', 'date'
    * Custom types: keys from the TTypes generic parameter
    */
-  type?: keyof (BuiltInTypes & TTypes);
+  type?: keyof (BuiltInTypes & TTypes) & string;
 
   /**
    * Predefined values for enum-like columns.
@@ -142,9 +142,14 @@ type BuiltInTypes = {
 /**
  * Union type for all column definitions.
  * 
- * @deprecated In V2, use ColumnDefinition directly. This is kept for backward compatibility.
+ * Uses bivariance (via `any`) to accept any ColumnDefinition regardless of
+ * the custom types generic parameter. Used for internal APIs and backward
+ * compatibility.
+ * 
+ * @see https://github.com/Microsoft/TypeScript/wiki/FAQ#why-are-function-parameters-bivariant
  */
-export type AnyColumnDefinition = ColumnDefinition;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyColumnDefinition = Omit<ColumnDefinition<any>, 'type'> & { type?: string };
 
 // ============================================================================
 // SCHEMA
@@ -183,7 +188,7 @@ export interface Schema {
  * filter.setSchema(schemaInput);
  * ```
  */
-export interface SchemaInput<TTypes extends Record<string, any> = Record<string, never>> {
+export interface SchemaInput<TTypes extends Record<string, any> = {}> {
   /** The column definitions */
   columns: ColumnDefinition<TTypes>[];
 

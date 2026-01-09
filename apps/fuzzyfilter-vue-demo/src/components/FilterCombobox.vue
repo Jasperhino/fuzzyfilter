@@ -10,7 +10,7 @@ import { useVirtualizer } from "@tanstack/vue-virtual"
 import { useFuzzyFilter } from "fuzzyfilter-vue"
 import { createFuzzyFilter, getOperator, DEFAULT_CONFIG, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch, createVueI18nProvider } from "@jasperhino/fuzzyfilter"
 import { isOperatorVariadic, operatorRequiresArgument, getMinArguments } from "@/lib/operator-helpers"
-import { TASK_SCHEMA, COLUMN_IDS, LARGE_DATASET, generateSingleTaskAsync, type Task as TaskRow } from "@fuzzyfilter/sample-data"
+import { TASK_SCHEMA, COLUMN_IDS, LARGE_DATASET, generateSingleTaskAsync, Amount, type Task as TaskRow } from "@fuzzyfilter/sample-data"
 import { useI18n } from "vue-i18n"
 import { i18n } from "@/i18n"
 import DataTypeIcon from "./DataTypeIcon.vue"
@@ -60,7 +60,8 @@ const { locale, t } = i18nComposer
 
 // Create filter instance with i18n
 // Set benchmark: true to enable telemetry spans (accessible via filter.getTelemetry())
-const filter = createFuzzyFilter({ 
+// Using generic type parameter to declare custom Amount type
+const filter = createFuzzyFilter<{ amount: Amount }>({ 
   ...DEFAULT_CONFIG,
   maxSuggestions: 12,
   columns: TASK_SCHEMA.columns,
@@ -289,7 +290,7 @@ const filteredData = computed(() => {
       
       // Check if operator is variadic (in, nin, between) - always pass array for these
       const opInfo = getOperator(f.operator)
-      const compileValue = opInfo.isVariadic 
+      const compileValue = isOperatorVariadic(opInfo)
         ? value  // Always pass array for variadic operators
         : (value && value.length === 1 ? value[0] : value)  // Unwrap single values for non-variadic
       const compiled = filter.compileFilter(f.column.id, f.operator, compileValue)
@@ -729,6 +730,7 @@ const dueDateColumn = getColumnById(COLUMN_IDS.dueDate)
 const createdColumn = getColumnById(COLUMN_IDS.created)
 const isBlockedColumn = getColumnById(COLUMN_IDS.isBlocked)
 const commentsColumn = getColumnById(COLUMN_IDS.comments)
+const amountColumn = getColumnById(COLUMN_IDS.amount)
 </script>
 
 <template>
@@ -1059,7 +1061,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
               >
                 <ColumnInfoPopover :column="isBlockedColumn">
                   <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="isBlockedColumn.type" size="size-3" class="shrink-0" />
+                    <DataTypeIcon :type="isBlockedColumn.type ?? 'boolean'" size="size-3" class="shrink-0" />
                     <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.isBlocked") }}</span>
                   </div>
                 </ColumnInfoPopover>
@@ -1090,12 +1092,32 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                 </span>
               </button>
             </th>
+            <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+              <button
+                v-if="amountColumn"
+                type="button"
+                @click="handleSort('amount')"
+                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
+              >
+                <ColumnInfoPopover :column="amountColumn">
+                  <div class="flex items-center gap-1">
+                    <DataTypeIcon :type="amountColumn.type || 'number'" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.amount") }}</span>
+                  </div>
+                </ColumnInfoPopover>
+                <span class="shrink-0">
+                  <ArrowUpIcon v-if="sortState.column === 'amount' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
+                  <ArrowDownIcon v-else-if="sortState.column === 'amount' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
+                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </span>
+              </button>
+            </th>
           </tr>
         </thead>
         <tbody>
           <!-- Empty state -->
           <tr v-if="filteredData.length === 0">
-            <td colspan="8">
+            <td colspan="9">
               <div class="flex flex-col items-center justify-center py-8 text-muted-foreground">
                 <FilterIcon class="size-10 mb-3 opacity-40" />
                 <p class="text-sm font-medium">{{ t("app.ui.noRowsTitle") }}</p>
@@ -1146,6 +1168,9 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
                   <template v-if="getRow(virtualRow.index).comments">{{ getRow(virtualRow.index).comments }}</template>
                   <span v-else class="text-muted-foreground/50 italic">{{ t("app.ui.noComments") }}</span>
                 </span>
+              </td>
+              <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">
+                {{ getRow(virtualRow.index).amount ? `${getRow(virtualRow.index).amount.value.toLocaleString()} ${getRow(virtualRow.index).amount.unit}` : '-' }}
               </td>
             </tr>
           </template>

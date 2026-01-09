@@ -73,7 +73,7 @@ import {
 /**
  * FuzzyFilter class implementation
  */
-export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>> = Record<string, never>> 
+export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>> = {}> 
   implements FuzzyFilter<TCustom> {
   private state: FuzzyFilterState;
   private suggestionEngine: SuggestionEngine;
@@ -85,14 +85,25 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
   private customTypes: Map<string, FuzzyFilterableStatic<any>> = new Map();
 
   constructor(userConfig: FuzzyFilterConfig<TCustom>) {
-    // Merge config with defaults
+    // Merge config with defaults, ensuring required internal fields are always defined
     this._config = {
-      ...DEFAULT_CONFIG,
-      ...userConfig,
+      maxSuggestions: userConfig.maxSuggestions ?? DEFAULT_CONFIG.maxSuggestions ?? 10,
+      minScore: userConfig.minScore ?? DEFAULT_CONFIG.minScore ?? 0.1,
       scoringWeights: {
-        ...DEFAULT_CONFIG.scoringWeights,
-        ...userConfig?.scoringWeights,
+        column: userConfig.scoringWeights?.column ?? DEFAULT_CONFIG.scoringWeights?.column ?? 0.4,
+        operator: userConfig.scoringWeights?.operator ?? DEFAULT_CONFIG.scoringWeights?.operator ?? 0.35,
+        arguments: userConfig.scoringWeights?.arguments ?? DEFAULT_CONFIG.scoringWeights?.arguments ?? 0.4,
       },
+      enableCache: userConfig.enableCache ?? DEFAULT_CONFIG.enableCache ?? true,
+      maxCacheSize: userConfig.maxCacheSize ?? DEFAULT_CONFIG.maxCacheSize ?? 1000,
+      debounceMs: userConfig.debounceMs ?? DEFAULT_CONFIG.debounceMs ?? 150,
+      debug: userConfig.debug ?? DEFAULT_CONFIG.debug ?? false,
+      benchmark: userConfig.benchmark ?? DEFAULT_CONFIG.benchmark ?? false,
+      telemetryOptions: userConfig.telemetryOptions,
+      columns: userConfig.columns,
+      operators: userConfig.operators,
+      i18n: userConfig.i18n,
+      types: userConfig.types,
     } as FuzzyFilterConfig<TCustom>;
 
     // Validate required fields
@@ -135,7 +146,7 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
 
     // Initialize suggestion engine
     this.suggestionEngine = new SuggestionEngine(this.state, {
-      maxSuggestions: this._config.maxSuggestions,
+      maxSuggestions: this._config.maxSuggestions ?? 10,
       benchmark: this._config.benchmark,
     });
 
@@ -358,12 +369,15 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
   configure(options: Partial<FuzzyFilterConfig<TCustom>>): void {
     const i18nProviderChanged = options.i18n !== undefined && options.i18n !== this.i18nProvider;
     
+    // Merge options, ensuring scoringWeights maintains required structure
+    const currentWeights = this._config.scoringWeights ?? { column: 0.4, operator: 0.35, arguments: 0.4 };
     this._config = {
       ...this._config,
       ...options,
       scoringWeights: {
-        ...this._config.scoringWeights,
-        ...options.scoringWeights,
+        column: options.scoringWeights?.column ?? currentWeights.column,
+        operator: options.scoringWeights?.operator ?? currentWeights.operator,
+        arguments: options.scoringWeights?.arguments ?? currentWeights.arguments,
       },
     };
 
@@ -398,7 +412,7 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
 
     // Update suggestion engine config
     this.suggestionEngine = new SuggestionEngine(this.state, {
-      maxSuggestions: this._config.maxSuggestions,
+      maxSuggestions: this._config.maxSuggestions ?? 10,
       benchmark: this._config.benchmark,
     });
   }
@@ -1206,7 +1220,7 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
  * });
  * ```
  */
-export function createFuzzyFilter<TCustom extends Record<string, FuzzyFilterable<any>> = Record<string, never>>(
+export function createFuzzyFilter<TCustom extends Record<string, FuzzyFilterable<any>> = {}>(
   config: FuzzyFilterConfig<TCustom>
 ): FuzzyFilter<TCustom> {
   return new FuzzyFilterImpl<TCustom>(config);

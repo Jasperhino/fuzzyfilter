@@ -160,8 +160,8 @@ export interface UseFuzzyFilterReturn {
  * deleteRow(5);
  * ```
  */
-export function useFuzzyFilter(
-  filter: FuzzyFilter,
+export function useFuzzyFilter<TCustom extends Record<string, any> = Record<string, never>>(
+  filter: FuzzyFilter<TCustom>,
   options: UseFuzzyFilterOptions = {}
 ): UseFuzzyFilterReturn {
   const { debounceMs = 150, initialQuery = "", onApply, filterContext } = options;

@@ -101,7 +101,7 @@ export * from "./types/index.ts";
  *
  * // Get metadata for a specific operator
  * const eqInfo = getOperator("eq");
- * // → { id: "eq", label: "equals", symbol: "=", ... }
+ * // → { id: "eq", label: "equals", ... }
  * ```
  */
 export {

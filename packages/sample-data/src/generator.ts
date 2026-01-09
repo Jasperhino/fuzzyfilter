@@ -7,10 +7,19 @@
  */
 
 import { faker } from "@faker-js/faker";
+import { Amount, WEIGHT_UNITS, type WeightUnit } from "./amount.ts";
 
 // ============================================================================
 // TYPES
 // ============================================================================
+
+/**
+ * Serialized Amount representation for JSON storage.
+ */
+export interface SerializedAmount {
+  value: number;
+  unit: WeightUnit;
+}
 
 /**
  * Task type definition for filtering results.
@@ -28,7 +37,9 @@ export interface Task {
   created: string;
   isBlocked: boolean;
   comments: string;
-  [key: string]: string | number | boolean;
+  /** Weight/amount associated with the task (e.g., material weight) */
+  amount: SerializedAmount;
+  [key: string]: string | number | boolean | SerializedAmount;
 }
 
 // ============================================================================
@@ -142,6 +153,15 @@ function generateTask(id: number, options: GeneratorOptions = {}): Task {
   ];
   const comments = faker.helpers.arrayElement(commentOptions) as string;
 
+  // Generate an amount with realistic weights
+  // Use kg for smaller amounts, tonnes for larger
+  const useKg = faker.datatype.boolean({ probability: 0.7 });
+  const weightValue = useKg
+    ? faker.number.int({ min: 10, max: 5000 })  // 10-5000 kg
+    : faker.number.float({ min: 0.5, max: 50, fractionDigits: 1 });  // 0.5-50 tonnes
+  const weightUnit = useKg ? "kg" : "t";
+  const amount = new Amount(weightValue, weightUnit as WeightUnit);
+
   return {
     id,
     status,
@@ -152,6 +172,7 @@ function generateTask(id: number, options: GeneratorOptions = {}): Task {
     created,
     isBlocked,
     comments,
+    amount: amount.toJSON(),
   };
 }
 

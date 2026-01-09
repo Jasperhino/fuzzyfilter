@@ -7,7 +7,8 @@
     "dueDate": "Fecha de vencimiento",
     "created": "Creado",
     "isBlocked": "Está bloqueado",
-    "comments": "Comentarios"
+    "comments": "Comentarios",
+    "amount": "Cantidad"
   },
   "values": {
     "status": {
@@ -71,7 +72,8 @@
       "dueDate": "Vence",
       "created": "Creado",
       "isBlocked": "Bloqueado",
-      "comments": "Comentarios"
+      "comments": "Comentarios",
+      "amount": "Cantidad"
     }
   },
   "languages": {

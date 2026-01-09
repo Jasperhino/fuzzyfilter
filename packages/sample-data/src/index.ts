@@ -7,12 +7,22 @@
  * @module @fuzzyfilter/sample-data
  */
 
-import { columnId, type SchemaInput } from "@jasperhino/fuzzyfilter";
+import { type SchemaInput } from "@jasperhino/fuzzyfilter";
 import { generateTasks, type Task } from "./generator.ts";
+import { Amount } from "./amount.ts";
 
 // Import pre-generated large dataset (10,000 rows with seed 42)
 // This is generated at build time to avoid loading faker at runtime
 import generatedData from "./generated-data.json";
+
+// Re-export Amount class and types for custom domain type example
+export {
+  Amount,
+  WEIGHT_UNITS,
+  serializeAmount,
+  deserializeAmount,
+  type WeightUnit,
+} from "./amount.ts";
 
 // Re-export generator utilities and Task type
 export {
@@ -22,6 +32,7 @@ export {
   generateSingleTask,
   type GeneratorOptions,
   type Task,
+  type SerializedAmount,
 } from "./generator.ts";
 
 // Re-export lazy-loaded async generator for runtime use
@@ -81,14 +92,15 @@ export type TaskRow = Task;
  * Pre-defined column IDs for the task schema.
  */
 export const COLUMN_IDS = {
-  status: columnId("status"),
-  assignee: columnId("assignee"),
-  priority: columnId("priority"),
-  department: columnId("department"),
-  dueDate: columnId("dueDate"),
-  created: columnId("created"),
-  isBlocked: columnId("isBlocked"),
-  comments: columnId("comments"),
+  status: "status",
+  assignee: "assignee",
+  priority: "priority",
+  department: "department",
+  dueDate: "dueDate",
+  created: "created",
+  isBlocked: "isBlocked",
+  comments: "comments",
+  amount: "amount",
 } as const;
 
 // ============================================================================
@@ -100,54 +112,53 @@ export const COLUMN_IDS = {
  * 
  * Column labels and enum values use i18n keys for translation support.
  * Native enums are defined using the `values` array - no `type: "enum"` needed.
+ * 
+ * The amount column demonstrates a custom FuzzyFilterable type (Amount with weight units).
  */
-export const TASK_SCHEMA: SchemaInput = {
+export const TASK_SCHEMA: SchemaInput<{ amount: Amount }> = {
   columns: [
     {
-      id: COLUMN_IDS.status,
+      id: "status",
       labelKey: "columns.status",
       values: ["Open", "In Progress", "Closed", "Blocked"],
       valuesI18nPrefix: "status", // Maps to "status.Open", "status.In Progress", etc.
     },
     {
-      id: COLUMN_IDS.assignee,
+      id: "assignee",
       labelKey: "columns.assignee",
       type: "string",
-      aliases: ["owner", "assigned to"],
     },
     {
-      id: COLUMN_IDS.priority,
+      id: "priority",
       labelKey: "columns.priority",
       type: "number",
     },
     {
-      id: COLUMN_IDS.department,
+      id: "department",
       labelKey: "columns.department",
       values: ["Engineering", "Design", "Product"],
       valuesI18nPrefix: "department", // Maps to "department.Engineering", etc.
     },
     {
-      id: COLUMN_IDS.dueDate,
+      id: "dueDate",
       labelKey: "columns.dueDate",
       type: "date",
-      aliases: ["due", "deadline"],
     },
     {
-      id: COLUMN_IDS.created,
+      id: "created",
       labelKey: "columns.created",
-      type: "string",
-      aliases: ["timestamp", "createdAt"],
+      type: "date",
     },
     {
-      id: COLUMN_IDS.isBlocked,
-      labelKey: "columns.isBlocked",
-      type: "boolean",
-    },
-    {
-      id: COLUMN_IDS.comments,
+      id: "comments",
       labelKey: "columns.comments",
       type: "string",
-      aliases: ["notes", "description", "text"],
+    },
+    {
+      id: "amount",
+      labelKey: "columns.amount",
+      type: "amount", // Custom FuzzyFilterable type for weight values (kg/t)
+      description: "Weight amount (custom Amount type with value and unit)",
     },
   ],
 };

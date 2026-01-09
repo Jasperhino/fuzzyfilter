@@ -57,7 +57,6 @@ export interface FilterSuggestion {
     column: { text: string; highlight?: boolean };
     operator: { 
       text: string; 
-      symbol?: string; 
       /** The alias that was matched (e.g., "at" when user typed "at") */
       matchedAlias?: string;
       highlight?: boolean;
