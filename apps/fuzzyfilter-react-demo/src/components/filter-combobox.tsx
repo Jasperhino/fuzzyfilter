@@ -748,10 +748,10 @@ export function FilterCombobox() {
   // Create FuzzyFilter instance with i18n
   // Set benchmark: true to enable telemetry spans (accessible via filter.getTelemetry())
   const [filter] = React.useState<FuzzyFilter>(() => {
-    const i18nProvider = createI18nextProvider(i18nInstance);
+    const i18n = createI18nextProvider(i18nInstance);
     const f = createFuzzyFilter({ 
       maxSuggestions: 12,
-      i18nProvider,
+      i18n,
       benchmark: true, // Enable to see telemetry spans via window.__filter.getTelemetry()
     });
     f.setSchema(TASK_SCHEMA);

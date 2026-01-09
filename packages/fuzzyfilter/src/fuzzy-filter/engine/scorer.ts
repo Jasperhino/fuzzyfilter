@@ -1,8 +1,13 @@
 /**
  * Centralized scoring logic for fuzzy filter matching
  * 
- * All scoring calculations use constants from SCORING_CONFIG to make
- * tuning the "feel" of the search easier.
+ * NOTE: All scores are in fuzzysort v3 format (0-1 range):
+ * - 1.0 = perfect match
+ * - 0.5 = good match
+ * - 0.0 = no match / threshold
+ * 
+ * The calculateSmartScore function can be used as a fuzzysort `scoreFn`
+ * to apply density, position, and completeness adjustments during search.
  */
 
 import { SCORING_WEIGHTS } from "../constants.ts";
@@ -59,25 +64,34 @@ export interface ScoreExplanation {
  * Calculates a "Smart Score" (0-1) by punishing sparsity and rewarding 
  * completeness and prefix matches.
  * 
- * This replaces the additive scoring system with a multiplicative, density-aware
- * scoring system that heavily penalizes scattered/sparse matches.
+ * This applies a multiplicative, density-aware scoring system that 
+ * heavily penalizes scattered/sparse matches. It can be used as a 
+ * fuzzysort `scoreFn` option to apply these adjustments during search.
  * 
- * @param fuzzyScore - The raw fuzzysort score 0 to 1 from fuzzysort library
- * @param indexes - The matched character indexes (from fuzzy library)
+ * Example usage with fuzzysort:
+ * ```typescript
+ * fuzzysort.go(query, targets, {
+ *   scoreFn: r => calculateSmartScore(r.score, r.indexes, r.target)
+ * })
+ * ```
+ * 
+ * @param fuzzyScore - The fuzzysort score (0-1 range in v3, higher is better)
+ * @param indexes - The matched character indexes from fuzzysort
  * @param targetText - The text we matched against (e.g., "Assignee")
- * @returns Smart score in 0-1 range
+ * @returns Smart score in 0-1 range (clamped)
  */
 export function calculateSmartScore(
   fuzzyScore: number,
   indexes: readonly number[] | undefined,
   targetText: string
 ): number {
-  // 1. Safety check
+  // Safety check - no match means score of 0
   if (!indexes || indexes.length === 0) return 0;
+  if (!targetText || targetText.length === 0) return 0;
 
   let score = fuzzyScore;
 
-  // 3. Density Penalty (The "Sparsity" Killer)
+  // Density Penalty (The "Sparsity" Killer)
   // We compare the number of matched characters vs. the range they span.
   const firstIdx = indexes[0]!;
   const lastIdx = indexes[indexes.length - 1]!;
@@ -93,25 +107,27 @@ export function calculateSmartScore(
   // A 0.5 density becomes a 0.25 multiplier.
   score *= Math.pow(density, 2);
 
-  // 4. Position Bias (Start of String)
+  // Position Bias (Start of String)
   if (firstIdx === 0) {
-    score *= 1.0; // Perfect start
+    score *= 1.0; // Perfect start - no penalty
   } else {
     // Check for word boundary (preceded by space, dot, etc)
     const charBefore = targetText[firstIdx - 1];
     const isWordBoundary = charBefore ? /[\s_\-./\\]/.test(charBefore) : false;
 
     if (isWordBoundary) {
-      score *= 0.95; // Slight penalty
+      score *= 0.95; // Slight penalty for word boundary match
     } else {
       score *= 0.6;  // Heavy penalty for mid-word match
     }
   }
 
-  // 5. Completeness Factor
+  // Completeness Factor
   // Reward matches that cover a larger % of the target string
-  const coverageOfTarget = matchCount / targetText.length;
-  score *= (0.8 + (0.2 * coverageOfTarget));
+  if (targetText && targetText.length > 0) {
+    const coverageOfTarget = matchCount / targetText.length;
+    score *= (0.8 + (0.2 * coverageOfTarget));
+  }
 
   return Math.max(0, Math.min(1, score));
 }
@@ -161,7 +177,7 @@ function calculateFuzzyQuality(
   if (matchIndexes && matchIndexes.length > 0) {
     return calculateSmartScore(score, matchIndexes, matchedTarget);
   }
-  return normalizeFuzzysortScore(score);
+  return  score
 }
 
 // ============================================================================

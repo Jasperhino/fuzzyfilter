@@ -259,7 +259,7 @@ export interface CompileEvent extends WideEventBase {
  * Wide event for data mutation operations
  */
 export interface DataMutationEvent extends WideEventBase {
-  operation: "addRow" | "removeRow" | "removeRows";
+  operation: "addRow" | "removeRow" | "removeRows" | "upsertRows" | "deleteRows";
   mutation: {
     rows_affected: number;
     previous_row_count: number;

@@ -8,7 +8,7 @@
  * - **Instant Counts** - Real-time result counts using optimized data structures
  * - **Natural Language Dates** - "last week", "yesterday", "next month"
  * - **Smart Ranking** - Prioritizes complete matches over partial ones
- * - **Type-Safe** - Full TypeScript support with branded types
+ * - **Type-Safe** - Full TypeScript support
  *
  * @packageDocumentation
  * @module fuzzyfilter
@@ -75,7 +75,7 @@
  * Re-export all types from the types module.
  *
  * Key types include:
- * - {@link ColumnId} - Branded type for column identifiers
+ * - {@link ColumnId} - Type alias for column identifiers (string)
  * - {@link Operator} - All supported filter operators
  * - {@link DataType} - Supported column data types
  * - {@link FuzzyFilter} - Main filter interface

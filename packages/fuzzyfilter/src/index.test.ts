@@ -21,9 +21,10 @@ import {
 // =============================================================================
 
 describe("Core Types", () => {
-  test("columnId creates branded type", () => {
+  test("columnId returns string", () => {
     const id = columnId("myColumn");
     expect(id).toBe("myColumn");
+    expect(typeof id).toBe("string");
   });
 });
 

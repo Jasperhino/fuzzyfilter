@@ -4,7 +4,7 @@
  * Orchestrates all suggestion strategies, handles deduplication, ranking, and limiting.
  */
 
-import type { FilterSuggestion, SuggestionResponse, Token } from "../../types/index.ts";
+import type { FilterSuggestion, SuggestionResponse, Token, ColumnId } from "../../types/index.ts";
 import type { SuggestionStrategy, StrategyContext } from "../strategies/interface.ts";
 import type {
   FuzzyFilterState,
@@ -17,7 +17,7 @@ import { TemplatedOperatorStrategy } from "../strategies/templated-operator.ts";
 import { NgramMatchStrategy } from "../strategies/ngram-match.ts";
 import { ValueInferenceStrategy } from "../strategies/value-inference.ts";
 import { generateNgrams } from "./ngrams.ts";
-import { adjustScoreForCoverage, calculateSmartScore } from "./scorer.ts";
+import { calculateSmartScore } from "./scorer.ts";
 import { SCORING_CONFIG, SCORING_WEIGHTS } from "../constants.ts";
 import { getAllOperators } from "../../operators.ts";
 import { countForFilter, countForDateFilter } from "./suggestion-helpers.ts";
@@ -58,7 +58,7 @@ function buildStrategyContext(options: BuildContextOptions): StrategyContext {
       const score = calculateSmartScore(
         match.score, 
         match.indexes, 
-        match.value.name
+        match.value.labelKey
       );
       
       // Filter noise immediately
@@ -81,7 +81,7 @@ function buildStrategyContext(options: BuildContextOptions): StrategyContext {
             adjustedScore: score,
           },
           ngram,
-          matchedTarget: match.value.name,
+          matchedTarget: match.value.labelKey,
           matchIndexes: match.indexes,
         });
       }

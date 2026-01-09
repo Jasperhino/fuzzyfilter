@@ -68,7 +68,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
   constructor(
     private getSchema: () => import("../../types/index.ts").Schema | null,
     private getColumnById: (
-      id: import("../../types/index.ts").ColumnId | string
+      id: string
     ) => import("../../types/index.ts").AnyColumnDefinition | null
   ) {}
 

@@ -9,7 +9,7 @@ A powerful TypeScript library for building intelligent fuzzy filter interfaces w
 - 📅 **Natural Language Dates** - "last week", "yesterday", "next month" via chrono-node
 - 🎯 **Smart Ranking** - Prioritizes complete matches over partial ones
 - ⚡ **Fast Indexing** - Optimized for datasets with thousands of rows
-- 🔧 **Type-Safe** - Full TypeScript support with branded types
+- 🔧 **Type-Safe** - Full TypeScript support
 - ⚛️ **React Ready** - Optional React hook for easy integration
 
 ## Installation

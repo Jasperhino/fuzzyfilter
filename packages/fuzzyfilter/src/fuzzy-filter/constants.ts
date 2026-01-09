@@ -3,6 +3,11 @@
  * 
  * Centralizes all magic numbers used in scoring calculations to make tuning
  * the "feel" of the search easier without hunting through code.
+ * 
+ * NOTE: All scores are in the 0-1 range (fuzzysort v3 format).
+ * - 1.0 = perfect match
+ * - 0.5 = good match
+ * - 0.0 = no match / threshold
  */
 
 /**
@@ -21,33 +26,45 @@ export const SCORING_WEIGHTS = {
   OPERATOR: 0.2,
   /** Value match importance */
   VALUE: 0.45,
-  /** Minimum score threshold to filter noise */
+  /** Minimum score threshold to filter noise (0-1 range) */
   THRESHOLD: 0.1,
 } as const;
 
 /**
- * Scoring configuration for fuzzy filter matching
+ * Scoring configuration for fuzzy filter matching.
+ * All values are in 0-1 range (fuzzysort v3 format).
  */
 export const SCORING_CONFIG = {
   /**
-   * Penalties applied to reduce scores for poor matches
+   * Thresholds for filtering poor matches (0-1 range)
    */
-  PENALTY: {
+  THRESHOLD: {
     /**
-     * Threshold below which a match is considered "poor"
-     * Used to scale down bonuses for low-quality fuzzy matches
+     * Threshold below which a match is considered "poor" (0-1 range).
+     * Matches below this threshold get reduced bonuses.
      */
-    POOR_MATCH_THRESHOLD: -10000,
+    POOR_MATCH: 0.2,
     
     /**
-     * Maximum penalty for low target coverage
-     * Applied when query only covers a small portion of a long target
+     * Minimum threshold for considering a match valid (0-1 range).
+     * Used for target coverage filtering.
      */
-    TARGET_COVERAGE: -3000,
+    MIN_VALID: 0.3,
+    
+    /**
+     * Minimum score for applying full query bonus (0-1 range)
+     */
+    FULL_QUERY_MIN: 0.5,
+    
+    /**
+     * Score multiplier threshold for operator overlap filtering.
+     * If one operator uses more tokens and scores >= this ratio of another, prefer it.
+     */
+    OPERATOR_OVERLAP_RATIO: 0.8,
   },
   
   /**
-   * Bonuses applied to increase scores for good matches
+   * Bonuses applied to increase scores for good matches (0-1 range)
    */
   BONUS: {
     /**
@@ -71,39 +88,26 @@ export const SCORING_CONFIG = {
     SPREAD_PATTERN_BASE: 0.95,
     
     /**
-     * Maximum bonus for full query coverage (matching all tokens)
+     * Multiplier bonus for full query coverage (matching all tokens).
+     * Applied as: score * (1 + FULL_COVERAGE_MULT) when all tokens are covered.
      */
-    FULL_COVERAGE: 3000,
+    FULL_COVERAGE_MULT: 0.3,
     
     /**
-     * Maximum bonus for matching more of the target
+     * Multiplier bonus for matching more of the target.
+     * Applied as: score * (1 + coverage * COMPLETENESS_MULT).
      */
-    COMPLETENESS: 1000,
+    COMPLETENESS_MULT: 0.1,
     
     /**
-     * Bonus for matching the full query with good quality
+     * Multiplier bonus for matching the full query with good quality.
      */
-    FULL_QUERY: 500,
+    FULL_QUERY_MULT: 0.05,
     
     /**
-     * Maximum bonus for exact match (case-insensitive)
+     * Score boost for exact matches (case-insensitive).
+     * Sets score directly to this value for perfect matches.
      */
-    EXACT_MATCH: 3000,
-  },
-  
-  /**
-   * Thresholds for score comparisons
-   */
-  THRESHOLD: {
-    /**
-     * Minimum score for full query bonus
-     */
-    FULL_QUERY_MIN_SCORE: -1000,
-    
-    /**
-     * Score multiplier threshold for operator overlap filtering
-     * If one operator uses more tokens and scores >= this ratio of another, prefer it
-     */
-    OPERATOR_OVERLAP_RATIO: 0.8,
+    EXACT_MATCH: 1.0,
   },
 } as const;

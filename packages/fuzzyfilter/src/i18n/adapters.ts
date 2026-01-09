@@ -74,6 +74,7 @@ export function createI18nextAdapter(
     }) => unknown;
     on: (event: string, callback: () => void) => void;
     off: (event: string, callback: () => void) => void;
+    language?: string;
   },
   options?: I18nextAdapterOptions
 ): I18nProvider {
@@ -81,6 +82,51 @@ export function createI18nextAdapter(
   const prefix = options?.keyPrefix ?? "";
   
   return {
+    get locale(): string {
+      return i18n.language ?? "en";
+    },
+
+    getAliases(key: string): string[] {
+      // Handle operators.xxx format
+      if (key.startsWith("operators.")) {
+        const opId = key.slice("operators.".length) as OperatorKey;
+        return this.getOperatorAliases?.(opId) ?? [];
+      }
+      
+      // General i18n key lookup
+      const result = i18n.t(`${prefix}${key}`, {
+        ns: namespace,
+        returnObjects: true,
+        defaultValue: [],
+      });
+      if (Array.isArray(result)) {
+        return result.map(String);
+      }
+      if (typeof result === "string" && result) {
+        return [result];
+      }
+      // Fallback: extract last part of key
+      const parts = key.split(".");
+      return [parts[parts.length - 1] ?? key];
+    },
+
+    getLabel(key: string): string {
+      // Handle operators.xxx format
+      if (key.startsWith("operators.")) {
+        const opId = key.slice("operators.".length) as OperatorKey;
+        return this.getOperatorLabel?.(opId) ?? opId;
+      }
+      
+      // General i18n key lookup
+      const parts = key.split(".");
+      const defaultValue = parts[parts.length - 1] ?? key;
+      const result = i18n.t(`${prefix}${key}`, {
+        ns: namespace,
+        defaultValue,
+      });
+      return typeof result === "string" ? result : defaultValue;
+    },
+
     getOperatorLabel(operatorId: OperatorKey): string {
       const op = getOperator(operatorId);
       const defaultValue = op?.id ?? operatorId;
@@ -152,8 +198,7 @@ export interface VueI18nAdapterOptions {
 export function createVueI18nAdapter(
   i18n: {
     t: (key: string, defaultValue?: string) => unknown;
-  } | {
-    t: (key: string, defaultValue?: string) => unknown;
+    locale?: { value?: string } | string;
   },
   options?: VueI18nAdapterOptions
 ): I18nProvider {
@@ -168,17 +213,61 @@ export function createVueI18nAdapter(
       };
   
   return {
+    get locale(): string {
+      if (typeof i18n.locale === "string") return i18n.locale;
+      if (typeof i18n.locale === "object" && i18n.locale?.value) return i18n.locale.value;
+      return "en";
+    },
+
+    getAliases(key: string): string[] {
+      // Handle operators.xxx format
+      if (key.startsWith("operators.")) {
+        const opId = key.slice("operators.".length) as OperatorKey;
+        return this.getOperatorAliases?.(opId) ?? [];
+      }
+      
+      // General i18n key lookup
+      const parts = key.split(".");
+      const defaultValue = parts[parts.length - 1] ?? key;
+      const result = t(`${prefix}.${key}`, defaultValue);
+      if (Array.isArray(result)) {
+        return result.map(String);
+      }
+      if (typeof result === "string" && result) {
+        // Handle comma-separated string
+        if (result.includes(",")) {
+          return result.split(",").map(s => s.trim()).filter(Boolean);
+        }
+        return [result];
+      }
+      return [defaultValue];
+    },
+
+    getLabel(key: string): string {
+      // Handle operators.xxx format
+      if (key.startsWith("operators.")) {
+        const opId = key.slice("operators.".length) as OperatorKey;
+        return this.getOperatorLabel?.(opId) ?? opId;
+      }
+      
+      // General i18n key lookup
+      const parts = key.split(".");
+      const defaultValue = parts[parts.length - 1] ?? key;
+      const result = t(`${prefix}.${key}`, defaultValue);
+      return typeof result === "string" ? result : defaultValue;
+    },
+
     getOperatorLabel(operatorId: OperatorKey): string {
       const op = getOperator(operatorId);
       const defaultValue = op?.id ?? operatorId;
-      const result = t(`operators.${operatorId}.label`, defaultValue);
+      const result = t(`${prefix}.operators.${operatorId}.label`, defaultValue);
       return typeof result === "string" ? result : defaultValue;
     },
 
     getOperatorAliases(operatorId: OperatorKey): string[] {
       const defaultAliases = flattenOperatorAliases(operatorId);
       const defaultValue = defaultAliases.join(",");
-      const result = t(`operators.${operatorId}.aliases`, defaultValue);
+      const result = t(`${prefix}.operators.${operatorId}.aliases`, defaultValue);
       if (Array.isArray(result)) {
         return result.map(String);
       }

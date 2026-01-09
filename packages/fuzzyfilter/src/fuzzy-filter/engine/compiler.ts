@@ -21,6 +21,21 @@ import { parseDate } from "../../date-parser.ts";
 import type { InstanceRegistry } from "../../registry.ts";
 import { OPERATORS } from "../../operators.ts";
 
+/**
+ * Checks if two dates are on the same day (ignoring time).
+ * 
+ * @param date1 - First date
+ * @param date2 - Second date
+ * @returns True if both dates are on the same calendar day
+ */
+function isSameDay(date1: Date, date2: Date): boolean {
+  return (
+    date1.getFullYear() === date2.getFullYear() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getDate() === date2.getDate()
+  );
+}
+
 
 /**
  * Compile a filter from parsed input
@@ -32,7 +47,7 @@ import { OPERATORS } from "../../operators.ts";
  */
 export function compileFromParsed(
   parsed: ParsedInput,
-  getColumnById: (id: ColumnId | string) => AnyColumnDefinition | null,
+  getColumnById: (id: string) => AnyColumnDefinition | null,
   registry?: InstanceRegistry
 ): CompiledFilter | null {
   if (!parsed.column || !parsed.operator) return null;
@@ -59,17 +74,17 @@ export function compileFromParsed(
  * @returns Compiled filter or null if invalid
  */
 export function compileFilter(
-  colId: ColumnId | string,
+  colId: string,
   operator: Operator | string,
   value: unknown,
-  getColumnById: (id: ColumnId | string) => AnyColumnDefinition | null,
+  getColumnById: (id: string) => AnyColumnDefinition | null,
   data: Array<Record<string, unknown>> = [],
   registry?: InstanceRegistry
 ): CompiledFilter | null {
   const col = getColumnById(colId);
   if (!col) return null;
 
-  const columnId = typeof colId === "string" ? (colId as ColumnId) : colId;
+  const columnId = colId;
 
   // Get operator definition from registry or fall back to built-in OPERATORS
   const opDef: OperatorDefinition | undefined = registry 

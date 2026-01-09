@@ -89,9 +89,20 @@ export function createTrie<T>(): Trie<T> {
     return results;
   }
 
+  /**
+   * Performs fuzzy search on the trie entries.
+   * 
+   * @param query - The search query
+   * @param limit - Maximum number of results to return
+   * @param scoreFn - Optional custom scoring function.
+   *                  Receives the fuzzysort result and should return a score (0-1 range, higher is better).
+   *                  This can be used to apply additional scoring logic like density penalties.
+   * @returns Array of matches with key, value, score (0-1, fuzzysort v3), and match indexes
+   */
   function fuzzySearch(
     query: string,
-    limit = 10
+    limit = 10,
+    scoreFn?: (result: { score: number; indexes: readonly number[]; target: string; obj: { key: string; value: T } }) => number
   ): Array<{ key: string; value: T; score: number; indexes?: readonly number[] }> {
     if (!query) {
       // Return all entries if no query
@@ -103,20 +114,33 @@ export function createTrie<T>(): Trie<T> {
       }));
     }
 
-    // Tightened threshold from -10000 to -3000 to filter poor matches faster
-    // This reduces the number of results that need to be processed
+    // fuzzysort v3 uses 0-1 scores (1 = perfect, 0.5 = good, 0 = no match)
+    // Threshold of 0.1 is lenient to allow fuzzy matches while filtering obvious noise
+    // Use key: "prepared" to search on the prepared field
     const results = fuzzysort.go(query.toLowerCase(), allEntries, {
       key: "prepared",
-      limit,
-      threshold: -3000,
+      limit: scoreFn ? undefined : limit, // Get more results if we need to re-score
+      threshold: 0.1,
     });
 
-    return results.map((r) => ({
+    // Map results and optionally apply custom scoring
+    let mappedResults = results.map((r) => ({
       key: r.obj.key,
       value: r.obj.value,
-      score: r.score,
+      score: scoreFn 
+        ? scoreFn({ score: r.score, indexes: r.indexes, target: r.target, obj: r.obj })
+        : r.score,
       indexes: r.indexes,
     }));
+
+    // If using custom scoring, re-sort and limit
+    if (scoreFn) {
+      mappedResults = mappedResults
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
+    }
+
+    return mappedResults;
   }
 
   function entries(): Array<{ key: string; value: T }> {

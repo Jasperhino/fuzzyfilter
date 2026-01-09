@@ -124,29 +124,22 @@ export function getTranslatedEnumValueLabel(
  * @returns The translated label, or the static label if no translation found
  */
 export function getTranslatedBooleanLabel(
-  column: BooleanColumnDefinition,
+  column: AnyColumnDefinition,
   value: boolean,
   i18nProvider?: I18nProvider
 ): string {
-  if (value) {
-    // Try to translate true label
-    if (column.trueLabelKey && i18nProvider?.translate) {
-      const translated = i18nProvider.translate(column.trueLabelKey);
-      if (translated) {
-        return translated;
-      }
+  if (i18nProvider) {
+    // Try to get translated label using pattern: {column.id}.{true|false}
+    const columnId = typeof column.id === 'string' ? column.id : String(column.id);
+    const key = `${columnId}.${value ? 'true' : 'false'}`;
+    const translated = i18nProvider.getLabel(key);
+    // If translation exists and is different from the key, use it
+    if (translated && translated !== key) {
+      return translated;
     }
-    return column.trueLabel ?? "true";
-  } else {
-    // Try to translate false label
-    if (column.falseLabelKey && i18nProvider?.translate) {
-      const translated = i18nProvider.translate(column.falseLabelKey);
-      if (translated) {
-        return translated;
-      }
-    }
-    return column.falseLabel ?? "false";
   }
+  // Fallback to string representation
+  return value ? "true" : "false";
 }
 
 /**
@@ -284,6 +277,9 @@ export function createSuggestion(
   i18nProvider?: I18nProvider
 ): FilterSuggestion {
   const opInfo = getOperator(operatorKey);
+  if (!opInfo) {
+    throw new Error(`Unknown operator: ${operatorKey}`);
+  }
 
   // Format value text based on arguments
   let valueText = "";
@@ -308,9 +304,8 @@ export function createSuggestion(
         if (arg.kind === "date") return formatDateForDisplay(arg.value);
         if (arg.kind === "boolean") {
           // Check if this is a boolean column that should be translated
-          if (column.type === "boolean" && "trueLabelKey" in column) {
-            const boolCol = column as BooleanColumnDefinition;
-            return getTranslatedBooleanLabel(boolCol, arg.value, i18nProvider);
+          if (column.type === "boolean") {
+            return getTranslatedBooleanLabel(column, arg.value, i18nProvider);
           }
           return String(arg.value);
         }
@@ -319,7 +314,7 @@ export function createSuggestion(
       .filter((v) => v !== "");
 
     // For between, format as "X - Y", for in/nin format as "X, Y, Z"
-    if (operator === "between" && formattedValues.length >= 2) {
+    if (operatorKey === "between" && formattedValues.length >= 2) {
       valueText = `${formattedValues[0]} - ${formattedValues[1]}`;
     } else {
       valueText = formattedValues.join(", ");
@@ -373,10 +368,9 @@ export function createSuggestion(
     ? `${columnDisplayName} ${operatorDisplay} ${valueText}`
     : `${columnDisplayName} ${operatorDisplay}`;
 
-  const columnDisplayName = getTranslatedColumnName(column, i18nProvider);
   const completionText = valueText
-    ? `${columnDisplayName} ${operator} "${valueText}"`
-    : `${columnDisplayName} ${operator} `;
+    ? `${columnDisplayName} ${operatorKey} "${valueText}"`
+    : `${columnDisplayName} ${operatorKey} `;
 
   // Calculate query explanation score using the new centralized scorer
   // This replaces the old scattered scoring logic with a unified "how well does this explain the query?" approach
@@ -458,7 +452,7 @@ export function createSuggestion(
   }
 
   return {
-    id: `${column.id}:${operator}:${valueText}`,
+    id: `${column.id}:${operatorKey}:${valueText}`,
     label,
     parts: {
       column: { text: columnDisplayName },
@@ -469,7 +463,7 @@ export function createSuggestion(
       arguments: argumentParts.length > 0 ? argumentParts : undefined,
     },
     column,
-    operator,
+    operator: operatorKey,
     arguments: args,
     // Defer count computation to post-processing (lazy evaluation)
     // Use -1 as placeholder; counts are computed only for final suggestions
@@ -559,7 +553,6 @@ export function createDateSuggestion(options: CreateDateSuggestionOptions): Filt
   const label = `${columnDisplayName} ${opInfo.id} ${displayDate}`;
 
   // Use the original text for completion to preserve natural language
-  const columnDisplayName = getTranslatedColumnName(column, i18nProvider);
   const completionText = `${columnDisplayName} ${operator} "${parsedDate.text}"`;
 
   // Build arguments array - either a range (2 dates) or a single date

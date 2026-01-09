@@ -7,7 +7,7 @@
  */
 
 import type { SuggestionStrategy, StrategyContext } from "./interface.ts";
-import type { FilterSuggestion } from "../../types/index.ts";
+import type { FilterSuggestion, ColumnId } from "../../types/index.ts";
 import type {
   MatchMetadata,
   DetectedValues,
@@ -83,7 +83,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
       rowCount: number;
     }>,
     private getColumnById: (
-      id: import("../../types/index.ts").ColumnId | string
+      id: string
     ) => import("../../types/index.ts").AnyColumnDefinition | null
   ) {}
 
@@ -170,7 +170,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
   }
 
   /**
-   * Detect which tokens are used for column matching
+   * Detect which tokens are used for column matching.
+   * Uses fuzzysort v3 scores (0-1 range, 0.3+ = reasonable match).
    */
   private detectUsedTokensForColumns(
     columnScores: Map<string, import("../types.ts").ColumnScoreEntry>,
@@ -184,15 +185,16 @@ export class NgramMatchStrategy implements SuggestionStrategy {
       // Find token(s) that best match this column
       for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i]!;
-        const colMatch = fuzzysort.single(token.normalized, col.name.toLowerCase());
-        if (colMatch && colMatch.score > -500) {
+        const colMatch = fuzzysort.single(token.normalized, col.labelKey.toLowerCase());
+        // fuzzysort v3: scores are 0-1, use 0.3 threshold to match trie settings
+        if (colMatch && colMatch.score > 0.3) {
           used.add(i);
         }
         // Also check aliases
         if (col.aliases) {
           for (const alias of col.aliases) {
             const aliasMatch = fuzzysort.single(token.normalized, alias.toLowerCase());
-            if (aliasMatch && aliasMatch.score > -500) {
+            if (aliasMatch && aliasMatch.score > 0.3) {
               used.add(i);
             }
           }
@@ -203,7 +205,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
   }
 
   /**
-   * Detect which tokens are used for operator matching
+   * Detect which tokens are used for operator matching.
+   * Uses fuzzysort v3 scores (0-1 range, 0.3+ = reasonable match).
    */
   private detectUsedTokensForOperators(
     operatorScores: Map<string, import("../types.ts").OpScoreEntry>,
@@ -219,7 +222,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
       for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i]!;
         const opMatch = fuzzysort.single(token.normalized, opInfo.id.toLowerCase());
-        if (opMatch && opMatch.score > -500) {
+        // fuzzysort v3: scores are 0-1, use 0.3 threshold to match trie settings
+        if (opMatch && opMatch.score > 0.3) {
           used.add(i);
         }
         // Also check aliases (now an object, not array)
@@ -228,7 +232,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
             for (const alias of values) {
               if (alias.startsWith("$")) continue; // Skip i18n refs
               const aliasMatch = fuzzysort.single(token.normalized, alias.toLowerCase());
-              if (aliasMatch && aliasMatch.score > -500) {
+              if (aliasMatch && aliasMatch.score > 0.3) {
                 used.add(i);
               }
             }
@@ -263,7 +267,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
         matchedTarget: colMatchedTarget,
         matchIndexes: colMatchIndexes,
       } = colScoreEntry;
-      const ops = getOperatorsForType(col.type);
+      if (!col.type) continue; // Skip columns without type
+      const ops = getOperatorsForType(col.type as DataType);
 
       // Get compatible values for this column type, filtered by context availability
       const compatibleValues: (number | Date)[] =
@@ -692,12 +697,14 @@ export class NgramMatchStrategy implements SuggestionStrategy {
         matchIndexes: opMatchIndexes,
       },
     ] of operatorScores) {
-      const opInfo = getOperator(operator, i18nProvider);
+      const opInfo = getOperator(operator);
+      if (!opInfo) continue;
       for (const col of getColumns(schema)) {
         // Skip if this is a type-specific alias that doesn't match the column type
         if (forType && forType !== col.type) continue;
+        if (!col.type) continue;
 
-        if (opInfo.supportedTypes.includes(col.type)) {
+        if (opInfo.supportedTypes.includes(col.type as DataType)) {
           // Check if this column was also matched in columnScores
           const colMatchEntry = columnScores.get(col.id as string);
 
@@ -976,8 +983,9 @@ export class NgramMatchStrategy implements SuggestionStrategy {
 
         for (const [, opScoreEntry] of operatorScores) {
           const opInfo = getOperator(opScoreEntry.operator);
+          if (!opInfo || !col.type) continue;
           if (
-            opInfo.supportedTypes.includes(col.type) &&
+            opInfo.supportedTypes.includes(col.type as DataType) &&
             operatorRequiresArgument(opInfo)
           ) {
             if (
@@ -1058,6 +1066,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     const col = parsed.column!.match.column;
     const op = parsed.operator!.match.operator;
     const opInfo = getOperator(op);
+    if (!opInfo) return suggestions;
 
     if (!operatorRequiresArgument(opInfo)) {
       // Operator doesn't need value - suggest the complete filter
@@ -1071,7 +1080,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
           inputStart: parsed.column!.token.start,
           inputEnd: parsed.column!.token.end,
           inputText: parsed.column!.token.text,
-          matchedTarget: col.name,
+          matchedTarget: col.labelKey,
           score: colMatch.score,
         },
         operator: {
@@ -1129,7 +1138,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
               inputStart: colToken.start,
               inputEnd: colToken.end,
               inputText: colToken.text,
-              matchedTarget: col.name,
+              matchedTarget: col.labelKey,
               score: parsed.column!.match.score,
             },
             operator: {
@@ -1222,7 +1231,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                   inputStart: parsed.column!.token.start,
                   inputEnd: parsed.column!.token.end,
                   inputText: parsed.column!.token.text,
-                  matchedTarget: col.name,
+                  matchedTarget: col.labelKey,
                   score: colMatch.score,
                 },
                 values: [{
@@ -1261,7 +1270,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
             inputStart: colToken.start,
             inputEnd: colToken.end,
             inputText: colToken.text,
-            matchedTarget: col.name,
+            matchedTarget: col.labelKey,
             score: parsed.column!.match.score,
           },
           operator: {
@@ -1412,7 +1421,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 inputStart: colToken.start,
                 inputEnd: colToken.end,
                 inputText: colToken.text,
-                matchedTarget: col.name,
+                matchedTarget: col.labelKey,
                 score: colMatch.score,
               },
               operator: {
@@ -1480,7 +1489,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                     inputStart: parsed.column!.token.start,
                     inputEnd: parsed.column!.token.end,
                     inputText: parsed.column!.token.text,
-                    matchedTarget: col.name,
+                    matchedTarget: col.labelKey,
                     score: colMatch.score,
                   },
                   operator: {

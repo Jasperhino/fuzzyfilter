@@ -51,17 +51,17 @@ export function classifyTokens(
         rowCount: m.value.rowCount,
       }));
 
-    // Determine best guess
+    // Determine best guess (scores are 0-1 range in fuzzysort v3)
     let bestGuess: "column" | "operator" | "value" | "unknown" = "unknown";
-    const bestCol = columnMatches[0]?.score ?? -Infinity;
-    const bestOp = operatorMatches[0]?.score ?? -Infinity;
-    const bestVal = valueMatches[0]?.score ?? -Infinity;
+    const bestCol = columnMatches[0]?.score ?? 0;
+    const bestOp = operatorMatches[0]?.score ?? 0;
+    const bestVal = valueMatches[0]?.score ?? 0;
 
-    if (bestCol >= bestOp && bestCol >= bestVal && bestCol > -Infinity) {
+    if (bestCol >= bestOp && bestCol >= bestVal && bestCol > 0) {
       bestGuess = "column";
-    } else if (bestOp >= bestCol && bestOp >= bestVal && bestOp > -Infinity) {
+    } else if (bestOp >= bestCol && bestOp >= bestVal && bestOp > 0) {
       bestGuess = "operator";
-    } else if (bestVal > -Infinity) {
+    } else if (bestVal > 0) {
       bestGuess = "value";
     }
 
@@ -107,9 +107,10 @@ export function parseInput(input: string, state: FuzzyFilterState): ParsedInput 
     }
   };
 
+  // Get score for a token-slot combination (0-1 range, fuzzysort v3)
   const getScore = (tokenIdx: number, slot: SlotType): number => {
     const match = getSlotMatch(tokenIdx, slot);
-    return match?.score ?? -Infinity;
+    return match?.score ?? 0;
   };
 
   // Use greedy assignment with exhaustive fallback for optimal performance.
@@ -119,6 +120,7 @@ export function parseInput(input: string, state: FuzzyFilterState): ParsedInput 
   const tokenIndices = classifications.map((_, i) => i);
 
   // Greedy assignment: for each slot, pick the best available token
+  // Scores are 0-1 range (fuzzysort v3)
   function greedyAssignment(): {
     assignment: Map<SlotType, number>;
     score: number;
@@ -129,7 +131,7 @@ export function parseInput(input: string, state: FuzzyFilterState): ParsedInput 
 
     for (const slot of slots) {
       let bestTokenIdx = -1;
-      let bestScore = -Infinity;
+      let bestScore = 0;
 
       for (const tokenIdx of tokenIndices) {
         if (usedTokens.has(tokenIdx)) continue;
@@ -140,7 +142,7 @@ export function parseInput(input: string, state: FuzzyFilterState): ParsedInput 
         }
       }
 
-      if (bestTokenIdx >= 0 && bestScore > -Infinity) {
+      if (bestTokenIdx >= 0 && bestScore > 0) {
         assignment.set(slot, bestTokenIdx);
         usedTokens.add(bestTokenIdx);
         totalScore += bestScore;
@@ -151,12 +153,13 @@ export function parseInput(input: string, state: FuzzyFilterState): ParsedInput 
   }
 
   // Exhaustive assignment (fallback for edge cases)
+  // Scores are 0-1 range (fuzzysort v3)
   function exhaustiveAssignment(): {
     assignment: Map<SlotType, number>;
     score: number;
   } {
     let bestAssignment = new Map<SlotType, number>();
-    let bestTotalScore = -Infinity;
+    let bestTotalScore = 0;
 
     function findBest(
       slotIndex: number,
@@ -182,10 +185,11 @@ export function parseInput(input: string, state: FuzzyFilterState): ParsedInput 
         if (usedTokens.has(tokenIdx)) continue;
 
         const score = getScore(tokenIdx, slot);
-        if (score === -Infinity) continue;
+        if (score === 0) continue;
 
-        // Early pruning: if current + max possible remaining < best, skip
-        if (currentScore + score <= bestTotalScore - 3000) continue;
+        // Early pruning: if current + max possible remaining < best - margin, skip
+        // In 0-1 range, use 0.3 margin for pruning (each slot max score = 1.0)
+        if (currentScore + score <= bestTotalScore - 0.3) continue;
 
         currentAssignment.set(slot, tokenIdx);
         usedTokens.add(tokenIdx);
@@ -205,9 +209,10 @@ export function parseInput(input: string, state: FuzzyFilterState): ParsedInput 
 
   // Use greedy result if it has good scores or if input is simple (≤2 tokens)
   // For complex inputs with poor greedy scores, fall back to exhaustive
+  // Scores are 0-1 range: 0.5 is considered a "good match" threshold
   const useGreedy =
     tokens.length <= 2 || // Simple inputs: greedy is fine
-    greedy.score > -500 || // Good match: greedy is fine
+    greedy.score > 0.5 || // Good match (0-1 range): greedy is fine
     tokens.length > 5; // Too many tokens: exhaustive is too slow
 
   const bestAssignment = useGreedy

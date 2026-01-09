@@ -59,11 +59,8 @@ import type { OperatorKey } from "../operators.ts";
 export interface ColumnDefinition<TTypes extends Record<string, any> = Record<string, never>> {
   /**
    * Unique identifier for this column.
-   *
-   * Can be a plain string or a branded ColumnId (via `columnId()` helper).
-   * Plain strings are recommended for simplicity.
    */
-  id: ColumnId | string;
+  id: string;
 
   /**
    * i18n key for the column label (e.g., "columns.status").

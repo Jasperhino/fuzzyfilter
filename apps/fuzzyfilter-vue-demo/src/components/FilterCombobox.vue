@@ -62,7 +62,7 @@ const { locale, t } = i18nComposer
 const filter = createFuzzyFilter({ 
   maxSuggestions: 12,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  i18nProvider: createVueI18nProvider(i18n as any),
+  i18n: createVueI18nProvider(i18n as any),
   benchmark: true, // Enable to see telemetry spans via window.__filter.getTelemetry()
 })
 

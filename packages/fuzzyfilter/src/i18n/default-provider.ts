@@ -113,8 +113,9 @@ export function createDefaultEnglishProvider(): I18nProvider {
       }
       
       // Handle simple word translations
-      if (key in DEFAULT_WORD_TRANSLATIONS) {
-        return [DEFAULT_WORD_TRANSLATIONS[key]];
+      const wordTranslation = DEFAULT_WORD_TRANSLATIONS[key];
+      if (wordTranslation !== undefined) {
+        return [wordTranslation];
       }
       
       // For other keys (columns.xxx, xxx.yyy), try to extract a label
@@ -133,8 +134,9 @@ export function createDefaultEnglishProvider(): I18nProvider {
       if (key.startsWith("operators.")) {
         const opId = key.slice("operators.".length);
         const aliases = DEFAULT_OPERATOR_ALIASES[opId];
-        if (aliases && aliases.length > 0) {
-          return aliases[0];
+        const firstAlias = aliases?.[0];
+        if (firstAlias !== undefined) {
+          return firstAlias;
         }
         // Fallback to operator id
         const op = getOperator(opId as OperatorKey);
@@ -142,8 +144,9 @@ export function createDefaultEnglishProvider(): I18nProvider {
       }
       
       // Handle simple word translations
-      if (key in DEFAULT_WORD_TRANSLATIONS) {
-        return DEFAULT_WORD_TRANSLATIONS[key];
+      const wordTranslation = DEFAULT_WORD_TRANSLATIONS[key];
+      if (wordTranslation !== undefined) {
+        return wordTranslation;
       }
       
       // For other keys (columns.xxx, xxx.yyy), extract the last part as label

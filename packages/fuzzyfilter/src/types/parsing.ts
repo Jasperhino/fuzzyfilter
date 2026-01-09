@@ -123,6 +123,8 @@ export interface ParsedInput {
   };
   /** Cursor position in the input (for autocomplete) */
   cursorPosition?: number;
+  /** What components are missing for a complete filter */
+  missing?: Array<"column" | "operator" | "value">;
 }
 
 // ============================================================================

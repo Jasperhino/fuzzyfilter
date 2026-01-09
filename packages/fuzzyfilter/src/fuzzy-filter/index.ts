@@ -26,7 +26,8 @@ import type {
   FilterResult,
 } from "../types/index.ts";
 import { DEFAULT_CONFIG } from "../types/index.ts";
-import { DataType, FuzzyFilterable, FuzzyFilterableStatic, TypeHandler } from "../types/index.ts";
+import type { FuzzyFilterable, FuzzyFilterableStatic, TypeHandler } from "../types/index.ts";
+import { DataType } from "../types/index.ts";
 import {
   getAllOperators,
   getOperatorsForType,
@@ -50,7 +51,7 @@ import type { I18nProvider } from "../types/i18n.ts";
 import { createDefaultEnglishProvider } from "../i18n/default-provider.ts";
 import { createEnumHandlerFromValues } from "./engine/enum-handler.ts";
 import { getBuiltInTypeHandler } from "./engine/type-handlers.ts";
-import type { ColumnDefinition } from "../types/schema.ts";
+import type { ColumnDefinition, AnyColumnDefinition } from "../types/schema.ts";
 import type {
   TelemetryCollector,
   IndexDataAsyncOptions,
@@ -120,7 +121,8 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
 
     // Initialize instance registry with custom operators/types if provided
     // Pass i18n provider for pattern compilation
-    this.registry = new InstanceRegistry(this._config, this.i18nProvider);
+    // Cast to base FuzzyFilterConfig since InstanceRegistry doesn't need the TCustom generic
+    this.registry = new InstanceRegistry(this._config as unknown as Partial<FuzzyFilterConfig>, this.i18nProvider);
 
     // Initialize state with i18n provider
     this.state = createFuzzyFilterState(this.i18nProvider);
@@ -354,7 +356,7 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
   }
 
   configure(options: Partial<FuzzyFilterConfig<TCustom>>): void {
-    const i18nProviderChanged = options.i18nProvider !== undefined && options.i18nProvider !== this.i18nProvider;
+    const i18nProviderChanged = options.i18n !== undefined && options.i18n !== this.i18nProvider;
     
     this._config = {
       ...this._config,
@@ -373,7 +375,7 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
         this.unsubscribeLanguageChange = undefined;
       }
 
-      this.i18nProvider = options.i18nProvider!;
+      this.i18nProvider = options.i18n!;
       this.state.i18nProvider = this.i18nProvider;
       
       // Rebuild operator trie with new translations
@@ -409,7 +411,8 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
     });
     
     try {
-      this.state.schema = buildSchema(schema);
+      // Cast to base SchemaInput since buildSchema doesn't need the TCustom generic
+      this.state.schema = buildSchema(schema as unknown as SchemaInput);
 
       // Rebuild column trie with translated names
       this.rebuildColumnTrie();
@@ -434,12 +437,12 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
     return this.state.schema;
   }
 
-  getColumn(id: ColumnId | string): ColumnDefinition<TCustom> | null {
+  getColumn(id: string): AnyColumnDefinition | null {
     if (!this.state.schema) return null;
     return getColumn(this.state.schema, id);
   }
 
-  getOperatorsForColumn(colId: ColumnId | string): Operator[] {
+  getOperatorsForColumn(colId: string): Operator[] {
     const col = this.getColumn(colId);
     if (!col) return [];
     
@@ -708,8 +711,9 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
           for (const alias of aliases) {
             // Skip if alias matches the original value (already in trie)
             if (alias.toLowerCase() !== strValue.toLowerCase()) {
+              // col.id is always ColumnId after buildSchema processes it
               this.state.valueTrie.insert(alias, {
-                value: originalValue, // Store original value for filter creation
+                value: strValue, // Store original value as string for filter creation
                 columnId: col.id,
                 rowCount,
               });
@@ -837,6 +841,107 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
 
   getData(): Array<Record<string, unknown>> {
     return this.state.data;
+  }
+
+  /**
+   * Upserts (inserts or updates) rows and incrementally updates the index.
+   * 
+   * @param rows - Array of rows to upsert with their row IDs
+   */
+  upsertRows(
+    rows: Array<{
+      rowId: number;
+      data: Record<string, unknown>;
+    }>
+  ): void {
+    const previousCount = this.state.data.length;
+    const event = this.telemetry.startEvent<DataMutationEvent>("upsertRows", {
+      mutation: {
+        rows_affected: rows.length,
+        previous_row_count: previousCount,
+        new_row_count: previousCount, // Will be updated after processing
+      },
+    });
+
+    try {
+      for (const { rowId, data } of rows) {
+        if (rowId >= 0 && rowId < this.state.data.length) {
+          // Update existing row
+          this.state.data[rowId] = data;
+        } else {
+          // Insert new row at the end
+          this.state.data.push(data);
+        }
+      }
+
+      // Increment version and re-index to update value counts
+      this.state.dataVersion++;
+      const reindexStart = performance.now();
+      this.indexData(this.state.data);
+      const reindexDuration = performance.now() - reindexStart;
+
+      event.set("mutation", {
+        rows_affected: rows.length,
+        previous_row_count: previousCount,
+        new_row_count: this.state.data.length,
+      });
+      event.set("reindex_duration_ms", Math.round(reindexDuration * 100) / 100);
+      event.success();
+    } catch (error) {
+      event.recordError(error instanceof Error ? error : String(error));
+      event.error();
+      throw error;
+    }
+  }
+
+  /**
+   * Deletes rows by their IDs and incrementally updates the index.
+   * 
+   * @param rowIds - Array of row IDs to delete
+   */
+  deleteRows(rowIds: number[]): void {
+    const previousCount = this.state.data.length;
+    const event = this.telemetry.startEvent<DataMutationEvent>("deleteRows", {
+      mutation: {
+        rows_affected: rowIds.length,
+        previous_row_count: previousCount,
+        new_row_count: previousCount, // Will be updated after processing
+      },
+    });
+
+    try {
+      // Sort row IDs in descending order to delete from end first
+      // This prevents index shifting issues
+      const sortedIds = [...rowIds].sort((a, b) => b - a);
+      let deletedCount = 0;
+
+      for (const rowId of sortedIds) {
+        if (rowId >= 0 && rowId < this.state.data.length) {
+          this.state.data.splice(rowId, 1);
+          deletedCount++;
+        }
+      }
+
+      if (deletedCount > 0) {
+        // Increment version and re-index to update value counts
+        this.state.dataVersion++;
+        const reindexStart = performance.now();
+        this.indexData(this.state.data);
+        const reindexDuration = performance.now() - reindexStart;
+        event.set("reindex_duration_ms", Math.round(reindexDuration * 100) / 100);
+      }
+
+      event.set("mutation", {
+        rows_affected: deletedCount,
+        previous_row_count: previousCount,
+        new_row_count: this.state.data.length,
+      });
+      event.success();
+    } catch (error) {
+      event.recordError(error instanceof Error ? error : String(error));
+      event.error();
+      throw error;
+    }
   }
 
   clearIndex(): void {
@@ -975,7 +1080,7 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
       
       event.set("result", {
         success: result !== null,
-        column_type: column?.type,
+        column_type: column?.type ? String(column.type) : undefined,
       });
       event.success();
       
@@ -988,7 +1093,7 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
   }
 
   compileFilter(
-    columnId: ColumnId | string,
+    columnId: string,
     operator: Operator,
     value?: unknown
   ): CompiledFilter | null {
@@ -996,15 +1101,15 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
     
     // Validate column exists - throw helpful error if not
     if (!col && this.state.schema) {
-      const suggestions = findSimilarColumns(this.state.schema, String(columnId));
+      const suggestions = findSimilarColumns(this.state.schema, columnId);
       const availableColumns = this.state.schema.columnOrder.map(String);
-      throw new UnknownColumnError(String(columnId), suggestions, availableColumns);
+      throw new UnknownColumnError(columnId, suggestions, availableColumns);
     }
     
     const event = this.telemetry.startEvent<CompileEvent>("compileFilter", {
       input: {
         type: "structured",
-        column_id: String(columnId),
+        column_id: columnId,
         operator,
         has_value: value !== undefined,
       },
@@ -1022,7 +1127,7 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
       
       event.set("result", {
         success: result !== null,
-        column_type: col?.type,
+        column_type: col?.type ? String(col.type) : undefined,
       });
       event.success();
       

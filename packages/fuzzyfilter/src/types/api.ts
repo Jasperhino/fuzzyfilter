@@ -260,7 +260,7 @@ export interface FuzzyFilter<TCustom extends Record<string, FuzzyFilterable<any>
    * @param id - The column ID (ColumnId or string)
    * @returns The column definition, or null if not found
    */
-  getColumn(id: ColumnId | string): AnyColumnDefinition | null;
+  getColumn(id: string): AnyColumnDefinition | null;
 
   /**
    * Gets all operators valid for a specific column.
@@ -274,7 +274,7 @@ export interface FuzzyFilter<TCustom extends Record<string, FuzzyFilterable<any>
    * // → ["eq", "neq", "lt", "lte", "gt", "gte", "in", "nin", "isEmpty", "isNotEmpty"]
    * ```
    */
-  getOperatorsForColumn(columnId: ColumnId | string): OperatorKey[];
+  getOperatorsForColumn(columnId: string): OperatorKey[];
 
   // -------------------------------------------------------------------------
   // Data Indexing
@@ -552,7 +552,7 @@ export interface FuzzyFilter<TCustom extends Record<string, FuzzyFilterable<any>
    * ```
    */
   compileFilter(
-    columnId: ColumnId | string,
+    columnId: string,
     operator: OperatorKey,
     value?: unknown
   ): CompiledFilter | null;

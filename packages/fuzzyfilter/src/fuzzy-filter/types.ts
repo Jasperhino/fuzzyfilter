@@ -40,7 +40,7 @@ export interface FuzzyFilterState {
   schema: Schema | null;
   columnTrie: Trie<AnyColumnDefinition>;
   operatorTrie: Trie<OperatorAliasEntry>;
-  valueTrie: Trie<{ value: string; columnId: ColumnId | string; rowCount: number }>;
+  valueTrie: Trie<{ value: string; columnId: ColumnId; rowCount: number }>;
   data: Array<Record<string, unknown>>;
   /** Version counter incremented when data changes, used for cache invalidation */
   dataVersion: number;

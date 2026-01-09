@@ -330,20 +330,12 @@ export interface OperatorDefinition<TValue = unknown, TArgs extends unknown[] = 
 /**
  * Unique identifier for a column in the schema.
  *
- * This is a branded type (nominal typing). However, plain strings are
- * accepted in most places for convenience. The {@link columnId} helper
- * function is optional and can be used for explicit typing if desired.
- *
  * @example
  * ```typescript
- * // Plain strings work everywhere (recommended)
  * { id: "status", name: "Status", type: "enum", ... }
- *
- * // Explicit ColumnId (optional)
- * const id: ColumnId = columnId("status");
  * ```
  */
-export type ColumnId = string & { readonly __brand: unique symbol };
+export type ColumnId = string;
 
 /**
  * Unique identifier for a row in the dataset.
@@ -353,13 +345,13 @@ export type ColumnId = string & { readonly __brand: unique symbol };
 export type RowId = number;
 
 /**
- * Creates a typed ColumnId from a string.
+ * Creates a ColumnId from a string.
  *
  * **Note:** This helper is optional. Plain strings are accepted everywhere
- * in the FuzzyFilter API. Use this only if you want explicit branded types.
+ * in the FuzzyFilter API.
  *
  * @param id - The string identifier for the column
- * @returns A branded ColumnId
+ * @returns The column ID as a string
  *
  * @example
  * ```typescript
@@ -380,7 +372,7 @@ export type RowId = number;
  * ```
  */
 export function columnId(id: string): ColumnId {
-  return id as ColumnId;
+  return id;
 }
 
 // ============================================================================

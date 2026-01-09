@@ -10,7 +10,6 @@ import type {
   AnyColumnDefinition,
   ColumnId,
 } from "./types/index.ts";
-import { columnId } from "./types/index.ts";
 
 /**
  * Build a Schema from SchemaInput
@@ -20,17 +19,14 @@ export function buildSchema(input: SchemaInput): Schema {
   const columnOrder: ColumnId[] = [];
 
   for (const col of input.columns) {
-    // Ensure ID is a ColumnId
-    const id = typeof col.id === "string" ? columnId(col.id as string) : col.id;
+    const id = col.id;
     const column = { ...col, id } as AnyColumnDefinition;
 
     columns.set(id, column);
     columnOrder.push(id);
   }
 
-  const defaultColumns = input.defaultColumns?.map((id) =>
-    columnId(id)
-  );
+  const defaultColumns = input.defaultColumns;
 
   return {
     columns,
@@ -44,10 +40,9 @@ export function buildSchema(input: SchemaInput): Schema {
  */
 export function getColumn(
   schema: Schema,
-  id: ColumnId | string
+  id: string
 ): AnyColumnDefinition | null {
-  const colId = typeof id === "string" ? columnId(id) : id;
-  return schema.columns.get(colId) ?? null;
+  return schema.columns.get(id) ?? null;
 }
 
 /**
@@ -157,14 +152,14 @@ export class UnknownColumnError extends Error {
  */
 export function getColumnOrThrow(
   schema: Schema,
-  id: ColumnId | string
+  id: string
 ): AnyColumnDefinition {
   const column = getColumn(schema, id);
   
   if (!column) {
-    const suggestions = findSimilarColumns(schema, String(id));
+    const suggestions = findSimilarColumns(schema, id);
     const availableColumns = schema.columnOrder.map(String);
-    throw new UnknownColumnError(String(id), suggestions, availableColumns);
+    throw new UnknownColumnError(id, suggestions, availableColumns);
   }
   
   return column;

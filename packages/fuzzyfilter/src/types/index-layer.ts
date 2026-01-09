@@ -161,8 +161,20 @@ export interface Trie<T> {
   /** Get all entries matching a prefix */
   prefixSearch(prefix: string): Array<{ key: string; value: T }>;
 
-  /** Fuzzy search with fuzzysort */
-  fuzzySearch(query: string, limit?: number): Array<{
+  /**
+   * Fuzzy search with fuzzysort (v3: scores are 0-1, higher is better).
+   * 
+   * @param query - The search query
+   * @param limit - Maximum number of results to return
+   * @param scoreFn - Optional custom scoring function. Receives the fuzzysort result
+   *                  and should return a score (0-1 range). Use this to apply smart
+   *                  scoring logic like density penalties or position bonuses.
+   */
+  fuzzySearch(
+    query: string,
+    limit?: number,
+    scoreFn?: (result: { score: number; indexes: readonly number[]; target: string; obj: { key: string; value: T } }) => number
+  ): Array<{
     key: string;
     value: T;
     score: number;
