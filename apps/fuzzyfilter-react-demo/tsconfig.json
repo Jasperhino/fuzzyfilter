@@ -17,10 +17,7 @@
       "fuzzyfilter-react": ["../../packages/fuzzyfilter-react/src/index.ts"],
       "@fuzzyfilter/sample-data": ["../../packages/sample-data/src/index.ts"],
       "@fuzzyfilter/i18n-locales": ["../../packages/i18n-locales/src/index.ts"],
-      "fuzzyfilter/types/i18n": ["../../packages/fuzzyfilter/src/types/i18n.ts"],
-      "lucide-operators": ["../../packages/lucide-operators/src/index.ts"],
-      "lucide-operators-react": ["../../packages/lucide-operators-react/src/index.tsx"],
-      "lucide-operators/assets/*": ["../../packages/lucide-operators/assets/*"]
+      "fuzzyfilter/types/i18n": ["../../packages/fuzzyfilter/src/types/i18n.ts"]
     }
   }
 }

@@ -38,10 +38,6 @@ export default defineConfig({
       "fuzzyfilter-vue": path.resolve(packagesPath, "fuzzyfilter-vue/src/index.ts"),
       "@fuzzyfilter/sample-data": path.resolve(packagesPath, "sample-data/src/index.ts"),
       "@fuzzyfilter/i18n-locales": path.resolve(packagesPath, "i18n-locales/src/index.ts"),
-      // Resolve lucide-operators packages
-      "lucide-operators/assets": path.resolve(packagesPath, "lucide-operators/assets"),
-      "lucide-operators": path.resolve(packagesPath, "lucide-operators/src/index.ts"),
-      "lucide-operators-vue": path.resolve(packagesPath, "lucide-operators-vue/src/index.ts"),
       // Resolve axiom-exporter package
       "@fuzzyfilter/axiom-exporter": path.resolve(packagesPath, "axiom-exporter/src/index.ts"),
     },
@@ -56,6 +52,6 @@ export default defineConfig({
   // Pre-bundle fuzzyfilter dependencies
   optimizeDeps: {
     include: ["fuzzysort", "chrono-node"],
-    exclude: ["fuzzyfilter", "fuzzyfilter-vue", "@fuzzyfilter/sample-data", "@fuzzyfilter/i18n-locales", "lucide-operators", "@fuzzyfilter/axiom-exporter"],
+    exclude: ["fuzzyfilter", "fuzzyfilter-vue", "@fuzzyfilter/sample-data", "@fuzzyfilter/i18n-locales", "@fuzzyfilter/axiom-exporter"],
   },
 })

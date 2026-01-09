@@ -13,7 +13,7 @@ import {
   ListIcon,
   TypeIcon,
   LayersIcon,
-} from "lucide-operators-react";
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DataType } from "@jasperhino/fuzzyfilter";
 

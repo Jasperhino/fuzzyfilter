@@ -11,6 +11,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   createFuzzyFilter,
   getOperator,
+  DEFAULT_CONFIG,
   type FuzzyFilter,
   type FilterSuggestion,
   type CompiledFilter,
@@ -18,6 +19,7 @@ import {
   type QueryMatch,
   createI18nextProvider,
 } from "@jasperhino/fuzzyfilter";
+import { isOperatorVariadic, operatorRequiresArgument, getMinArguments } from "@/lib/operator-helpers";
 import { useFuzzyFilter } from "fuzzyfilter-react";
 import { useTranslation } from "react-i18next";
 import {
@@ -47,7 +49,7 @@ import {
   ArrowUpIcon,
   ArrowDownIcon,
   ChevronsUpDownIcon,
-} from "lucide-operators-react";
+} from "lucide-react";
 import { attachAxiomExporter } from "@/lib/axiom-telemetry";
 
 // Use pre-generated dataset (10,000 rows with seed 42)
@@ -307,7 +309,7 @@ function FilterParts({
   
   // Calculate missing arguments for placeholders
   const opInfo = getOperator(operator);
-  const minArgs = opInfo.isVariadic ? (opInfo.minArguments ?? 1) : (opInfo.requiresArgument ? 1 : 0);
+  const minArgs = isOperatorVariadic(opInfo) ? (getMinArguments(opInfo) || 1) : (operatorRequiresArgument(opInfo) ? 1 : 0);
   const currentArgs = parts.arguments?.length ?? 0;
   const missingArgs = Math.max(0, minArgs - currentArgs);
   
@@ -416,7 +418,7 @@ function SuggestionItem({ suggestion }: { suggestion: FilterSuggestion }) {
   tooltipLines.push(
     "",
     "── Match Info ──",
-    `Column: ${suggestion.column.name}`,
+    `Column: ${suggestion.column.id}`,
     `Operator: ${suggestion.operator}`,
   );
 
@@ -433,7 +435,7 @@ function SuggestionItem({ suggestion }: { suggestion: FilterSuggestion }) {
     
     // Show if more arguments are needed
     const opInfo = getOperator(suggestion.operator);
-    const minArgs = opInfo.isVariadic ? (opInfo.minArguments ?? 1) : (opInfo.requiresArgument ? 1 : 0);
+    const minArgs = isOperatorVariadic(opInfo) ? (getMinArguments(opInfo) || 1) : (operatorRequiresArgument(opInfo) ? 1 : 0);
     if (suggestion.arguments.length < minArgs) {
       tooltipLines.push(`Missing: ${minArgs - suggestion.arguments.length} more value(s) needed`);
     }
@@ -750,11 +752,12 @@ export function FilterCombobox() {
   const [filter] = React.useState<FuzzyFilter>(() => {
     const i18n = createI18nextProvider(i18nInstance);
     const f = createFuzzyFilter({ 
+      ...DEFAULT_CONFIG,
       maxSuggestions: 12,
+      columns: TASK_SCHEMA.columns,
       i18n,
       benchmark: true, // Enable to see telemetry spans via window.__filter.getTelemetry()
     });
-    f.setSchema(TASK_SCHEMA);
     f.indexData(INITIAL_DATASET);
     
     // Expose filter globally for debugging
@@ -815,7 +818,7 @@ export function FilterCombobox() {
       
       // Check if operator is variadic (in, nin, between) - always pass array for these
       const opInfo = getOperator(f.operator);
-      const compileValue = opInfo.isVariadic 
+      const compileValue = isOperatorVariadic(opInfo)
         ? value  // Always pass array for variadic operators
         : (value && value.length === 1 ? value[0] : value);  // Unwrap single values for non-variadic
       const c = filter.compileFilter(f.column.id, f.operator, compileValue);
@@ -994,7 +997,7 @@ export function FilterCombobox() {
         
         // Check if operator is variadic (in, nin, between) - always pass array for these
         const opInfo = getOperator(f.operator);
-        const compileValue = opInfo.isVariadic 
+        const compileValue = isOperatorVariadic(opInfo)
           ? value  // Always pass array for variadic operators
           : (value && value.length === 1 ? value[0] : value);  // Unwrap single values for non-variadic
         const c = filter.compileFilter(f.column.id, f.operator, compileValue);

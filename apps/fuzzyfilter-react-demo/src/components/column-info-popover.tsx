@@ -54,7 +54,7 @@ function getArgCount(operator: OperatorDefinition): number {
 function OperatorBadgeLabel({ operator }: { operator: OperatorDefinition }) {
   return (
     <span className="shrink-0 text-[10px] h-4 px-1 rounded inline-flex items-center font-medium bg-muted text-muted-foreground">
-      {operator.symbol || operator.id}
+      {operator.id}
     </span>
   );
 }
@@ -116,16 +116,19 @@ function OperatorArgs({ operator }: { operator: OperatorDefinition }) {
  */
 export function ColumnInfoPopover({ column, children }: ColumnInfoPopoverProps) {
   const operators = React.useMemo(
-    () => getOperatorsForType(column.type as DataType),
+    () => column.type ? getOperatorsForType(column.type as DataType) : [],
     [column.type]
   );
+
+  const columnName = column.labelKey || column.id;
+  const columnType = column.type || "string";
 
   return (
     <Popover>
       <PopoverTrigger
         openOnHover
         className="cursor-help"
-        aria-label={`Info about ${column.name} column`}
+        aria-label={`Info about ${columnName} column`}
       >
         {children}
       </PopoverTrigger>
@@ -134,10 +137,10 @@ export function ColumnInfoPopover({ column, children }: ColumnInfoPopoverProps) 
           {/* Header with column name and type */}
           <div className="flex items-center justify-between">
             <PopoverTitle className="flex items-center gap-2 mb-0">
-              <DataTypeIcon type={column.type} size="size-4" />
-              <span>{column.name}</span>
+              <DataTypeIcon type={columnType} size="size-4" />
+              <span>{columnName}</span>
             </PopoverTitle>
-            <DataTypeBadge type={column.type} size="sm" />
+            <DataTypeBadge type={columnType} size="sm" />
           </div>
 
           {/* Operators section */}
@@ -153,18 +156,18 @@ export function ColumnInfoPopover({ column, children }: ColumnInfoPopoverProps) 
           </div>
 
           {/* Column-specific hints */}
-          {column.type === "enum" && "values" in column && (
+          {column.values && column.values.length > 0 && (
             <div className="space-y-1">
               <h4 className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
                 Allowed Values
               </h4>
               <div className="flex flex-wrap gap-1">
-                {column.values.slice(0, 6).map((value) => (
+                {column.values.slice(0, 6).map((value, idx) => (
                   <code
-                    key={value}
+                    key={idx}
                     className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono"
                   >
-                    {value}
+                    {String(value)}
                   </code>
                 ))}
                 {column.values.length > 6 && (
@@ -173,13 +176,6 @@ export function ColumnInfoPopover({ column, children }: ColumnInfoPopoverProps) 
                   </span>
                 )}
               </div>
-            </div>
-          )}
-
-          {column.type === "number" && "min" in column && "max" in column && (
-            <div className="text-[10px] text-muted-foreground">
-              Range: {column.min} – {column.max}
-              {column.isInteger && " (integers only)"}
             </div>
           )}
 
@@ -246,10 +242,11 @@ interface ColumnHeaderProps {
  * @returns Column header with icon, label wrapped in info popover
  */
 export function ColumnHeader({ column, label, className }: ColumnHeaderProps) {
+  const columnType = column.type || "string";
   return (
     <ColumnInfoPopover column={column}>
       <div className={`flex items-center gap-1 ${className ?? ""}`}>
-        <DataTypeIcon type={column.type} className="shrink-0" size="size-3" />
+        <DataTypeIcon type={columnType} className="shrink-0" size="size-3" />
         <span className="font-medium text-muted-foreground text-sm truncate">{label}</span>
       </div>
     </ColumnInfoPopover>

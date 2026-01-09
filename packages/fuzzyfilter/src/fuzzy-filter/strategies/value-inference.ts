@@ -515,9 +515,10 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
     i18nProvider?: import("../../types/i18n.ts").I18nProvider
   ): FilterSuggestion[] {
     const suggestions: FilterSuggestion[] = [];
-    const ops = getOperatorsForType(col.type, i18nProvider);
+    if (!col.type) return suggestions;
+    const ops = getOperatorsForType(col.type);
     const variadicOps = ops.filter((op) => {
-      const opInfo = getOperator(op.id, i18nProvider);
+      const opInfo = getOperator(op.id);
       return isOperatorVariadic(opInfo) && (getMinArguments(opInfo) || 1) === 1;
     });
 
@@ -725,6 +726,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
       for (const col of getColumns(schema)) {
         // Skip if this is a type-specific alias that doesn't match the column type
         if (forType && forType !== col.type) continue;
+        if (!col.type) continue;
 
         if (!opInfo.supportedTypes.includes(col.type)) continue;
         if (!isVariadic || minArgs !== 1) continue;

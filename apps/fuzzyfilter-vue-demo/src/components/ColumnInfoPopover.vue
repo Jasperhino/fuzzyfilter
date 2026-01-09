@@ -28,7 +28,7 @@ const props = defineProps<{
 }>()
 
 /** Get operators for this column type */
-const operators = computed(() => getOperatorsForType(props.column.type as DataType))
+const operators = computed(() => props.column.type ? getOperatorsForType(props.column.type as DataType) : [])
 
 /**
  * Get the number of arguments for an operator (matching API reference)
@@ -53,7 +53,7 @@ function getArgCount(operator: OperatorDefinition): number {
     <TooltipRoot>
       <TooltipTrigger
         class="cursor-help inline-flex items-center outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded-sm"
-        :aria-label="`Info about ${column.name} column`"
+        :aria-label="`Info about ${column.labelKey || column.id} column`"
       >
         <slot />
       </TooltipTrigger>
@@ -74,10 +74,10 @@ function getArgCount(operator: OperatorDefinition): number {
             <!-- Header with column name and type -->
             <div class="flex items-center justify-between">
               <h2 class="flex items-center gap-2 font-semibold text-sm">
-                <DataTypeIcon :type="column.type" size="size-4" />
-                <span>{{ column.name }}</span>
+                <DataTypeIcon :type="column.type || 'string'" size="size-4" />
+                <span>{{ column.labelKey || column.id }}</span>
               </h2>
-              <DataTypeIcon :type="column.type" as-badge badge-size="sm" />
+              <DataTypeIcon :type="column.type || 'string'" as-badge badge-size="sm" />
             </div>
 
             <!-- Operators section -->
@@ -94,7 +94,7 @@ function getArgCount(operator: OperatorDefinition): number {
                   <!-- Operator label -->
                   <div class="flex items-center gap-1.5 flex-1 min-w-0">
                     <span class="shrink-0 text-[10px] h-4 px-1 rounded inline-flex items-center font-medium bg-muted text-muted-foreground">
-                      {{ op.symbol || op.id }}
+                      {{ op.id }}
                     </span>
                     <span class="text-muted-foreground truncate">{{ op.id }}</span>
                   </div>

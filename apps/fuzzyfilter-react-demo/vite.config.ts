@@ -41,9 +41,6 @@ export default defineConfig({
       "fuzzyfilter-react": path.resolve(packagesPath, "fuzzyfilter-react/src/index.ts"),
       "@fuzzyfilter/sample-data": path.resolve(packagesPath, "sample-data/src/index.ts"),
       "@fuzzyfilter/i18n-locales": path.resolve(packagesPath, "i18n-locales/src/index.ts"),
-      "lucide-operators/assets": path.resolve(packagesPath, "lucide-operators/assets"),
-      "lucide-operators": path.resolve(packagesPath, "lucide-operators/src/index.ts"),
-      "lucide-operators-react": path.resolve(packagesPath, "lucide-operators-react/src/index.tsx"),
       "@fuzzyfilter/axiom-exporter": path.resolve(packagesPath, "axiom-exporter/src/index.ts"),
     },
     // Ensure React is always resolved from the project root
@@ -61,6 +58,6 @@ export default defineConfig({
   // Exclude local packages from optimization so changes are picked up
   optimizeDeps: {
     include: ["fuzzysort", "chrono-node"],
-    exclude: ["fuzzyfilter", "fuzzyfilter-react", "@fuzzyfilter/sample-data", "@fuzzyfilter/i18n-locales", "lucide-operators", "lucide-operators-react", "@fuzzyfilter/axiom-exporter"],
+    exclude: ["fuzzyfilter", "fuzzyfilter-react", "@fuzzyfilter/sample-data", "@fuzzyfilter/i18n-locales", "@fuzzyfilter/axiom-exporter"],
   },
 })

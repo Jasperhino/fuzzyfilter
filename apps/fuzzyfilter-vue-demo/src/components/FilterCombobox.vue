@@ -8,7 +8,8 @@
 import { ref, onMounted, computed, watch } from "vue"
 import { useVirtualizer } from "@tanstack/vue-virtual"
 import { useFuzzyFilter } from "fuzzyfilter-vue"
-import { createFuzzyFilter, getOperator, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch, createVueI18nProvider } from "@jasperhino/fuzzyfilter"
+import { createFuzzyFilter, getOperator, DEFAULT_CONFIG, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch, createVueI18nProvider } from "@jasperhino/fuzzyfilter"
+import { isOperatorVariadic, operatorRequiresArgument, getMinArguments } from "@/lib/operator-helpers"
 import { TASK_SCHEMA, COLUMN_IDS, LARGE_DATASET, generateSingleTaskAsync, type Task as TaskRow } from "@fuzzyfilter/sample-data"
 import { useI18n } from "vue-i18n"
 import { i18n } from "@/i18n"
@@ -26,7 +27,7 @@ import {
   ArrowUpIcon,
   ArrowDownIcon,
   ChevronsUpDownIcon,
-} from "lucide-operators-vue"
+} from "lucide-vue-next"
 import { cn } from "@/lib/utils"
 import { attachAxiomExporter } from "@/lib/axiom-telemetry"
 
@@ -60,7 +61,9 @@ const { locale, t } = i18nComposer
 // Create filter instance with i18n
 // Set benchmark: true to enable telemetry spans (accessible via filter.getTelemetry())
 const filter = createFuzzyFilter({ 
+  ...DEFAULT_CONFIG,
   maxSuggestions: 12,
+  columns: TASK_SCHEMA.columns,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   i18n: createVueI18nProvider(i18n as any),
   benchmark: true, // Enable to see telemetry spans via window.__filter.getTelemetry()
@@ -70,9 +73,8 @@ const filter = createFuzzyFilter({
 // Access in console: window.__filter.getTelemetry()?.getSpans()
 ;(window as unknown as { __filter: typeof filter }).__filter = filter
 
-// Initialize schema and data
+// Initialize data
 onMounted(() => {
-  filter.setSchema(TASK_SCHEMA)
   filter.indexData(INITIAL_DATASET)
   
   // Trigger reactivity update so filteredData re-evaluates
@@ -100,7 +102,7 @@ const compiledFiltersForContext = computed(() => {
     
     // Check if operator is variadic (in, nin, between) - always pass array for these
     const opInfo = getOperator(f.operator)
-    const compileValue = opInfo.isVariadic 
+    const compileValue = isOperatorVariadic(opInfo)
       ? value  // Always pass array for variadic operators
       : (value && value.length === 1 ? value[0] : value)  // Unwrap single values for non-variadic
     const c = filter.compileFilter(f.column.id, f.operator, compileValue)
@@ -405,7 +407,7 @@ function getScoreColor(score: number): string {
  */
 function getMissingArgsCount(suggestion: FilterSuggestion): number {
   const opInfo = getOperator(suggestion.operator)
-  const minArgs = opInfo.isVariadic ? (opInfo.minArguments ?? 1) : (opInfo.requiresArgument ? 1 : 0)
+  const minArgs = isOperatorVariadic(opInfo) ? (getMinArguments(opInfo) || 1) : (operatorRequiresArgument(opInfo) ? 1 : 0)
   const currentArgs = suggestion.parts.arguments?.length ?? 0
   return Math.max(0, minArgs - currentArgs)
 }
@@ -430,7 +432,7 @@ function getScoreTooltip(suggestion: FilterSuggestion): string {
   lines.push(
     "",
     "── Match Info ──",
-    `Column: ${suggestion.column.name}`,
+    `Column: ${suggestion.column.id}`,
     `Operator: ${suggestion.operator}`,
   )
   
@@ -937,7 +939,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
               >
                 <ColumnInfoPopover :column="statusColumn">
                   <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="statusColumn.type" size="size-3" class="shrink-0" />
+                    <DataTypeIcon :type="statusColumn.type || 'string'" size="size-3" class="shrink-0" />
                     <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.status") }}</span>
                   </div>
                 </ColumnInfoPopover>
@@ -957,7 +959,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
               >
                 <ColumnInfoPopover :column="assigneeColumn">
                   <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="assigneeColumn.type" size="size-3" class="shrink-0" />
+                    <DataTypeIcon :type="assigneeColumn.type || 'string'" size="size-3" class="shrink-0" />
                     <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.assignee") }}</span>
                   </div>
                 </ColumnInfoPopover>
@@ -977,7 +979,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
               >
                 <ColumnInfoPopover :column="priorityColumn">
                   <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="priorityColumn.type" size="size-3" class="shrink-0" />
+                    <DataTypeIcon :type="priorityColumn.type || 'number'" size="size-3" class="shrink-0" />
                     <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.priority") }}</span>
                   </div>
                 </ColumnInfoPopover>
@@ -997,7 +999,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
               >
                 <ColumnInfoPopover :column="departmentColumn">
                   <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="departmentColumn.type" size="size-3" class="shrink-0" />
+                    <DataTypeIcon :type="departmentColumn.type || 'string'" size="size-3" class="shrink-0" />
                     <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.department") }}</span>
                   </div>
                 </ColumnInfoPopover>
@@ -1017,7 +1019,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
               >
                 <ColumnInfoPopover :column="dueDateColumn">
                   <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="dueDateColumn.type" size="size-3" class="shrink-0" />
+                    <DataTypeIcon :type="dueDateColumn.type || 'date'" size="size-3" class="shrink-0" />
                     <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.dueDate") }}</span>
                   </div>
                 </ColumnInfoPopover>
@@ -1037,7 +1039,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
               >
                 <ColumnInfoPopover :column="createdColumn">
                   <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="createdColumn.type" size="size-3" class="shrink-0" />
+                    <DataTypeIcon :type="createdColumn.type || 'date'" size="size-3" class="shrink-0" />
                     <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.created") }}</span>
                   </div>
                 </ColumnInfoPopover>
@@ -1077,7 +1079,7 @@ const commentsColumn = getColumnById(COLUMN_IDS.comments)
               >
                 <ColumnInfoPopover :column="commentsColumn">
                   <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="commentsColumn.type" size="size-3" class="shrink-0" />
+                    <DataTypeIcon :type="commentsColumn.type || 'string'" size="size-3" class="shrink-0" />
                     <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.comments") }}</span>
                   </div>
                 </ColumnInfoPopover>

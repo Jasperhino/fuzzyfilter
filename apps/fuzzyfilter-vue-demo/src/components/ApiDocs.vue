@@ -15,6 +15,7 @@ import {
   DataType,
   type OperatorDefinition,
 } from "@jasperhino/fuzzyfilter"
+import { isOperatorVariadic, getOperatorAliases } from "@/lib/operator-helpers"
 import {
   BookOpenIcon,
   CodeIcon,
@@ -278,14 +279,14 @@ const options = [
                     class="px-3 pb-3 pt-1 space-y-2 text-xs bg-muted/30"
                   >
                     <!-- Aliases -->
-                    <div v-if="operator.aliases.length > 0">
+                    <div v-if="getOperatorAliases(operator).length > 0">
                       <span class="text-muted-foreground text-[10px] uppercase tracking-wider font-medium">
                         Aliases
                       </span>
                       <div class="flex flex-wrap gap-1 mt-1">
                         <span
-                          v-for="alias in operator.aliases"
-                          :key="alias"
+                          v-for="(alias, idx) in getOperatorAliases(operator)"
+                          :key="idx"
                           class="shrink-0 text-[10px] h-4 px-1 rounded inline-flex items-center font-medium bg-muted text-muted-foreground"
                         >
                           {{ alias }}
@@ -309,7 +310,7 @@ const options = [
                     </div>
 
                     <!-- Properties -->
-                    <div v-if="operator.isVariadic" class="flex flex-wrap gap-2">
+                    <div v-if="isOperatorVariadic(operator)" class="flex flex-wrap gap-2">
                       <span class="text-[9px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">
                         variadic
                       </span>

@@ -7,6 +7,7 @@
 
 import * as React from "react";
 import { OPERATORS, getOperatorsForType, DataType, type OperatorDefinition } from "@jasperhino/fuzzyfilter";
+import { isOperatorVariadic, getOperatorAliases } from "@/lib/operator-helpers";
 import { Tabs } from "@base-ui/react/tabs";
 import {
   BookOpenIcon,
@@ -128,13 +129,13 @@ function OperatorDoc({ operator }: { operator: OperatorDefinition }) {
       {isExpanded && (
         <div className="px-3 pb-3 pt-1 space-y-2 text-xs bg-muted/30">
           {/* Aliases */}
-          {operator.aliases.length > 0 && (
+          {getOperatorAliases(operator).length > 0 && (
             <div>
               <span className="text-muted-foreground text-[10px] uppercase tracking-wider font-medium">
                 Aliases
               </span>
               <div className="flex flex-wrap gap-1 mt-1">
-                {operator.aliases.map((alias: string) => (
+                {getOperatorAliases(operator).map((alias: string) => (
                   <OperatorBadge key={alias} text={alias} />
                 ))}
               </div>
@@ -155,7 +156,7 @@ function OperatorDoc({ operator }: { operator: OperatorDefinition }) {
 
           {/* Properties */}
           <div className="flex flex-wrap gap-2">
-            {operator.isVariadic && (
+            {isOperatorVariadic(operator) && (
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">
                 variadic
               </span>
@@ -390,7 +391,7 @@ function OperatorsByDataType() {
                     key={op.id}
                     className="px-2 py-1 rounded-md bg-muted/50 text-xs text-muted-foreground"
                   >
-                    {op.label}
+                    {op.id}
                   </div>
                 ))}
               </div>

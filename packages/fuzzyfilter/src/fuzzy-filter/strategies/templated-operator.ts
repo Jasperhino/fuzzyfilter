@@ -76,6 +76,7 @@ export class TemplatedOperatorStrategy implements SuggestionStrategy {
 
       // Check what columns this could apply to
       for (const col of getColumns(schema)) {
+        if (!col.type) continue;
         const opInfo = getOperator(templateMatch.operator);
         if (!opInfo || !(opInfo.supportedTypes as readonly string[]).includes(col.type)) continue;
 
