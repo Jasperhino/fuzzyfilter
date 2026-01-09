@@ -215,13 +215,6 @@ function resolveI18nRef(key: string, i18nProvider?: I18nProvider): string[] {
   if (i18nProvider?.getAliases) {
     return i18nProvider.getAliases(key);
   }
-  // Fallback: try translate() for backward compatibility
-  if (i18nProvider?.translate) {
-    const translated = i18nProvider.translate(key);
-    if (translated !== undefined) {
-      return Array.isArray(translated) ? translated : [translated];
-    }
-  }
   // Fallback to the key itself (replace dots/underscores with spaces for readability)
   const fallback = key.replace(/[._]/g, " ");
   return [fallback];

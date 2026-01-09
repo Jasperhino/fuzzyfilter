@@ -3,19 +3,18 @@
  * 
  * Manages operator and type definitions per FuzzyFilter instance.
  * When operators or types are provided in config, they replace the defaults entirely.
- * Users can spread OPERATORS_ARRAY or DATA_TYPES to extend rather than replace.
+ * Users can spread defaultFuzzyFilterOperators or DATA_TYPES to extend rather than replace.
  * 
  * Compiles operator patterns with i18n resolution for efficient matching.
  * 
  * @module fuzzyfilter/registry
  */
 
-import type { TypeDefinition, OperatorDefinition, DataType } from "./types/core.ts";
+import type { OperatorDefinition } from "./types/core.ts";
 import type { FuzzyFilterConfig } from "./types/api.ts";
 import type { I18nProvider } from "./types/i18n.ts";
-import { DATA_TYPES } from "./types/core.ts";
-import { OPERATORS_ARRAY } from "./operators.ts";
 import { compileOperatorDefinition, type CompiledOperator } from "./pattern-compiler.ts";
+import { defaultFuzzyFilterOperators } from "./operators.ts";
 
 /**
  * Instance registry for operators and types.
@@ -42,7 +41,7 @@ export class InstanceRegistry {
    */
   constructor(config: Partial<FuzzyFilterConfig>, i18nProvider?: I18nProvider) {
     // Use provided or fall back to defaults
-    const ops = config.operators ?? OPERATORS_ARRAY;
+    const ops = config.operators ?? defaultFuzzyFilterOperators;
     const types = config.types ?? DATA_TYPES;
 
     // Validate operators
@@ -127,20 +126,6 @@ export class InstanceRegistry {
    */
   getCompiledOperator(id: string): CompiledOperator | undefined {
     return this.compiledOperators.get(id);
-  }
-
-  /**
-   * Get all operators that support a given type.
-   * 
-   * @deprecated Operators are now universal and work with all types.
-   * This method returns all operators for backward compatibility.
-   * 
-   * @param typeId - The type ID (can be a DataType or custom type ID)
-   * @returns Array of all operator definitions
-   */
-  getOperatorsForType(typeId: string): OperatorDefinition[] {
-    // Operators are now universal - return all operators
-    return Array.from(this.operators.values());
   }
 
   /**

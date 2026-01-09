@@ -47,7 +47,7 @@ export const DataType = {
  * import { DataType } from "fuzzyfilter";
  * 
  * const column: ColumnDefinition = {
- *   id: columnId("status"),
+ *   id: "status",
  *   name: "Status",
  *   type: DataType.ENUM,
  *   values: ["Open", "Closed"],
@@ -267,6 +267,7 @@ export interface OperatorDefinition {
  */
 export type ColumnId = string;
 
+
 /**
  * Unique identifier for a row in the dataset.
  *
@@ -274,36 +275,6 @@ export type ColumnId = string;
  */
 export type RowId = number;
 
-/**
- * Creates a ColumnId from a string.
- *
- * **Note:** This helper is optional. Plain strings are accepted everywhere
- * in the FuzzyFilter API.
- *
- * @param id - The string identifier for the column
- * @returns The column ID as a string
- *
- * @example
- * ```typescript
- * import { createFuzzyFilter } from "fuzzyfilter";
- *
- * const filter = createFuzzyFilter();
- *
- * // Recommended: Just use plain strings
- * filter.setSchema({
- *   columns: [
- *     { id: "status", name: "Status", type: "enum", values: ["Open", "Closed"] },
- *     { id: "priority", name: "Priority", type: "number" },
- *   ],
- * });
- *
- * // Plain strings work for all API calls
- * const compiled = filter.compileFilter("status", "eq", "Open");
- * ```
- */
-export function columnId(id: string): ColumnId {
-  return id;
-}
 
 // ============================================================================
 // MATCH RESULT

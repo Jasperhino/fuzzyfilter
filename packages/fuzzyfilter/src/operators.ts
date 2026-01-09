@@ -224,10 +224,6 @@ export const OPERATORS: Record<string, OperatorDefinition> = {
  */
 export const defaultFuzzyFilterOperators: OperatorDefinition[] = Object.values(OPERATORS);
 
-/**
- * @deprecated Use `defaultFuzzyFilterOperators` instead. This alias will be removed in the next major version.
- */
-export const OPERATORS_ARRAY = defaultFuzzyFilterOperators;
 
 /**
  * All supported filter operators.

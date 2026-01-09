@@ -93,15 +93,15 @@ export * from "./types/index.ts";
  *
  * @example
  * ```typescript
- * import { getOperatorsForType, getOperator } from "fuzzyfilter";
+ * import { getAllOperators, getOperator } from "fuzzyfilter";
  *
- * // Get all operators for a data type
- * const stringOps = getOperatorsForType("string");
- * // → ["eq", "neq", "contains", "startsWith", ...]
+ * // Get all operators (operators are now universal)
+ * const allOps = getAllOperators();
+ * // → [{ id: "eq", ... }, { id: "neq", ... }, ...]
  *
  * // Get metadata for a specific operator
  * const eqInfo = getOperator("eq");
- * // → { id: "eq", label: "equals", ... }
+ * // → { id: "eq", patterns: [...], predicate: ... }
  * ```
  */
 export {

@@ -18,9 +18,9 @@ import { createFuzzyFilter, column  Id } from "@jasperhino/fuzzyfilter";
 const filter = createFuzzyFilter();
 filter.setSchema({
   columns: [
-    { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
-    { id: columnId("priority"), name: "Priority", type: "number" },
-    { id: columnId("assignee"), name: "Assignee", type: "string" },
+    { id: "status", name: "Status", type: "enum", values: ["Open", "Closed"] },
+    { id: "priority", name: "Priority", type: "number" },
+    { id: "assignee", name: "Assignee", type: "string" },
   ],
 });
 filter.indexData(myData);

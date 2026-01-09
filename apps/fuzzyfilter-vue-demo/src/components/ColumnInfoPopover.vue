@@ -15,7 +15,7 @@ import {
 } from "radix-vue"
 import DataTypeIcon from "./DataTypeIcon.vue"
 import {
-  getOperatorsForType,
+  getAllOperators,
   DataType,
   type OperatorDefinition,
   type AnyColumnDefinition,
@@ -28,7 +28,7 @@ const props = defineProps<{
 }>()
 
 /** Get operators for this column type */
-const operators = computed(() => props.column.type ? getOperatorsForType(props.column.type as DataType) : [])
+const operators = computed(() => getAllOperators())
 
 /**
  * Get the number of arguments for an operator (matching API reference)

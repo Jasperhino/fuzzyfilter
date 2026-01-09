@@ -4,7 +4,6 @@
 
 // Core types (type-only exports)
 export type {
-  TypeDefinition,
   OperatorDefinition,
   ColumnId,
   RowId,
@@ -16,11 +15,11 @@ export type {
 } from "./core.ts";
 
 // Core values (DataType and OperatorCategory are both a value and type with same name)
-export { DataType, OperatorCategory, columnId, DATA_TYPES } from "./core.ts";
+export { DataType, OperatorCategory } from "./core.ts";
 
 // Operator types (derived from registry)
 export type { OperatorKey as Operator } from "../operators.ts";
-export { OPERATORS, OPERATORS_ARRAY } from "../operators.ts";
+export { OPERATORS, defaultFuzzyFilterOperators } from "../operators.ts";
 
 // Pattern types for type-safe operator creation
 export type {

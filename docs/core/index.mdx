@@ -54,8 +54,8 @@ import { columnId } from "@jasperhino/fuzzyfilter";
 
 filter.setSchema({
   columns: [
-    { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
-    { id: columnId("priority"), name: "Priority", type: "number" },
+    { id: "status", name: "Status", type: "enum", values: ["Open", "Closed"] },
+    { id: "priority", name: "Priority", type: "number" },
   ],
 });
 ```
@@ -91,18 +91,6 @@ Compiles a filter programmatically.
 
 ```typescript
 const compiled = filter.compileFilter("priority", "gte", 3);
-```
-
-## Types
-
-### ColumnId
-
-Type alias for column identifiers (string).
-
-```typescript
-import { columnId } from "@jasperhino/fuzzyfilter";
-
-const statusId = columnId("status"); // string type
 ```
 
 ### Operators

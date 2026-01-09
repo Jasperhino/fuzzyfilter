@@ -65,45 +65,6 @@ export interface I18nProvider {
   readonly locale: string;
   
   /**
-   * Get the translated label for an operator.
-   * 
-   * @deprecated Use getLabel() instead. Kept for backward compatibility.
-   * 
-   * @param operatorId - The operator ID (e.g., "eq", "contains")
-   * @returns Translated label (e.g., "igual" for Spanish "eq")
-   */
-  getOperatorLabel?(operatorId: OperatorKey): string;
-  
-  /**
-   * Get all translated aliases for an operator.
-   * 
-   * @deprecated Use getAliases() instead. Kept for backward compatibility.
-   * 
-   * @param operatorId - The operator ID
-   * @returns Array of translated aliases for fuzzy matching
-   */
-  getOperatorAliases?(operatorId: OperatorKey): string[];
-  
-  /**
-   * Translate a generic i18n key.
-   * 
-   * @deprecated Use getAliases() or getLabel() instead. Kept for backward compatibility.
-   * 
-   * @param key - The i18n key (e.g., "columns.status", "operators.neq")
-   * @returns Translated string, array of strings, or undefined if not found
-   */
-  translate?(key: string): string | string[] | undefined;
-  
-  /**
-   * Get the current locale/language code.
-   * 
-   * @deprecated Use locale property instead. Kept for backward compatibility.
-   * 
-   * @returns Locale code (e.g., "en", "de", "fr") or undefined if not available
-   */
-  getLocale?(): string | undefined;
-  
-  /**
    * Optional: Subscribe to language change events.
    * 
    * If provided, FuzzyFilter can reactively update when language changes.

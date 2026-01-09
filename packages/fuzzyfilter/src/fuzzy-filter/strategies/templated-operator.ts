@@ -302,13 +302,10 @@ export class TemplatedOperatorStrategy implements SuggestionStrategy {
     if (i18nMatch) {
       const key = i18nMatch[1]!;
       // Try i18n provider
-      if (i18nProvider?.translate) {
+      if (i18nProvider?.getAliases) {
         try {
-          const translated = i18nProvider.translate(key);
-          if (translated) {
-            const values = Array.isArray(translated) ? translated : [translated];
-            results.push(...values);
-          }
+          const aliases = i18nProvider.getAliases(key);
+          results.push(...aliases);
         } catch {
           // Ignore errors
         }

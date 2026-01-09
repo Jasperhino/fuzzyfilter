@@ -91,24 +91,6 @@ export function createI18nextProvider(
       return aliases[0] ?? key;
     },
 
-    // Legacy methods for backward compatibility
-    getOperatorLabel(operatorId: OperatorKey): string {
-      return this.getLabel(`operators.${operatorId}`);
-    },
-
-    getOperatorAliases(operatorId: OperatorKey): string[] {
-      return this.getAliases(`operators.${operatorId}`);
-    },
-
-    translate(key: string): string | string[] | undefined {
-      const aliases = this.getAliases(key);
-      return aliases.length === 1 ? aliases[0] : aliases;
-    },
-
-    getLocale(): string | undefined {
-      return this.locale;
-    },
-
     onChange: (callback: () => void): (() => void) => {
       // Subscribe to i18next language change events
       const handler = () => {

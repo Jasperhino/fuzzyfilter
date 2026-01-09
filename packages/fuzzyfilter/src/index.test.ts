@@ -6,14 +6,12 @@
 
 import { test, expect, describe } from "bun:test";
 import {
-  columnId,
   getAllOperators,
   getOperator,
-  getOperatorsForType,
-  isValidOperatorForType,
   getDefaultOperatorForType,
   isOperator,
   getOperatorSearchTerms,
+  type ColumnId,
 } from "./index.ts";
 
 // =============================================================================
@@ -21,8 +19,8 @@ import {
 // =============================================================================
 
 describe("Core Types", () => {
-  test("columnId returns string", () => {
-    const id = columnId("myColumn");
+  test("ColumnId is a string type", () => {
+    const id: ColumnId = "myColumn";
     expect(id).toBe("myColumn");
     expect(typeof id).toBe("string");
   });
@@ -50,29 +48,16 @@ describe("Operator Registry", () => {
     expect(eq?.patterns.some(p => p.includes("{"))).toBe(true); // requires argument
   });
 
-  test("getOperatorsForType returns type-compatible operators", () => {
-    const stringOps = getOperatorsForType("string");
-    expect(stringOps.some((op) => op.id === "eq")).toBe(true);
-    expect(stringOps.some((op) => op.id === "contains")).toBe(true);
-    expect(stringOps.some((op) => op.id === "startsWith")).toBe(true);
-
-    const numberOps = getOperatorsForType("number");
-    expect(numberOps.some((op) => op.id === "gt")).toBe(true);
-    expect(numberOps.some((op) => op.id === "lt")).toBe(true);
-    // 'contains' is NOT valid for numbers
-    expect(numberOps.some((op) => op.id === "contains")).toBe(false);
-
-    const boolOps = getOperatorsForType("boolean");
-    expect(boolOps.some((op) => op.id === "isTrue")).toBe(true);
-    expect(boolOps.some((op) => op.id === "isFalse")).toBe(true);
-  });
-
-  test("isValidOperatorForType checks compatibility", () => {
-    expect(isValidOperatorForType("eq", "string")).toBe(true);
-    expect(isValidOperatorForType("gt", "number")).toBe(true);
-    expect(isValidOperatorForType("contains", "number")).toBe(false);
-    expect(isValidOperatorForType("isTrue", "string")).toBe(false);
-    expect(isValidOperatorForType("isTrue", "boolean")).toBe(true);
+  test("operators are universal and work with all types", () => {
+    // All operators are now available for all types
+    const allOps = getAllOperators();
+    expect(allOps.some((op) => op.id === "eq")).toBe(true);
+    expect(allOps.some((op) => op.id === "contains")).toBe(true);
+    expect(allOps.some((op) => op.id === "startsWith")).toBe(true);
+    expect(allOps.some((op) => op.id === "gt")).toBe(true);
+    expect(allOps.some((op) => op.id === "lt")).toBe(true);
+    expect(allOps.some((op) => op.id === "isTrue")).toBe(true);
+    expect(allOps.some((op) => op.id === "isFalse")).toBe(true);
   });
 
   test("getDefaultOperatorForType returns sensible defaults", () => {
@@ -253,7 +238,7 @@ describe("Operator Predicates", () => {
 describe("Schema Types", () => {
   test("column definitions are type-safe", () => {
     const stringCol = {
-      id: columnId("name"),
+      id: "name",
       name: "Name",
       type: "string" as const,
       caseSensitive: false,
@@ -261,7 +246,7 @@ describe("Schema Types", () => {
     expect(stringCol.type).toBe("string");
 
     const enumCol = {
-      id: columnId("status"),
+      id: "status",
       name: "Status",
       type: "enum" as const,
       values: ["Open", "Closed", "Pending"],
@@ -269,7 +254,7 @@ describe("Schema Types", () => {
     expect(enumCol.values).toHaveLength(3);
 
     const dateCol = {
-      id: columnId("createdAt"),
+      id: "createdAt",
       name: "Created At",
       type: "date" as const,
       granularity: "day" as const,

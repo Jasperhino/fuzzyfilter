@@ -35,9 +35,9 @@ const filter = createFuzzyFilter();
 // Define your schema
 filter.setSchema({
   columns: [
-    { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed", "Pending"] },
-    { id: columnId("priority"), name: "Priority", type: "number" },
-    { id: columnId("createdAt"), name: "Created At", type: "date" },
+    { id: "status", name: "Status", type: "enum", values: ["Open", "Closed", "Pending"] },
+    { id: "priority", name: "Priority", type: "number" },
+    { id: "createdAt", name: "Created At", type: "date" },
   ],
 });
 

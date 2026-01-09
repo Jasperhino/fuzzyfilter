@@ -59,23 +59,23 @@ The schema tells FuzzyFilter about your data structure:
 filter.setSchema({
   columns: [
     {
-      id: columnId("status"),
+      id: "status",
       name: "Status",
       type: "enum",
       values: ["Open", "Closed", "In Progress", "Pending"],
     },
     {
-      id: columnId("priority"),
+      id: "priority",
       name: "Priority",
       type: "number",
     },
     {
-      id: columnId("title"),
+      id: "title",
       name: "Title",
       type: "string",
     },
     {
-      id: columnId("createdAt"),
+      id: "createdAt",
       name: "Created At",
       type: "date",
     },

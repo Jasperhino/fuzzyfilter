@@ -7,7 +7,7 @@
  * @module fuzzyfilter/types/api
  */
 
-import type { TypeDefinition, OperatorDefinition, FuzzyFilterable } from "./core.ts";
+import type { OperatorDefinition, FuzzyFilterable } from "./core.ts";
 import type { OperatorKey } from "../operators.ts";
 import type { Schema, SchemaInput, AnyColumnDefinition } from "./schema.ts";
 import type { ParsedInput } from "./parsing.ts";
@@ -107,11 +107,11 @@ export interface FuzzyFilterConfig<TCustom extends Record<string, FuzzyFilterabl
 
   /**
    * Operator definitions. When provided, replaces built-in operators entirely.
-   * Spread OPERATORS_ARRAY to extend with custom operators:
+   * Spread defaultFuzzyFilterOperators to extend with custom operators:
    * 
    * @example
    * ```typescript
-   * operators: [...OPERATORS_ARRAY, myCustomOperator]
+   * operators: [...defaultFuzzyFilterOperators, myCustomOperator]
    * ```
    */
   operators?: OperatorDefinition[];
@@ -122,19 +122,6 @@ export interface FuzzyFilterConfig<TCustom extends Record<string, FuzzyFilterabl
    * Required for proper label resolution and enum value translations.
    */
   i18n: I18nProvider;
-
-  /**
-   * Type definitions. When provided, replaces built-in types entirely.
-   * 
-   * @deprecated In V2, use FuzzyFilterable interface for custom types instead.
-   * This is kept for backward compatibility during migration.
-   * 
-   * @example
-   * ```typescript
-   * types: [...DATA_TYPES, myCustomType]
-   * ```
-   */
-  types?: TypeDefinition[];
 }
 
 /**

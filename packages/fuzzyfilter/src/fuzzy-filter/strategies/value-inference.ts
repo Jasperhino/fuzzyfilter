@@ -16,7 +16,7 @@ import type {
   PositionedValueMatch,
 } from "../types.ts";
 import { getColumns } from "../../schema-builder.ts";
-import { getOperatorsForType, getOperator } from "../../operators.ts";
+import { getAllOperators, getOperator } from "../../operators.ts";
 import { DataType } from "../../types/index.ts";
 import { detectValueTokens, selectNonOverlappingMatches, toHypothesisValue } from "../engine/helpers.ts";
 import { createSuggestion, createDateSuggestion, countForDateFilter } from "../engine/suggestion-helpers.ts";
@@ -241,7 +241,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
 
       if (filteredValues.length === 0) continue;
 
-      const ops = getOperatorsForType(col.type);
+      const ops = getAllOperators();
       const baseScore = SCORING_CONFIG.BONUS.VALUE_ONLY_BASE;
 
       if (filteredValues.length >= 2) {
@@ -339,7 +339,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
 
       if (filteredValues.length === 0) continue;
 
-      const ops = getOperatorsForType(col.type);
+      const ops = getAllOperators();
       const baseScore = SCORING_CONFIG.BONUS.VALUE_ONLY_BASE;
 
       // Separate date ranges from single dates
@@ -516,7 +516,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
   ): FilterSuggestion[] {
     const suggestions: FilterSuggestion[] = [];
     if (!col.type) return suggestions;
-    const ops = getOperatorsForType(col.type);
+    const ops = getAllOperators();
     const variadicOps = ops.filter((op) => {
       const opInfo = getOperator(op.id);
       return isOperatorVariadic(opInfo) && (getMinArguments(opInfo) || 1) === 1;
@@ -614,7 +614,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
 
       // Only generate multi-value suggestions if we have 2+ values
       if (aggregatedValues.length >= 2) {
-        const ops = getOperatorsForType(col.type);
+        const ops = getAllOperators();
         const variadicOps = ops.filter((op) => {
           const opInfo = getOperator(op.id);
           if (!opInfo) return false;

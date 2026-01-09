@@ -30,7 +30,6 @@ import type { FuzzyFilterable, FuzzyFilterableStatic, TypeHandler } from "../typ
 import { DataType } from "../types/index.ts";
 import {
   getAllOperators,
-  getOperatorsForType,
   getOperator,
 } from "../operators.ts";
 import { InstanceRegistry } from "../registry.ts";
@@ -313,7 +312,7 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
 
     // Also insert aliases from i18n provider
     for (const op of operators) {
-      const i18nAliases = this.i18nProvider.getOperatorAliases?.(op.id as Operator) ?? [];
+      const i18nAliases = this.i18nProvider.getAliases(`operators.${op.id}`);
       for (const alias of i18nAliases) {
         this.state.operatorTrie.insert(alias, { operator: op.id });
       }
@@ -460,20 +459,8 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
     const col = this.getColumn(colId);
     if (!col) return [];
     
-    // If column has values (enum mode), use enum-compatible operators
-    if (col.values && col.values.length > 0) {
-      return getOperatorsForType(DataType.ENUM).map((op) => op.id);
-    }
-    
-    // Otherwise use operators for the column's type
-    if (!col.type) return [];
-    const typeName = String(col.type);
-    
-    // Map custom types to built-in types for operator compatibility
-    // For now, assume custom types map to their base type
-    // This could be enhanced with a compatibility mapping
-    const dataType = typeName as DataType;
-    return getOperatorsForType(dataType).map((op) => op.id);
+    // Operators are now universal - return all operator IDs
+    return getAllOperators().map((op) => op.id);
   }
 
   indexData(data: Array<Record<string, unknown>>): void {

@@ -156,32 +156,6 @@ export function createDefaultEnglishProvider(): I18nProvider {
       return parts[parts.length - 1] ?? key;
     },
 
-    // Legacy methods for backward compatibility
-    getOperatorLabel(operatorId: OperatorKey): string {
-      return this.getLabel(`operators.${operatorId}`);
-    },
-
-    getOperatorAliases(operatorId: OperatorKey): string[] {
-      return this.getAliases(`operators.${operatorId}`);
-    },
-
-    getLocale(): string {
-      return this.locale;
-    },
-
-    /**
-     * Translate a key. Supports:
-     * - "operators.eq" -> returns array of aliases for eq operator
-     * - "between", "from", etc. -> returns single word translation
-     * 
-     * @deprecated Use getAliases() or getLabel() instead
-     */
-    translate(key: string): string | string[] | undefined {
-      const aliases = this.getAliases(key);
-      // Return array if multiple aliases, single string if one alias
-      return aliases.length === 1 ? aliases[0] : aliases;
-    },
-
     // No onChange callback - English translations are static
   };
 }

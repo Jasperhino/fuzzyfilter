@@ -331,20 +331,7 @@ const filter = createFuzzyFilter({
 filter.configure({ maxSuggestions: 20 });
 ```
 
-### Column Aliases
-
-Add aliases for alternative names users might type:
-
-```typescript
-{
-  id: columnId("createdAt"),
-  name: "Created At",
-  type: "date",
-  aliases: ["created", "date", "when", "timestamp"]
-}
-```
-
-### Incremental Updates (V2 API)
+### Incremental Updates
 
 Update the index without re-indexing everything:
 

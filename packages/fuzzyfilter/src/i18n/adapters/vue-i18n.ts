@@ -127,24 +127,6 @@ export function createVueI18nProvider(
       return aliases[0] ?? key;
     },
 
-    // Legacy methods for backward compatibility
-    getOperatorLabel(operatorId: OperatorKey): string {
-      return this.getLabel(`operators.${operatorId}`);
-    },
-
-    getOperatorAliases(operatorId: OperatorKey): string[] {
-      return this.getAliases(`operators.${operatorId}`);
-    },
-
-    translate(key: string): string | string[] | undefined {
-      const aliases = this.getAliases(key);
-      return aliases.length === 1 ? aliases[0] : aliases;
-    },
-
-    getLocale(): string | undefined {
-      return this.locale;
-    },
-
     onChange: (callback: () => void): (() => void) => {
       // For vue-i18n, we watch the locale reactive value
       // Since we can't import Vue here (it's a peer dependency), we use polling

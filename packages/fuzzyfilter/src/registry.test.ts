@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "bun:test";
 import { InstanceRegistry } from "./registry.ts";
-import { OPERATORS_ARRAY } from "./operators.ts";
+import { defaultFuzzyFilterOperators } from "./operators.ts";
 import { DATA_TYPES } from "./types/core.ts";
 import type { OperatorDefinition, TypeDefinition } from "./types/core.ts";
 import { DataType } from "./types/core.ts";
@@ -13,7 +13,7 @@ describe("InstanceRegistry", () => {
   describe("constructor", () => {
     it("should use default operators when none provided", () => {
       const registry = new InstanceRegistry({});
-      expect(registry.operatorCount).toBe(OPERATORS_ARRAY.length);
+      expect(registry.operatorCount).toBe(defaultFuzzyFilterOperators.length);
     });
 
     it("should use default types when none provided", () => {
@@ -61,10 +61,10 @@ describe("InstanceRegistry", () => {
       };
 
       const registry = new InstanceRegistry({
-        operators: [...OPERATORS_ARRAY, customOp],
+        operators: [...defaultFuzzyFilterOperators, customOp],
       });
 
-      expect(registry.operatorCount).toBe(OPERATORS_ARRAY.length + 1);
+      expect(registry.operatorCount).toBe(defaultFuzzyFilterOperators.length + 1);
       expect(registry.hasOperator("eq")).toBe(true);
       expect(registry.hasOperator("fuzzyMatch")).toBe(true);
     });
@@ -126,44 +126,12 @@ describe("InstanceRegistry", () => {
     });
   });
 
-  describe("getOperatorsForType", () => {
-    it("should return operators that support the given type", () => {
-      const registry = new InstanceRegistry({});
-      const stringOps = registry.getOperatorsForType(DataType.STRING);
-      
-      expect(stringOps.length).toBeGreaterThan(0);
-      expect(stringOps.some(op => op.id === "eq")).toBe(true);
-      expect(stringOps.some(op => op.id === "contains")).toBe(true);
-      // gt doesn't support strings
-      expect(stringOps.some(op => op.id === "gt")).toBe(false);
-    });
-
-    it("should work with custom types using compatibilityType", () => {
-      const customType: TypeDefinition = {
-        id: "amount",
-        label: "Amount",
-        compatibilityType: DataType.NUMBER,
-      };
-
-      const registry = new InstanceRegistry({
-        types: [...DATA_TYPES, customType],
-      });
-
-      const amountOps = registry.getOperatorsForType("amount");
-      
-      // Should get operators that support DataType.NUMBER
-      expect(amountOps.some(op => op.id === "gt")).toBe(true);
-      expect(amountOps.some(op => op.id === "lt")).toBe(true);
-      expect(amountOps.some(op => op.id === "eq")).toBe(true);
-    });
-  });
-
   describe("getAllOperators", () => {
     it("should return all registered operators", () => {
       const registry = new InstanceRegistry({});
       const all = registry.getAllOperators();
       
-      expect(all.length).toBe(OPERATORS_ARRAY.length);
+      expect(all.length).toBe(defaultFuzzyFilterOperators.length);
       expect(all.some(op => op.id === "eq")).toBe(true);
     });
   });

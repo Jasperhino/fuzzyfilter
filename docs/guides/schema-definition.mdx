@@ -191,19 +191,19 @@ const filter = createFuzzyFilter({
       aliases: ["created", "creation date"],
     },
     {
-      id: columnId("dueDate"),
+      id: "dueDate",
       name: "Due Date",
       type: "date",
       aliases: ["deadline", "due"],
     },
     {
-      id: columnId("isBlocked"),
+      id: "isBlocked",
       name: "Blocked",
       type: "boolean",
       aliases: ["stuck", "waiting"],
     },
     {
-      id: columnId("tags"),
+      id: "tags",
       name: "Tags",
       type: "enum",
       values: ["bug", "feature", "docs", "test", "refactor"],
@@ -224,7 +224,7 @@ const statuses = [...new Set(data.map(row => row.status))];
 filter.setSchema({
   columns: [
     {
-      id: columnId("status"),
+      id: "status",
       name: "Status",
       type: "enum",
       values: statuses,
@@ -245,7 +245,7 @@ filter.setSchema({ columns: [...] });
 filter.setSchema({
   columns: [
     ...existingColumns,
-    { id: columnId("newColumn"), name: "New Column", type: "string" },
+    { id: "newColumn", name: "New Column", type: "string" },
   ],
 });
 
@@ -260,8 +260,8 @@ The `columnId` function is a helper that returns the string as-is:
 ```typescript
 import { columnId, type ColumnId } from "@jasperhino/fuzzyfilter";
 
-const statusId: ColumnId = columnId("status");
-const priorityId: ColumnId = columnId("priority");
+const statusId: ColumnId = "status";
+const priorityId: ColumnId = "priority";
 
 // TypeScript ensures you use valid column IDs
 filter.compileFilter(statusId, "eq", "Open");

@@ -14,7 +14,7 @@
  * const filter = createFuzzyFilter();
  * filter.setSchema({
  *   columns: [
- *     { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
+ *     { id: "status", name: "Status", type: "enum", values: ["Open", "Closed"] },
  *   ],
  * });
  * filter.indexData(myData);

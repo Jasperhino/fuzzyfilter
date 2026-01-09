@@ -24,9 +24,9 @@ const filter = createFuzzyFilter();
 onMounted(() => {
   filter.setSchema({
     columns: [
-      { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "In Progress", "Closed"] },
-      { id: columnId("assignee"), name: "Assignee", type: "string" },
-      { id: columnId("priority"), name: "Priority", type: "number" },
+      { id: "status", name: "Status", type: "enum", values: ["Open", "In Progress", "Closed"] },
+      { id: "assignee", name: "Assignee", type: "string" },
+      { id: "priority", name: "Priority", type: "number" },
     ],
   });
   filter.indexData(myData);

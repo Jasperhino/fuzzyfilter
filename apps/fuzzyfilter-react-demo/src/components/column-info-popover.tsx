@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/popover";
 import { DataTypeIcon, DataTypeBadge } from "./data-type-icon";
 import {
-  getOperatorsForType,
+  getAllOperators,
   DataType,
   type OperatorDefinition,
   type AnyColumnDefinition,
@@ -116,8 +116,8 @@ function OperatorArgs({ operator }: { operator: OperatorDefinition }) {
  */
 export function ColumnInfoPopover({ column, children }: ColumnInfoPopoverProps) {
   const operators = React.useMemo(
-    () => column.type ? getOperatorsForType(column.type as DataType) : [],
-    [column.type]
+    () => getAllOperators(),
+    []
   );
 
   const columnName = column.labelKey || column.id;

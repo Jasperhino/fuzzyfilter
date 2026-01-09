@@ -14,7 +14,7 @@ import type {
   PositionedValueMatch,
 } from "../types.ts";
 import { getColumns, getColumn } from "../../schema-builder.ts";
-import { getOperatorsForType, getOperator } from "../../operators.ts";
+import { getAllOperators, getOperator } from "../../operators.ts";
 import { DataType } from "../../types/index.ts";
 import { parseDate, formatDateForDisplay, getDateSuggestionsForLocale } from "../../date-parser.ts";
 import { detectValueTokens, selectNonOverlappingMatches, toHypothesisValue } from "../engine/helpers.ts";
@@ -117,7 +117,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     // Detect value tokens for argument-aware scoring
     // First, find which tokens are likely used for column matching
     const usedForColumn = this.detectUsedTokensForColumns(columnScores, tokens);
-    const locale = context.i18nProvider?.getLocale?.();
+    const locale = context.i18nProvider?.locale ?? "en";
     const detectedValues = detectValueTokens(tokens, usedForColumn, locale);
 
     // 1. Column suggestions with argument-aware scoring
@@ -226,18 +226,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
         if (opMatch && opMatch.score > 0.3) {
           used.add(i);
         }
-        // Also check aliases (now an object, not array)
-        if (opInfo.aliases) {
-          for (const values of Object.values(opInfo.aliases)) {
-            for (const alias of values) {
-              if (alias.startsWith("$")) continue; // Skip i18n refs
-              const aliasMatch = fuzzysort.single(token.normalized, alias.toLowerCase());
-              if (aliasMatch && aliasMatch.score > 0.3) {
-                used.add(i);
-              }
-            }
-          }
-        }
+        // Operator aliases are now resolved via i18n provider and matched through the trie,
+        // so we don't need to check them here separately
       }
     }
     return used;
@@ -268,7 +258,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
         matchIndexes: colMatchIndexes,
       } = colScoreEntry;
       if (!col.type) continue; // Skip columns without type
-      const ops = getOperatorsForType(col.type as DataType);
+      const ops = getAllOperators();
 
       // Get compatible values for this column type, filtered by context availability
       const compatibleValues: (number | Date)[] =
@@ -704,11 +694,9 @@ export class NgramMatchStrategy implements SuggestionStrategy {
         if (forType && forType !== col.type) continue;
         if (!col.type) continue;
 
-        // Operators are now universal - no need to check supportedTypes
-        // Check if this column was also matched in columnScores
         const colMatchEntry = columnScores.get(col.id as string);
 
-          if (colMatchEntry && !operatorRequiresArgument(opInfo)) {
+        if (colMatchEntry && !operatorRequiresArgument(opInfo)) {
             // Both column and no-argument operator matched
             const matchMeta: MatchMetadata = {
               column: {
@@ -912,10 +900,9 @@ export class NgramMatchStrategy implements SuggestionStrategy {
               )
             );
           }
-        }
+        
       }
     }
-
     return suggestions;
   }
 
@@ -1116,7 +1103,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     // Handle date columns specially
     if (col.type === DataType.DATE) {
       // Get locale for date parsing
-      const locale = i18nProvider?.getLocale?.() ?? "en";
+      const locale = i18nProvider?.locale ?? "en";
       
       if (valueTokens.length > 0) {
         const valueQuery = valueTokens.map((t) => t.text).join(" ");
@@ -1281,7 +1268,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
         };
 
         // Get locale-specific date suggestions
-        const locale = i18nProvider?.getLocale?.() ?? "en";
+        const locale = i18nProvider?.locale ?? "en";
         const dateSuggestions = getDateSuggestionsForLocale(locale);
         
         for (const dateSuggestion of dateSuggestions) {
