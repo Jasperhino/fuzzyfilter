@@ -101,17 +101,25 @@ export function compileFilter(
     return null;
   }
 
-  // For date columns, parse the value as a date expression
+  // Process value based on column type
   let processedValue = value;
   
   if (col.type === DataType.DATE && value !== undefined) {
     processedValue = parseDateValue(value);
   }
+  
+  // For boolean columns, convert string "true"/"false" to actual booleans
+  if (col.type === DataType.BOOLEAN && typeof value === "string") {
+    const lower = value.toLowerCase();
+    if (["true", "yes", "1", "on"].includes(lower)) {
+      processedValue = true;
+    } else if (["false", "no", "0", "off"].includes(lower)) {
+      processedValue = false;
+    }
+  }
 
-  // Convert value to arguments array (predicates now expect arrays)
-  const argsArray: unknown[] = processedValue !== undefined 
-    ? (Array.isArray(processedValue) ? processedValue : [processedValue]) 
-    : [];
+  // Build named args object from value based on operator pattern
+  const namedArgs = buildNamedArgs(operator, processedValue);
 
   // Create the predicate using the operator's predicate function
   const predicate = (row: Record<string, unknown>): boolean => {
@@ -125,19 +133,19 @@ export function compileFilter(
       if (isNaN(cellDate.getTime())) return false;
       
       // For date equality, we need special handling for "same day" comparison
-      if (operator === "eq" && argsArray[0] instanceof Date) {
-        return isSameDay(cellDate, argsArray[0]);
+      if (operator === "eq" && namedArgs.value instanceof Date) {
+        return isSameDay(cellDate, namedArgs.value);
       }
-      if (operator === "neq" && argsArray[0] instanceof Date) {
-        return !isSameDay(cellDate, argsArray[0]);
+      if (operator === "neq" && namedArgs.value instanceof Date) {
+        return !isSameDay(cellDate, namedArgs.value);
       }
       
-      // For other date operators, pass args array to predicate
-      return opDef.predicate(cellDate, argsArray, row);
+      // For other date operators, pass named args to predicate
+      return opDef.predicate(cellDate, namedArgs, row);
     }
     
-    // Use the operator's predicate with args array for non-date columns
-    return opDef.predicate(cellValue, argsArray, row);
+    // Use the operator's predicate with named args for non-date columns
+    return opDef.predicate(cellValue, namedArgs, row);
   };
 
   // Calculate match count
@@ -145,6 +153,9 @@ export function compileFilter(
   for (const row of data) {
     if (predicate(row)) matchCount++;
   }
+
+  // Convert named args back to array for backward compatibility with CompiledFilter.arguments
+  const argsArray = Object.values(namedArgs).filter(v => v !== undefined);
 
   return {
     columnId,
@@ -159,6 +170,41 @@ export function compileFilter(
       return `${displayLabel} ${opDef.id}${argsArray.length > 0 ? ` ${argsArray.join(", ")}` : ""}`;
     },
   };
+}
+
+/**
+ * Build named arguments object from value based on operator pattern.
+ * 
+ * @param operator - The operator ID
+ * @param value - The processed value
+ * @returns Named arguments object
+ */
+function buildNamedArgs(operator: string, value: unknown): Record<string, unknown> {
+  // Handle between operator specially (expects min and max)
+  if (operator === "between") {
+    if (Array.isArray(value) && value.length === 2) {
+      return { min: value[0], max: value[1] };
+    }
+    // Fallback: if not array, treat as single value (shouldn't happen)
+    return { min: value, max: value };
+  }
+  
+  // Handle variadic operators (in, nin) - expect values array
+  if (operator === "in" || operator === "nin") {
+    if (Array.isArray(value)) {
+      return { values: value };
+    }
+    // Single value - wrap in array
+    return { values: value !== undefined ? [value] : [] };
+  }
+  
+  // Handle operators with no arguments (isEmpty, isNotEmpty, isTrue, isFalse)
+  if (operator === "isEmpty" || operator === "isNotEmpty" || operator === "isTrue" || operator === "isFalse") {
+    return {};
+  }
+  
+  // Default: single value argument
+  return { value };
 }
 
 /**

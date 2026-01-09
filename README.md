@@ -118,8 +118,8 @@ const filter = createFuzzyFilter({
   
   // Number column with bounds
   { 
-    id: columnId("priority"), 
-    name: "Priority", 
+    id: "priority", 
+    labelKey: "columns.priority", 
     type: "number",
     min: 1,
     max: 5,
@@ -128,16 +128,16 @@ const filter = createFuzzyFilter({
   
   // Date column
   { 
-    id: columnId("createdAt"), 
-    name: "Created At", 
+    id: "createdAt", 
+    labelKey: "columns.createdAt", 
     type: "date",
     granularity: "day"
   },
   
   // Boolean column with custom labels
   { 
-    id: columnId("isBlocked"), 
-    name: "Is Blocked", 
+    id: "isBlocked", 
+    labelKey: "columns.isBlocked", 
     type: "boolean",
     trueLabel: "Blocked",
     falseLabel: "Not Blocked"

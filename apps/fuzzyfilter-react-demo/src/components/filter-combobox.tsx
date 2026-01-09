@@ -1150,7 +1150,7 @@ export function FilterCombobox() {
         </div>
 
         {/* Filter summary */}
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs text-muted-foreground" data-testid="filter-summary">
           {appliedFilters.length > 0
             ? t("ui.filterSummary", {
                 filterCount: appliedFilters.length,

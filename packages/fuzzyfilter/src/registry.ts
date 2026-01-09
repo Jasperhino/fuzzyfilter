@@ -88,25 +88,10 @@ export class InstanceRegistry {
         throw new Error(`Operator "${id}" must have at least one pattern`);
       }
       
-      // Convert readonly arrays to mutable arrays for pattern compiler
-      const aliases: Record<string, string[]> | undefined = op.aliases
-        ? Object.fromEntries(
-            Object.entries(op.aliases).map(([k, v]) => [k, [...v]])
-          )
-        : undefined;
-      
-      const typeSpecificPatterns: Record<string, string[]> | undefined = op.typeSpecificPatterns
-        ? Object.fromEntries(
-            Object.entries(op.typeSpecificPatterns).map(([k, v]) => [k, [...v]])
-          )
-        : undefined;
-      
       const compiled = compileOperatorDefinition(
         {
           key: op.id,
           patterns: [...op.patterns],
-          aliases,
-          typeSpecificPatterns,
         },
         this.i18nProvider
       );
@@ -147,17 +132,15 @@ export class InstanceRegistry {
   /**
    * Get all operators that support a given type.
    * 
+   * @deprecated Operators are now universal and work with all types.
+   * This method returns all operators for backward compatibility.
+   * 
    * @param typeId - The type ID (can be a DataType or custom type ID)
-   * @returns Array of matching operator definitions
+   * @returns Array of all operator definitions
    */
   getOperatorsForType(typeId: string): OperatorDefinition[] {
-    // Check if typeId is a custom type and get its compatibility type
-    const type = this.types.get(typeId);
-    const compatType = type?.compatibilityType ?? typeId;
-
-    return Array.from(this.operators.values()).filter(op => 
-      (op.supportedTypes as readonly string[]).includes(compatType)
-    );
+    // Operators are now universal - return all operators
+    return Array.from(this.operators.values());
   }
 
   /**

@@ -704,9 +704,9 @@ export class NgramMatchStrategy implements SuggestionStrategy {
         if (forType && forType !== col.type) continue;
         if (!col.type) continue;
 
-        if (opInfo.supportedTypes.includes(col.type as DataType)) {
-          // Check if this column was also matched in columnScores
-          const colMatchEntry = columnScores.get(col.id as string);
+        // Operators are now universal - no need to check supportedTypes
+        // Check if this column was also matched in columnScores
+        const colMatchEntry = columnScores.get(col.id as string);
 
           if (colMatchEntry && !operatorRequiresArgument(opInfo)) {
             // Both column and no-argument operator matched
@@ -984,10 +984,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
         for (const [, opScoreEntry] of operatorScores) {
           const opInfo = getOperator(opScoreEntry.operator);
           if (!opInfo || !col.type) continue;
-          if (
-            opInfo.supportedTypes.includes(col.type as DataType) &&
-            operatorRequiresArgument(opInfo)
-          ) {
+          // Operators are now universal - no need to check supportedTypes
+          if (operatorRequiresArgument(opInfo)) {
             if (
               !bestOpEntry ||
               opScoreEntry.breakdown.adjustedScore > bestOpEntry.breakdown.adjustedScore

@@ -28,6 +28,17 @@
         "coverage/**"
       ]
     },
+    "e2e": {
+      "passThroughEnv": [
+        "PLAYWRIGHT_*",
+        "CI"
+      ],
+      "outputs": [
+        "playwright-report/**",
+        "test-results/**"
+      ],
+      "cache": false
+    },
     "lint": {
       "outputs": []
     },

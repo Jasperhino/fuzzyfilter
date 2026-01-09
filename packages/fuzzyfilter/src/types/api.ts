@@ -7,7 +7,7 @@
  * @module fuzzyfilter/types/api
  */
 
-import type { ColumnId, TypeDefinition, OperatorDefinition, FuzzyFilterable } from "./core.ts";
+import type { TypeDefinition, OperatorDefinition, FuzzyFilterable } from "./core.ts";
 import type { OperatorKey } from "../operators.ts";
 import type { Schema, SchemaInput, AnyColumnDefinition } from "./schema.ts";
 import type { ParsedInput } from "./parsing.ts";

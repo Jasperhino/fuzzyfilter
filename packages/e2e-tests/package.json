@@ -4,13 +4,10 @@
   "private": true,
   "description": "End-to-end tests for fuzzyfilter examples",
   "scripts": {
-    "test": "playwright test",
-    "test:ui": "playwright test --ui",
-    "test:headed": "playwright test --headed",
-    "test:debug": "playwright test --debug"
+    "e2e": "bunx playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.0",
+    "@playwright/test": "^1.52.0",
     "@types/node": "^22.10.2"
   },
   "packageManager": "bun@1.3.5"

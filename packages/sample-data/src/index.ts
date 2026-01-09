@@ -150,6 +150,11 @@ export const TASK_SCHEMA: SchemaInput<{ amount: Amount }> = {
       type: "date",
     },
     {
+      id: "isBlocked",
+      labelKey: "columns.isBlocked",
+      type: "boolean",
+    },
+    {
       id: "comments",
       labelKey: "columns.comments",
       type: "string",

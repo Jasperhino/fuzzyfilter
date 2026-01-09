@@ -7,7 +7,7 @@ import { InstanceRegistry } from "./registry.ts";
 import { OPERATORS_ARRAY } from "./operators.ts";
 import { DATA_TYPES } from "./types/core.ts";
 import type { OperatorDefinition, TypeDefinition } from "./types/core.ts";
-import { DataType, OperatorCategory } from "./types/core.ts";
+import { DataType } from "./types/core.ts";
 
 describe("InstanceRegistry", () => {
   describe("constructor", () => {
@@ -24,13 +24,8 @@ describe("InstanceRegistry", () => {
     it("should use custom operators when provided", () => {
       const customOp: OperatorDefinition = {
         id: "customEq",
-        category: OperatorCategory.EQUALITY,
-        patterns: ["@eq {value}"],
-        aliases: {
-          "@eq": ["ceq", "custom equals"],
-        },
-        supportedTypes: [DataType.STRING],
-        predicate: (cell, [arg]) => cell === arg,
+        patterns: ["t(operators.customEq) {value}"],
+        predicate: (operand, { value }) => operand === value,
       };
 
       const registry = new InstanceRegistry({
@@ -61,13 +56,8 @@ describe("InstanceRegistry", () => {
     it("should allow extending default operators via spread", () => {
       const customOp: OperatorDefinition = {
         id: "fuzzyMatch",
-        category: OperatorCategory.PATTERN_MATCHING,
-        patterns: ["@fuzz {value}"],
-        aliases: {
-          "@fuzz": ["fuzz", "~?", "fuzzy match"],
-        },
-        supportedTypes: [DataType.STRING],
-        predicate: (cell, [arg]) => String(cell).toLowerCase().includes(String(arg).toLowerCase()),
+        patterns: ["t(operators.fuzzyMatch) {value}"],
+        predicate: (operand, { value }) => String(operand).toLowerCase().includes(String(value).toLowerCase()),
       };
 
       const registry = new InstanceRegistry({
@@ -83,17 +73,13 @@ describe("InstanceRegistry", () => {
       const ops: OperatorDefinition[] = [
         {
           id: "eq",
-          category: OperatorCategory.EQUALITY,
-          patterns: ["= {value}"],
-          supportedTypes: [DataType.STRING],
-          predicate: (cell, [arg]) => cell === arg,
+          patterns: ["t(operators.eq) {value}"],
+          predicate: (operand, { value }) => operand === value,
         },
         {
           id: "eq", // Duplicate!
-          category: OperatorCategory.EQUALITY,
-          patterns: ["== {value}"],
-          supportedTypes: [DataType.STRING],
-          predicate: (cell, [arg]) => cell === arg,
+          patterns: ["t(operators.eq) {value}"],
+          predicate: (operand, { value }) => operand === value,
         },
       ];
 
@@ -116,9 +102,7 @@ describe("InstanceRegistry", () => {
     it("should throw on missing predicate", () => {
       const op = {
         id: "broken",
-        category: OperatorCategory.EQUALITY,
-        patterns: ["= {value}"],
-        supportedTypes: [DataType.STRING],
+        patterns: ["t(operators.broken) {value}"],
         // Missing predicate!
       } as unknown as OperatorDefinition;
 
@@ -202,11 +186,9 @@ describe("InstanceRegistry", () => {
     it("should execute custom operator predicates", () => {
       const customOp: OperatorDefinition = {
         id: "startsWithLetter",
-        category: OperatorCategory.PATTERN_MATCHING,
         patterns: ["starts with letter {letter}"],
-        supportedTypes: [DataType.STRING],
-        predicate: (cell, [letter]) => {
-          return String(cell).toLowerCase().startsWith(String(letter).toLowerCase());
+        predicate: (operand, { letter }) => {
+          return String(operand).toLowerCase().startsWith(String(letter).toLowerCase());
         },
       };
 
@@ -215,17 +197,15 @@ describe("InstanceRegistry", () => {
       });
 
       const op = registry.getOperator("startsWithLetter");
-      expect(op?.predicate("Hello", ["H"])).toBe(true);
-      expect(op?.predicate("Hello", ["X"])).toBe(false);
+      expect(op?.predicate("Hello", { letter: "H" })).toBe(true);
+      expect(op?.predicate("Hello", { letter: "X" })).toBe(false);
     });
 
     it("should execute predicates with row access", () => {
       const customOp: OperatorDefinition = {
         id: "sameDept",
-        category: OperatorCategory.EQUALITY,
         patterns: ["same department"],
-        supportedTypes: [DataType.STRING],
-        predicate: (_cell, _args, row) => {
+        predicate: (_operand, _args, row) => {
           // Check if user department matches manager department
           return row?.userDept === row?.managerDept;
         },
@@ -237,8 +217,8 @@ describe("InstanceRegistry", () => {
 
       const op = registry.getOperator("sameDept");
       
-      expect(op?.predicate("anything", [], { userDept: "Sales", managerDept: "Sales" })).toBe(true);
-      expect(op?.predicate("anything", [], { userDept: "Sales", managerDept: "Marketing" })).toBe(false);
+      expect(op?.predicate("anything", {}, { userDept: "Sales", managerDept: "Sales" })).toBe(true);
+      expect(op?.predicate("anything", {}, { userDept: "Sales", managerDept: "Marketing" })).toBe(false);
     });
   });
 

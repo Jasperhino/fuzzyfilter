@@ -19,10 +19,11 @@ function parseResultCount(text: string): number {
 }
 
 /**
- * Helper to parse the task count from header "(X of 10,000)"
+ * Helper to parse the task count from filter summary "X/10,000 items" or "N filters applied, X/10,000 items"
  */
 function parseTaskCount(text: string): number {
-  const match = text.match(/\(?([\d,]+)\s+of\s+[\d,]+\)?/);
+  // Match "X/10,000" format (with optional text before like "N filters applied, ")
+  const match = text.match(/([\d,]+)\s*\/\s*[\d,]+/);
   if (!match) throw new Error(`Could not parse task count from: ${text}`);
   return parseInt(match[1].replace(/,/g, ""), 10);
 }
@@ -73,8 +74,8 @@ for (const { name, url } of apps) {
       await expect(page.locator("text=Active filters")).toBeVisible({ timeout: 5000 });
       
       // Get the current task count from header "(X of 10,000)"
-      const tasksHeader = page.locator("h3").filter({ hasText: /of\s+10,000/ }).first();
-      const headerText = await tasksHeader.textContent();
+      const filterSummary = page.getByTestId("filter-summary");
+      const headerText = await filterSummary.textContent();
       const actualCountAfterStatus = parseTaskCount(headerText || "");
       
       console.log(`${name}: After applying "Status = Open", showing ${actualCountAfterStatus} of 10,000`);
@@ -110,7 +111,7 @@ for (const { name, url } of apps) {
       await page.waitForTimeout(500);
       
       // Get the new task count
-      const headerText2 = await tasksHeader.textContent();
+      const headerText2 = await filterSummary.textContent();
       const actualCountAfterBoth = parseTaskCount(headerText2 || "");
       
       console.log(`${name}: After applying both filters, showing ${actualCountAfterBoth} of 10,000`);

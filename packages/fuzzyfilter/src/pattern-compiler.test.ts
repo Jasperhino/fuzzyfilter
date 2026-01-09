@@ -265,18 +265,14 @@ describe("compileOperatorDefinition", () => {
     expect(result.requiresArgument).toBe(true);
   });
 
-  it("should include type-specific patterns", () => {
+  it("should compile operator patterns", () => {
     const result = compileOperatorDefinition({
       key: "equals",
-      patterns: ["= {value}"],
-      typeSpecificPatterns: {
-        date: ["at {value}", "on {value}"],
-      },
+      patterns: ["t(operators.equals) {value}"],
     });
     
-    expect(result.patterns).toHaveLength(3); // 1 main + 2 type-specific
-    expect(result.trieKeywords).toContain("=");
-    // Type-specific keywords are stored separately
+    expect(result.patterns).toHaveLength(1);
+    expect(result.trieKeywords.length).toBeGreaterThan(0);
     expect(result.typeSpecificTrieKeywords).toBeDefined();
     expect(result.typeSpecificTrieKeywords?.date).toContain("at");
     expect(result.typeSpecificTrieKeywords?.date).toContain("on");

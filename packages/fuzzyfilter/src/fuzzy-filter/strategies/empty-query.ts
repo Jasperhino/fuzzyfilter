@@ -9,7 +9,7 @@ import type { SuggestionStrategy, StrategyContext } from "./interface.ts";
 import type { FilterSuggestion } from "../../types/index.ts";
 import { DataType } from "../../types/index.ts";
 import { getColumns } from "../../schema-builder.ts";
-import { getOperatorsForType } from "../../operators.ts";
+import { getDefaultOperatorForType, getOperator } from "../../operators.ts";
 import { createSuggestion } from "../engine/suggestion-helpers.ts";
 
 /**
@@ -33,12 +33,13 @@ export class EmptyQueryStrategy implements SuggestionStrategy {
     for (const col of getColumns(schema)) {
       // Skip columns without a type (shouldn't happen but handle gracefully)
       if (!col.type) continue;
-      const defaultOp = getOperatorsForType(col.type as DataType)[0];
+      const defaultOpId = getDefaultOperatorForType(col.type as DataType);
+      const defaultOp = getOperator(defaultOpId);
       if (defaultOp) {
         suggestions.push(
           createSuggestion(
             col,
-            defaultOp.id,
+            defaultOpId,
             undefined,
             0,
             undefined,

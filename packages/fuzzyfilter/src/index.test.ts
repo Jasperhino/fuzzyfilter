@@ -104,20 +104,19 @@ describe("Operator Registry", () => {
     expect(containsTerms).toContain("like");
   });
 
-  test("operators specify which types they support", () => {
+  test("operators are universal and work with all types", () => {
+    // Operators no longer have supportedTypes - they work universally
     const eq = getOperator("eq");
-    expect(eq?.supportedTypes).toContain("string");
-    expect(eq?.supportedTypes).toContain("number");
-    expect(eq?.supportedTypes).toContain("date");
+    expect(eq).toBeDefined();
+    expect(eq?.id).toBe("eq");
 
     const gt = getOperator("gt");
-    expect(gt?.supportedTypes).toContain("number");
-    expect(gt?.supportedTypes).toContain("date");
-    expect(gt?.supportedTypes).not.toContain("string");
+    expect(gt).toBeDefined();
+    expect(gt?.id).toBe("gt");
 
     const startsWith = getOperator("startsWith");
-    expect(startsWith?.supportedTypes).toContain("string");
-    expect(startsWith?.supportedTypes).not.toContain("number");
+    expect(startsWith).toBeDefined();
+    expect(startsWith?.id).toBe("startsWith");
   });
 
   test("variadic operators have variadic argument patterns", () => {

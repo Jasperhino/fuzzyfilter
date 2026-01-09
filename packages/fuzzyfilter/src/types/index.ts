@@ -22,6 +22,14 @@ export { DataType, OperatorCategory, columnId, DATA_TYPES } from "./core.ts";
 export type { OperatorKey as Operator } from "../operators.ts";
 export { OPERATORS, OPERATORS_ARRAY } from "../operators.ts";
 
+// Pattern types for type-safe operator creation
+export type {
+  TypeRegistry,
+  OperatorArgs,
+  Prettify,
+  PatternError,
+} from "./pattern-types.ts";
+
 // Schema types
 export type {
   ColumnDefinition,

@@ -19,11 +19,17 @@ function parseResultCount(text: string): number {
 }
 
 /**
- * Helper to parse the task count from header "(X of 10,000)"
+ * Helper to parse the task count from filter summary "X/10,000 items" or "N filters applied, X/10,000 items"
  */
 function parseTaskCount(text: string): number {
-  const match = text.match(/\(?([\d,]+)\s+of\s+[\d,]+\)?/);
-  if (!match) throw new Error(`Could not parse task count from: ${text}`);
+  console.log(`parseTaskCount input: "${text}"`);
+  // Match "X/10,000" format (with optional text before like "N filters applied, ")
+  const match = text.match(/([\d,]+)\s*\/\s*[\d,]+/);
+  if (!match) {
+    console.log(`parseTaskCount: no match found in "${text}"`);
+    return 0;
+  }
+  console.log(`parseTaskCount match: "${match[1]}"`);
   return parseInt(match[1].replace(/,/g, ""), 10);
 }
 
@@ -96,9 +102,11 @@ for (const { name, url } of apps) {
       // STEP 5: Verify the actual filtered count matches the preview
       // =========================================================
 
-      // Get the actual task count from header "(X of 10,000)"
-      const tasksHeader = page.locator("h3").filter({ hasText: /of\s+10,000/ }).first();
-      const headerText = await tasksHeader.textContent();
+      // Get the actual task count from filter summary
+      const filterSummary = page.getByTestId("filter-summary");
+      await expect(filterSummary).toBeVisible({ timeout: 5000 });
+      const headerText = await filterSummary.textContent();
+      console.log(`${name}: Header text: "${headerText}"`);
       const actualCount = parseTaskCount(headerText || "");
 
       console.log(`${name}: Actual filtered count: ${actualCount}`);
@@ -157,8 +165,9 @@ for (const { name, url } of apps) {
       await firstSuggestion.click();
       await page.waitForTimeout(500);
 
-      const tasksHeader = page.locator("h3").filter({ hasText: /of\s+10,000/ }).first();
-      const headerText = await tasksHeader.textContent();
+      const filterSummary = page.getByTestId("filter-summary");
+      const headerText = await filterSummary.textContent();
+      console.log(`${name}: Header text: "${headerText}"`);
       const actualCount = parseTaskCount(headerText || "");
 
       console.log(`${name}: Actual filtered count: ${actualCount}`);

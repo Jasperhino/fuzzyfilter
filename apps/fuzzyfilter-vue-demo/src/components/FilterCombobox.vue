@@ -8,7 +8,7 @@
 import { ref, onMounted, computed, watch } from "vue"
 import { useVirtualizer } from "@tanstack/vue-virtual"
 import { useFuzzyFilter } from "fuzzyfilter-vue"
-import { createFuzzyFilter, getOperator, DEFAULT_CONFIG, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch, createVueI18nProvider } from "@jasperhino/fuzzyfilter"
+import { createFuzzyFilter, createOperator, getOperator, DEFAULT_CONFIG, defaultFuzzyFilterOperators, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch, type OperatorDefinition, createVueI18nProvider } from "@jasperhino/fuzzyfilter"
 import { isOperatorVariadic, operatorRequiresArgument, getMinArguments } from "@/lib/operator-helpers"
 import { TASK_SCHEMA, COLUMN_IDS, LARGE_DATASET, generateSingleTaskAsync, Amount, type Task as TaskRow } from "@fuzzyfilter/sample-data"
 import { useI18n } from "vue-i18n"
@@ -58,14 +58,25 @@ interface SortState {
 const i18nComposer = useI18n()
 const { locale, t } = i18nComposer
 
+// Create a type-safe custom operator using createOperator
+// The {:amount} syntax infers types from the pattern - no manual casting needed!
+const greaterAmountOp = createOperator<{ amount: Amount }>()({
+  id: "greater",
+  patterns: ["t(operators.greater) {:amount}"],
+  predicate: (operand: Amount, { amount }) => operand.toKg() > amount.toKg(),
+})
+
 // Create filter instance with i18n
 // Set benchmark: true to enable telemetry spans (accessible via filter.getTelemetry())
-// Using generic type parameter to declare custom Amount type
-const filter = createFuzzyFilter<{ amount: Amount }>({ 
+const filter = createFuzzyFilter({ 
   ...DEFAULT_CONFIG,
   maxSuggestions: 12,
   columns: TASK_SCHEMA.columns,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  operators: [
+    ...defaultFuzzyFilterOperators,
+    // Cast to OperatorDefinition - type safety is enforced at createOperator() call site
+    greaterAmountOp as unknown as OperatorDefinition,
+  ],
   i18n: createVueI18nProvider(i18n as any),
   benchmark: true, // Enable to see telemetry spans via window.__filter.getTelemetry()
 })
@@ -907,7 +918,7 @@ const amountColumn = getColumnById(COLUMN_IDS.amount)
       </div>
 
       <!-- Filter summary -->
-      <span class="text-xs text-muted-foreground">
+      <span class="text-xs text-muted-foreground" data-testid="filter-summary">
         {{
           appliedFilters.length > 0
             ? t("app.ui.filterSummary", {

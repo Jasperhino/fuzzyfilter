@@ -152,50 +152,7 @@ export interface TypeHandler<T> {
   values?: T[];
 }
 
-// ============================================================================
-// TYPE DEFINITION (LEGACY - kept for backward compatibility during migration)
-// ============================================================================
 
-/**
- * Definition for a custom data type.
- * 
- * @deprecated Use FuzzyFilterable interface instead for custom types.
- * This is kept temporarily for migration purposes.
- * 
- * @typeParam TValue - The TypeScript type for values of this type
- */
-export interface TypeDefinition<TValue = unknown> {
-  /** Unique identifier for this type */
-  id: string;
-  /** Human-readable label */
-  label: string;
-  /**
-   * Maps to a base DataType for operator compatibility.
-   * Operators that support this DataType will be available for columns of this type.
-   */
-  compatibilityType: DataType;
-  /** Parse user input string into typed value */
-  parseValue?: (input: string) => TValue | null;
-  /** Format typed value for display */
-  formatValue?: (value: TValue) => string;
-  /** Compare two values (for range operators) */
-  compare?: (a: TValue, b: TValue) => number;
-}
-
-/**
- * Built-in type definitions that map to DataType values.
- * 
- * @deprecated This is kept for backward compatibility. In v2, built-in types
- * are handled automatically and don't need to be registered.
- */
-export const DATA_TYPES: TypeDefinition[] = [
-  { id: "string", label: "String", compatibilityType: DataType.STRING },
-  { id: "number", label: "Number", compatibilityType: DataType.NUMBER },
-  { id: "boolean", label: "Boolean", compatibilityType: DataType.BOOLEAN },
-  { id: "date", label: "Date", compatibilityType: DataType.DATE },
-  { id: "enum", label: "Enum", compatibilityType: DataType.ENUM },
-  { id: "array", label: "Array", compatibilityType: DataType.ARRAY },
-];
 
 // ============================================================================
 // OPERATOR DEFINITION (PATTERN-BASED API)
@@ -204,123 +161,96 @@ export const DATA_TYPES: TypeDefinition[] = [
 /**
  * Definition for a filter operator using the pattern-based syntax.
  * 
- * The new pattern syntax consolidates aliases, template patterns, and i18n
- * into a single `patterns` array with special reference syntax:
+ * The new pattern syntax uses i18n translations exclusively:
  * 
  * | Syntax | Meaning | Resolution |
  * |--------|---------|------------|
- * | `{arg}` | Argument placeholder | User provides value |
- * | `@keyword` | Local alias reference | Resolves from `aliases["@keyword"]` |
- * | `$keyword` | i18n translation key | Resolves from `i18nProvider.translate(keyword)` |
+ * | `{arg}` or `{name}` | Argument placeholder | User provides value |
+ * | `t(key)` | i18n translation key | Resolved via i18nProvider.getAliases() |
  * | `literal` | Literal text | Matches exactly |
  * 
- * @typeParam TValue - The type of cell values this operator handles
- * @typeParam TArgs - The type of arguments passed to the predicate
+ * All operator aliases (including symbols like `=`, `!=`, `<`) are defined
+ * in i18n translations via `t(operators.xxx)` references.
  * 
  * @example
  * ```typescript
  * const customOperator: OperatorDefinition = {
- *   key: 'hasMoreThan',
- *   category: OperatorCategory.COMPARISON,
- *   patterns: ['@more {value}', 'exceeds {value}'],
- *   aliases: {
- *     '@more': ['more than', 'greater than', '>'],
- *   },
- *   supportedTypes: [DataType.NUMBER],
- *   predicate: (cell, [arg]) => (cell as number) > (arg as number),
+ *   id: 'hasMoreThan',
+ *   patterns: ['t(operators.gt) {value}'],
+ *   predicate: (operand, { value }) => (operand as number) > (value as number),
  * };
  * ```
  */
-export interface OperatorDefinition<TValue = unknown, TArgs extends unknown[] = unknown[]> {
+export interface OperatorDefinition {
   /** 
    * Unique identifier for this operator.
    * Used as the programmatic key for lookups.
    */
   id: string;
   
-  /** Category for grouping operators in UI */
-  category: OperatorCategory;
-  
-  /** Which data types this operator supports */
-  supportedTypes: readonly DataType[] | readonly string[];
-  
   /**
    * Pattern strings for matching user input.
    * 
    * Patterns use a special syntax:
    * - `{}` or `{name}` - Argument placeholder that captures user input
-   * - `@keyword` - Reference to local aliases (resolved from `aliases` field)
-   * - `t(key)` - i18n translation key (resolved via i18nProvider.translate(), can return array)
+   * - `t(key)` - i18n translation key (resolved via i18nProvider.getAliases(), returns array)
    * - `literal` - Matches text literally
-   * 
-   * Multi-word literals should use underscores: `not_equals` becomes "not equals" in display.
    * 
    * @example
    * ```typescript
    * patterns: [
-   *   "@is {}",                    // Matches: "is X", "= X", "== X"
-   *   "t(between) {} @and {}",     // Matches: "between 1 and 10", "zwischen 1 und 10"
-   *   "t(operators.isEmpty)",      // Matches: "is empty", "is blank", etc.
+   *   "t(operators.eq) {value}",           // Matches: "is X", "= X", "equals X"
+   *   "t(operators.between) {min} t(operators.and) {max}",  // Matches: "between 1 and 10"
+   *   "t(operators.isEmpty)",              // Matches: "is empty", "is blank", etc.
    * ]
    * ```
    */
   patterns: readonly string[];
   
   /**
-   * Local alias expansions for @keyword references.
-   * 
-   * Each key (prefixed with @) maps to an array of literal strings
-   * or t(key) i18n references that get resolved at runtime.
-   * Use underscores for multi-word aliases: "not_equals" instead of "not equals".
-   * 
-   * @example
-   * ```typescript
-   * aliases: {
-   *   "@eq": ["=", "==", "is", "equal", "equals", "t(operators.eq)"],
-   *   "@and": ["and", "&", "t(and)"],
-   * }
-   * ```
-   */
-  aliases?: Record<string, readonly string[]>;
-  
-  /**
-   * Type-specific patterns that only apply for certain column types.
-   * For example, "at" and "on" only make sense for date equality.
-   * 
-   * @example
-   * ```typescript
-   * typeSpecificPatterns: {
-   *   [DataType.DATE]: ["at {value}", "on {value}"],
-   * }
-   * ```
-   */
-  typeSpecificPatterns?: Partial<Record<DataType, readonly string[]>>;
-  
-  /**
    * The predicate function that implements the operator logic.
    * REQUIRED for all operators.
    * 
-   * @param cellValue - The value from the cell being filtered
-   * @param args - The filter argument(s) as an array
+   * @param operand - The value from the cell being filtered
+   * @param args - Named arguments extracted from the pattern (e.g., { value }, { min, max })
    * @param row - Optional: the entire row for cross-column logic
    * @returns true if the row matches the filter
    * 
    * @example
    * ```typescript
    * // Simple equality
-   * predicate: (cell, [arg]) => cell === arg
+   * predicate: (operand, { value }) => operand === value
    * 
    * // Between operator
-   * predicate: (cell, [min, max]) => cell >= min && cell <= max
+   * predicate: (operand, { min, max }) => operand >= min && operand <= max
    * 
    * // Cross-column comparison
-   * predicate: (cell, [_arg], row) => {
+   * predicate: (operand, { value }, row) => {
    *   const endDate = row?.endDate as Date;
-   *   return (cell as Date) < endDate;
+   *   return (operand as Date) < endDate;
    * }
    * ```
    */
-  predicate: (cellValue: TValue, args: TArgs, row?: Record<string, unknown>) => boolean;
+  predicate: (operand: unknown, args: Record<string, unknown>, row?: Record<string, unknown>) => boolean;
+  
+  /**
+   * Optional type-specific predicates for operators that need different logic per type.
+   * When provided, these override the main `predicate` for the specified types.
+   * 
+   * @example
+   * ```typescript
+   * predicates: {
+   *   date: (operand, { start, end }) => {
+   *     const date = operand as Date;
+   *     return date >= start && date <= end;
+   *   },
+   *   number: (operand, { start, end }) => {
+   *     return operand >= start && operand <= end;
+   *   },
+   * }
+   * ```
+   */
+  predicates?: Record<string, (operand: unknown, args: Record<string, unknown>, row?: Record<string, unknown>) => boolean>;
 }
 
 // ============================================================================

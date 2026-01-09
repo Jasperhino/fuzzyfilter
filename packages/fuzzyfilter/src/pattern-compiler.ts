@@ -91,9 +91,7 @@ export interface PatternMatch {
  * Options for pattern compilation
  */
 export interface PatternCompilerOptions {
-  /** Local aliases for this operator (maps @key to expansions) */
-  aliases?: Record<string, string[]>;
-  /** i18n provider for $keyword resolution */
+  /** i18n provider for t(key) resolution */
   i18nProvider?: I18nProvider;
 }
 
@@ -129,10 +127,10 @@ export interface CompiledOperator {
  * Supports:
  * - `{}` or `{name}` - Single argument placeholder
  * - `{...}` or `{name...}` - Variadic argument placeholder (1 or more values)
- * - `@keyword` - Local alias reference
  * - `t(key)` - i18n translation reference
+ * - `literal` - Literal text
  * 
- * @param pattern - The pattern string (e.g., "@is {}" or "@in {...}")
+ * @param pattern - The pattern string (e.g., "t(operators.eq) {value}")
  * @returns Parsed pattern structure
  */
 export function parsePattern(pattern: string): ParsedPattern {
@@ -147,9 +145,9 @@ export function parsePattern(pattern: string): ParsedPattern {
   let argCounter = 0;
   
   // Combined regex to find all special tokens
-  // Matches: {name...}, {...}, {name}, {}, @keyword, t(key), t(nested.key)
+  // Matches: {name...}, {...}, {name}, {}, t(key), t(nested.key)
   // Note: Variadic patterns ({...} or {name...}) must be checked first
-  const tokenRegex = /(\{(\w*)\.\.\.\})|(\{(\w*)\})|(@(\w+))|(t\(([^)]+)\))/g;
+  const tokenRegex = /(\{(\w*)\.\.\.\})|(\{(\w*)\})|(t\(([^)]+)\))/g;
   let match: RegExpExecArray | null;
   
   while ((match = tokenRegex.exec(pattern)) !== null) {
@@ -173,13 +171,8 @@ export function parsePattern(pattern: string): ParsedPattern {
       segments.push({ type: "arg", name });
       argNames.push(name);
     } else if (match[5]) {
-      // @aliasRef
-      const key = match[6]!;
-      segments.push({ type: "aliasRef", key: `@${key}` });
-      aliasRefs.push(`@${key}`);
-    } else if (match[7]) {
       // t(key) i18n reference
-      const key = match[8]!;
+      const key = match[6]!;
       segments.push({ type: "i18nRef", key });
       i18nRefs.push(key);
     }
@@ -212,17 +205,20 @@ export function parsePattern(pattern: string): ParsedPattern {
 
 /**
  * Resolve a t(key) reference via i18n provider.
- * Can return a single string or an array of strings (for aliases).
+ * Returns an array of strings (aliases).
  * 
- * @param key - The i18n key (e.g., "operators.neq" or "not_equals")
+ * @param key - The i18n key (e.g., "operators.eq")
  * @param i18nProvider - The i18n provider
  * @returns Resolved translation(s) or the key itself as fallback
  */
 function resolveI18nRef(key: string, i18nProvider?: I18nProvider): string[] {
+  if (i18nProvider?.getAliases) {
+    return i18nProvider.getAliases(key);
+  }
+  // Fallback: try translate() for backward compatibility
   if (i18nProvider?.translate) {
     const translated = i18nProvider.translate(key);
     if (translated !== undefined) {
-      // translate() can return string or string[]
       return Array.isArray(translated) ? translated : [translated];
     }
   }
@@ -232,42 +228,14 @@ function resolveI18nRef(key: string, i18nProvider?: I18nProvider): string[] {
 }
 
 /**
- * Expand alias references in a list of strings.
- * Handles nested t(key) references within aliases.
- * 
- * @param values - Array of values that may contain t(key) refs
- * @param i18nProvider - The i18n provider
- * @returns Expanded values with i18n refs resolved
- */
-function expandI18nInValues(values: string[], i18nProvider?: I18nProvider): string[] {
-  const result: string[] = [];
-  
-  for (const value of values) {
-    // Check for t(key) syntax
-    const tMatch = value.match(/^t\(([^)]+)\)$/);
-    if (tMatch) {
-      // This is an i18n reference - can return multiple values
-      const translations = resolveI18nRef(tMatch[1]!, i18nProvider);
-      result.push(...translations);
-    } else {
-      result.push(value);
-    }
-  }
-  
-  return result;
-}
-
-/**
  * Generate all permutations of pattern expansions.
  * 
  * @param parsed - Parsed pattern
- * @param aliases - Local alias map
  * @param i18nProvider - i18n provider for t() refs
  * @returns Array of expanded pattern strings
  */
 function generateExpansions(
   parsed: ParsedPattern,
-  aliases?: Record<string, string[]>,
   i18nProvider?: I18nProvider
 ): string[] {
   // Start with a single empty expansion
@@ -292,16 +260,11 @@ function generateExpansions(
           newExpansions.push([...current, `{${segment.name}...}`]);
           break;
           
-        case "aliasRef": {
-          // Expand from local aliases
-          const aliasValues = aliases?.[segment.key] ?? [segment.key.slice(1)]; // Remove @ for fallback
-          const expandedValues = expandI18nInValues(aliasValues, i18nProvider);
-          
-          for (const value of expandedValues) {
-            newExpansions.push([...current, value]);
-          }
+        case "aliasRef":
+          // @keyword references are no longer supported - treat as literal
+          // This should not happen in new patterns, but handle gracefully
+          newExpansions.push([...current, segment.key]);
           break;
-        }
           
         case "i18nRef": {
           // Resolve via i18n provider - can return multiple values
@@ -445,7 +408,7 @@ export function compilePattern(
   options: PatternCompilerOptions = {}
 ): CompiledPattern {
   const parsed = parsePattern(pattern);
-  const expansionStrings = generateExpansions(parsed, options.aliases, options.i18nProvider);
+  const expansionStrings = generateExpansions(parsed, options.i18nProvider);
   
   const expansions: ExpandedPattern[] = expansionStrings.map(exp => ({
     pattern: exp,
@@ -509,7 +472,7 @@ export function compileOperator(
 }
 
 /**
- * Compile an operator definition with type-specific patterns.
+ * Compile an operator definition.
  * 
  * @param def - Operator definition object
  * @param i18nProvider - i18n provider
@@ -519,50 +482,13 @@ export function compileOperatorDefinition(
   def: {
     key: string;
     patterns: string[];
-    aliases?: Record<string, string[]>;
-    typeSpecificPatterns?: Record<string, string[]>;
   },
   i18nProvider?: I18nProvider
 ): CompiledOperator {
   const options: PatternCompilerOptions = {
-    aliases: def.aliases,
     i18nProvider,
   };
   
-  // Compile main patterns
-  const mainCompiled = compileOperator(def.key, def.patterns, options);
-  
-  // Compile type-specific patterns (if any)
-  // Track these separately so they can be inserted with forType restriction
-  const typeSpecificTrieKeywords: Record<string, string[]> = {};
-  
-  if (def.typeSpecificPatterns) {
-    for (const [dataType, typePatterns] of Object.entries(def.typeSpecificPatterns)) {
-      const typeCompiled = compileOperator(def.key, typePatterns, options);
-      
-      // Merge patterns into main
-      mainCompiled.patterns.push(...typeCompiled.patterns);
-      
-      // Store type-specific keywords separately (don't add to general trieKeywords)
-      // Filter out the operator key itself which is always added
-      const typeKeywords = typeCompiled.trieKeywords.filter(k => k !== def.key);
-      if (typeKeywords.length > 0) {
-        typeSpecificTrieKeywords[dataType] = typeKeywords;
-      }
-      
-      // Update arg counts
-      const allArgCounts = mainCompiled.patterns.map(p => p.argCount);
-      mainCompiled.minArguments = Math.min(...allArgCounts);
-      mainCompiled.maxArguments = Math.max(...allArgCounts);
-      mainCompiled.requiresArgument = mainCompiled.minArguments > 0;
-      mainCompiled.isVariadic = mainCompiled.maxArguments > 1;
-    }
-  }
-  
-  // Add type-specific keywords to compiled operator
-  if (Object.keys(typeSpecificTrieKeywords).length > 0) {
-    mainCompiled.typeSpecificTrieKeywords = typeSpecificTrieKeywords;
-  }
-  
-  return mainCompiled;
+  // Compile patterns
+  return compileOperator(def.key, def.patterns, options);
 }

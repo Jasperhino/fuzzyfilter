@@ -111,14 +111,10 @@ export {
   getAllOperators,
   /** Get metadata for a specific operator */
   getOperator,
-  /** Get operators valid for a data type */
-  getOperatorsForType,
   /** Get operators grouped by category */
   getOperatorsByCategory,
   /** Get all operator categories in display order */
   getAllCategories,
-  /** Check if an operator is valid for a data type */
-  isValidOperatorForType,
   /** Get the default operator for a data type */
   getDefaultOperatorForType,
   /** Get all search terms (aliases) for an operator */
@@ -128,13 +124,62 @@ export {
   /** Type guard to check if a string is a valid operator */
   isOperator,
   /** Array of all built-in operators for spreading into config */
-  OPERATORS_ARRAY,
+  defaultFuzzyFilterOperators,
+
 } from "./operators.ts";
 
 /**
  * Instance registry for custom operators and types.
  */
 export { InstanceRegistry } from "./registry.ts";
+
+// ============================================================================
+// TYPE-SAFE OPERATOR CREATION
+// ============================================================================
+
+/**
+ * Create type-safe operators with pattern-based argument extraction.
+ *
+ * @example Single-type operator
+ * ```typescript
+ * import { createOperator } from "fuzzyfilter";
+ *
+ * const betweenOp = createOperator({
+ *   id: 'between',
+ *   patterns: ['{min} to {max}'],
+ *   predicate: (operand: number, { min, max }) => operand >= min && operand <= max,
+ * });
+ * ```
+ *
+ * @example Multi-type operator with custom type
+ * ```typescript
+ * import { createOperator } from "fuzzyfilter";
+ *
+ * const greaterOp = createOperator<{ amount: Amount }>()({
+ *   id: 'greater',
+ *   patterns: ['t(operators.greater) {:amount}'],
+ *   predicates: {
+ *     amount: (operand, { amount }) => operand.toKg() > amount.toKg(),
+ *   },
+ * });
+ * ```
+ */
+export { createOperator } from "./create-operator.ts";
+
+/**
+ * TypeRegistry for extending with custom types via module augmentation.
+ *
+ * @example
+ * ```typescript
+ * declare module 'fuzzyfilter' {
+ *   interface TypeRegistry {
+ *     amount: Amount;
+ *     date: Date;
+ *   }
+ * }
+ * ```
+ */
+export type { TypeRegistry } from "./create-operator.ts";
 
 // ============================================================================
 // MAIN FACTORY

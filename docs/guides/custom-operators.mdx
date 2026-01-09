@@ -17,12 +17,11 @@ FuzzyFilter supports a fully extensible operator and type system. You can:
 ### Adding a Custom Operator
 
 ```typescript
-import { createFuzzyFilter, OPERATORS_ARRAY, OperatorCategory, DataType } from "@jasperhino/fuzzyfilter";
+import { createFuzzyFilter, OPERATORS_ARRAY, DataType } from "@jasperhino/fuzzyfilter";
 
 // Define a custom operator
 const fuzzyMatchOperator = {
   id: "fuzzyMatch",
-  category: OperatorCategory.PATTERN_MATCHING,
   label: "fuzzy match",
   aliases: ["fuzz", "~?", "approximately"],
   supportedTypes: [DataType.STRING],
@@ -89,9 +88,6 @@ interface OperatorDefinition {
   /** Unique identifier */
   id: string;
   
-  /** Category for UI grouping */
-  category: OperatorCategory;
-  
   /** Human-readable label */
   label: string;
   
@@ -144,7 +140,6 @@ Access other columns using the `row` parameter:
 ```typescript
 const startBeforeEnd = {
   id: "beforeEndDate",
-  category: OperatorCategory.DATE,
   label: "before end date",
   aliases: ["beforeEnd"],
   supportedTypes: [DataType.DATE],
@@ -163,7 +158,6 @@ For operators accepting multiple values:
 ```typescript
 const containsAll = {
   id: "containsAll",
-  category: OperatorCategory.PATTERN_MATCHING,
   label: "contains all",
   aliases: ["hasAll"],
   supportedTypes: [DataType.STRING],
@@ -185,7 +179,6 @@ Template patterns enable syntax like "from X to Y" or "between X and Y":
 ```typescript
 const betweenOperator = {
   id: "between",
-  category: OperatorCategory.DATE,
   label: "between",
   aliases: ["range", "within"],
   supportedTypes: [DataType.NUMBER, DataType.DATE],

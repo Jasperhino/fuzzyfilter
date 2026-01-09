@@ -78,7 +78,8 @@ export class TemplatedOperatorStrategy implements SuggestionStrategy {
       for (const col of getColumns(schema)) {
         if (!col.type) continue;
         const opInfo = getOperator(templateMatch.operator);
-        if (!opInfo || !(opInfo.supportedTypes as readonly string[]).includes(col.type)) continue;
+        // Operators are now universal - no need to check supportedTypes
+        if (!opInfo) continue;
 
         // Date columns
         if (col.type === DataType.DATE && arg1Date && arg2Date) {
