@@ -39,6 +39,14 @@
       ],
       "cache": false
     },
+    "e2e:ui": {
+      "passThroughEnv": [
+        "PLAYWRIGHT_*",
+        "CI"
+      ],
+      "cache": false,
+      "persistent": true
+    },
     "lint": {
       "outputs": []
     },

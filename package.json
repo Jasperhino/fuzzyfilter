@@ -8,6 +8,7 @@
     "dev": "turbo run dev",
     "test": "turbo run test",
     "e2e": "turbo run e2e",
+    "e2e:ui": "turbo run e2e:ui",
     "lint": "turbo run lint",
     "bench": "bun run --filter @jasperhino/fuzzyfilter bench",
     "bench:otel": "bun run --filter @jasperhino/fuzzyfilter bench:otel",
