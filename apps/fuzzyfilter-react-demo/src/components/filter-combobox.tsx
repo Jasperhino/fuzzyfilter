@@ -508,18 +508,21 @@ function TableRow({
           : "border-l-2 border-l-transparent hover:border-l-primary/40"
       }`}
     >
-      <td className="px-3 py-2 whitespace-nowrap h-12">
-        <StatusBadge status={row.status} />
+      <td className="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12 text-xs">{row.created}</td>
+      <td className="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">
+        {row.amount ? `${row.amount.value.toLocaleString()} ${row.amount.unit}` : "-"}
       </td>
       <td className="px-3 py-2 font-medium whitespace-nowrap h-12">{row.assignee}</td>
-      <td className="px-3 py-2 whitespace-nowrap h-12">
-        <PriorityIndicator priority={row.priority} />
-      </td>
       <td className="px-3 py-2 text-muted-foreground whitespace-nowrap h-12">
         {DEPARTMENT_TRANSLATION_KEYS[row.department] ? t(DEPARTMENT_TRANSLATION_KEYS[row.department]) : row.department}
       </td>
+      <td className="px-3 py-2 whitespace-nowrap h-12">
+        <PriorityIndicator priority={row.priority} />
+      </td>
+      <td className="px-3 py-2 whitespace-nowrap h-12">
+        <StatusBadge status={row.status} />
+      </td>
       <td className="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">{row.dueDate}</td>
-      <td className="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12 text-xs">{row.created}</td>
       <td className="px-3 py-2 text-center whitespace-nowrap h-12">
         {row.isBlocked ? (
           <XIcon className="size-4 text-rose-500 mx-auto" />
@@ -531,9 +534,6 @@ function TableRow({
         <span className="block truncate">
           {row.comments || <span className="text-muted-foreground/50 italic">{t("ui.noComments")}</span>}
         </span>
-      </td>
-      <td className="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">
-        {row.amount ? `${row.amount.value.toLocaleString()} ${row.amount.unit}` : "-"}
       </td>
     </tr>
   );
@@ -634,11 +634,20 @@ function VirtualDataTable({
             <tr className="border-b">
               <th className="px-3 py-3 text-left font-normal whitespace-nowrap">
                 <SortableColumnHeader
-                  column={statusColumn}
-                  label={t("table.headers.status")}
+                  column={createdColumn}
+                  label={t("table.headers.created")}
                   sortState={sortState}
                   onSort={onSort}
-                  columnKey="status"
+                  columnKey="created"
+                />
+              </th>
+              <th className="px-3 py-3 text-left font-normal whitespace-nowrap">
+                <SortableColumnHeader
+                  column={amountColumn}
+                  label={t("table.headers.amount")}
+                  sortState={sortState}
+                  onSort={onSort}
+                  columnKey="amount"
                 />
               </th>
               <th className="px-3 py-3 text-left font-normal whitespace-nowrap">
@@ -652,15 +661,6 @@ function VirtualDataTable({
               </th>
               <th className="px-3 py-3 text-left font-normal whitespace-nowrap">
                 <SortableColumnHeader
-                  column={priorityColumn}
-                  label={t("table.headers.priority")}
-                  sortState={sortState}
-                  onSort={onSort}
-                  columnKey="priority"
-                />
-              </th>
-              <th className="px-3 py-3 text-left font-normal whitespace-nowrap">
-                <SortableColumnHeader
                   column={departmentColumn}
                   label={t("table.headers.department")}
                   sortState={sortState}
@@ -670,20 +670,29 @@ function VirtualDataTable({
               </th>
               <th className="px-3 py-3 text-left font-normal whitespace-nowrap">
                 <SortableColumnHeader
+                  column={priorityColumn}
+                  label={t("table.headers.priority")}
+                  sortState={sortState}
+                  onSort={onSort}
+                  columnKey="priority"
+                />
+              </th>
+              <th className="px-3 py-3 text-left font-normal whitespace-nowrap">
+                <SortableColumnHeader
+                  column={statusColumn}
+                  label={t("table.headers.status")}
+                  sortState={sortState}
+                  onSort={onSort}
+                  columnKey="status"
+                />
+              </th>
+              <th className="px-3 py-3 text-left font-normal whitespace-nowrap">
+                <SortableColumnHeader
                   column={dueDateColumn}
                   label={t("table.headers.dueDate")}
                   sortState={sortState}
                   onSort={onSort}
                   columnKey="dueDate"
-                />
-              </th>
-              <th className="px-3 py-3 text-left font-normal whitespace-nowrap">
-                <SortableColumnHeader
-                  column={createdColumn}
-                  label={t("table.headers.created")}
-                  sortState={sortState}
-                  onSort={onSort}
-                  columnKey="created"
                 />
               </th>
               <th className="px-3 py-3 text-left font-normal whitespace-nowrap">
@@ -702,15 +711,6 @@ function VirtualDataTable({
                   sortState={sortState}
                   onSort={onSort}
                   columnKey="comments"
-                />
-              </th>
-              <th className="px-3 py-3 text-left font-normal whitespace-nowrap">
-                <SortableColumnHeader
-                  column={amountColumn}
-                  label={t("table.headers.amount")}
-                  sortState={sortState}
-                  onSort={onSort}
-                  columnKey="amount"
                 />
               </th>
             </tr>

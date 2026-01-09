@@ -934,20 +934,40 @@ const amountColumn = getColumnById(COLUMN_IDS.amount)
           <tr class="border-b">
             <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
               <button
-                v-if="statusColumn"
+                v-if="createdColumn"
                 type="button"
-                @click="handleSort('status')"
+                @click="handleSort('created')"
                 class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
               >
-                <ColumnInfoPopover :column="statusColumn">
+                <ColumnInfoPopover :column="createdColumn">
                   <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="statusColumn.type || 'string'" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.status") }}</span>
+                    <DataTypeIcon :type="createdColumn.type || 'date'" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.created") }}</span>
                   </div>
                 </ColumnInfoPopover>
                 <span class="shrink-0">
-                  <ArrowUpIcon v-if="sortState.column === 'status' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
-                  <ArrowDownIcon v-else-if="sortState.column === 'status' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
+                  <ArrowUpIcon v-if="sortState.column === 'created' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
+                  <ArrowDownIcon v-else-if="sortState.column === 'created' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
+                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </span>
+              </button>
+            </th>
+            <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+              <button
+                v-if="amountColumn"
+                type="button"
+                @click="handleSort('amount')"
+                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
+              >
+                <ColumnInfoPopover :column="amountColumn">
+                  <div class="flex items-center gap-1">
+                    <DataTypeIcon :type="amountColumn.type || 'number'" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.amount") }}</span>
+                  </div>
+                </ColumnInfoPopover>
+                <span class="shrink-0">
+                  <ArrowUpIcon v-if="sortState.column === 'amount' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
+                  <ArrowDownIcon v-else-if="sortState.column === 'amount' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
                   <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </span>
               </button>
@@ -974,26 +994,6 @@ const amountColumn = getColumnById(COLUMN_IDS.amount)
             </th>
             <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
               <button
-                v-if="priorityColumn"
-                type="button"
-                @click="handleSort('priority')"
-                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
-              >
-                <ColumnInfoPopover :column="priorityColumn">
-                  <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="priorityColumn.type || 'number'" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.priority") }}</span>
-                  </div>
-                </ColumnInfoPopover>
-                <span class="shrink-0">
-                  <ArrowUpIcon v-if="sortState.column === 'priority' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
-                  <ArrowDownIcon v-else-if="sortState.column === 'priority' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
-                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </span>
-              </button>
-            </th>
-            <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-              <button
                 v-if="departmentColumn"
                 type="button"
                 @click="handleSort('department')"
@@ -1014,6 +1014,46 @@ const amountColumn = getColumnById(COLUMN_IDS.amount)
             </th>
             <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
               <button
+                v-if="priorityColumn"
+                type="button"
+                @click="handleSort('priority')"
+                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
+              >
+                <ColumnInfoPopover :column="priorityColumn">
+                  <div class="flex items-center gap-1">
+                    <DataTypeIcon :type="priorityColumn.type || 'number'" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.priority") }}</span>
+                  </div>
+                </ColumnInfoPopover>
+                <span class="shrink-0">
+                  <ArrowUpIcon v-if="sortState.column === 'priority' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
+                  <ArrowDownIcon v-else-if="sortState.column === 'priority' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
+                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </span>
+              </button>
+            </th>
+            <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+              <button
+                v-if="statusColumn"
+                type="button"
+                @click="handleSort('status')"
+                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
+              >
+                <ColumnInfoPopover :column="statusColumn">
+                  <div class="flex items-center gap-1">
+                    <DataTypeIcon :type="statusColumn.type || 'string'" size="size-3" class="shrink-0" />
+                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.status") }}</span>
+                  </div>
+                </ColumnInfoPopover>
+                <span class="shrink-0">
+                  <ArrowUpIcon v-if="sortState.column === 'status' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
+                  <ArrowDownIcon v-else-if="sortState.column === 'status' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
+                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </span>
+              </button>
+            </th>
+            <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
+              <button
                 v-if="dueDateColumn"
                 type="button"
                 @click="handleSort('dueDate')"
@@ -1028,26 +1068,6 @@ const amountColumn = getColumnById(COLUMN_IDS.amount)
                 <span class="shrink-0">
                   <ArrowUpIcon v-if="sortState.column === 'dueDate' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
                   <ArrowDownIcon v-else-if="sortState.column === 'dueDate' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
-                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </span>
-              </button>
-            </th>
-            <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-              <button
-                v-if="createdColumn"
-                type="button"
-                @click="handleSort('created')"
-                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
-              >
-                <ColumnInfoPopover :column="createdColumn">
-                  <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="createdColumn.type || 'date'" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.created") }}</span>
-                  </div>
-                </ColumnInfoPopover>
-                <span class="shrink-0">
-                  <ArrowUpIcon v-if="sortState.column === 'created' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
-                  <ArrowDownIcon v-else-if="sortState.column === 'created' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
                   <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </span>
               </button>
@@ -1092,26 +1112,6 @@ const amountColumn = getColumnById(COLUMN_IDS.amount)
                 </span>
               </button>
             </th>
-            <th class="px-3 py-3 text-left font-normal whitespace-nowrap">
-              <button
-                v-if="amountColumn"
-                type="button"
-                @click="handleSort('amount')"
-                class="flex items-center gap-1 group hover:text-foreground transition-colors cursor-pointer"
-              >
-                <ColumnInfoPopover :column="amountColumn">
-                  <div class="flex items-center gap-1">
-                    <DataTypeIcon :type="amountColumn.type || 'number'" size="size-3" class="shrink-0" />
-                    <span class="font-medium text-muted-foreground text-sm">{{ t("app.table.headers.amount") }}</span>
-                  </div>
-                </ColumnInfoPopover>
-                <span class="shrink-0">
-                  <ArrowUpIcon v-if="sortState.column === 'amount' && sortState.direction === 'asc'" class="size-3.5 text-foreground" />
-                  <ArrowDownIcon v-else-if="sortState.column === 'amount' && sortState.direction === 'desc'" class="size-3.5 text-foreground" />
-                  <ChevronsUpDownIcon v-else class="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </span>
-              </button>
-            </th>
           </tr>
         </thead>
         <tbody>
@@ -1140,6 +1140,18 @@ const amountColumn = getColumnById(COLUMN_IDS.amount)
               )"
               @click="handleRowClick(getRow(virtualRow.index).id)"
             >
+              <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12 text-xs">{{ getRow(virtualRow.index).created }}</td>
+              <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">
+                {{ getRow(virtualRow.index).amount ? `${getRow(virtualRow.index).amount.value.toLocaleString()} ${getRow(virtualRow.index).amount.unit}` : '-' }}
+              </td>
+              <td class="px-3 py-2 font-medium whitespace-nowrap h-12">{{ getRow(virtualRow.index).assignee }}</td>
+              <td class="px-3 py-2 text-muted-foreground whitespace-nowrap h-12">{{ translateDepartment(getRow(virtualRow.index).department) }}</td>
+              <td class="px-3 py-2 whitespace-nowrap h-12">
+                <div class="flex items-center gap-1">
+                  <div :class="cn('size-2 rounded-full', priorityColors[getRow(virtualRow.index).priority - 1] ?? priorityColors[0])" />
+                  <span class="text-sm tabular-nums">{{ getRow(virtualRow.index).priority }}</span>
+                </div>
+              </td>
               <td class="px-3 py-2 whitespace-nowrap h-12">
                 <span :class="cn(
                   'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
@@ -1149,16 +1161,7 @@ const amountColumn = getColumnById(COLUMN_IDS.amount)
                   {{ translateStatus(getRow(virtualRow.index).status) }}
                 </span>
               </td>
-              <td class="px-3 py-2 font-medium whitespace-nowrap h-12">{{ getRow(virtualRow.index).assignee }}</td>
-              <td class="px-3 py-2 whitespace-nowrap h-12">
-                <div class="flex items-center gap-1">
-                  <div :class="cn('size-2 rounded-full', priorityColors[getRow(virtualRow.index).priority - 1] ?? priorityColors[0])" />
-                  <span class="text-sm tabular-nums">{{ getRow(virtualRow.index).priority }}</span>
-                </div>
-              </td>
-              <td class="px-3 py-2 text-muted-foreground whitespace-nowrap h-12">{{ translateDepartment(getRow(virtualRow.index).department) }}</td>
               <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">{{ getRow(virtualRow.index).dueDate }}</td>
-              <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12 text-xs">{{ getRow(virtualRow.index).created }}</td>
               <td class="px-3 py-2 text-center whitespace-nowrap h-12">
                 <XIcon v-if="getRow(virtualRow.index).isBlocked" class="size-4 text-rose-500 mx-auto" />
                 <CheckIcon v-else class="size-4 text-emerald-500 mx-auto" />
@@ -1168,9 +1171,6 @@ const amountColumn = getColumnById(COLUMN_IDS.amount)
                   <template v-if="getRow(virtualRow.index).comments">{{ getRow(virtualRow.index).comments }}</template>
                   <span v-else class="text-muted-foreground/50 italic">{{ t("app.ui.noComments") }}</span>
                 </span>
-              </td>
-              <td class="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap h-12">
-                {{ getRow(virtualRow.index).amount ? `${getRow(virtualRow.index).amount.value.toLocaleString()} ${getRow(virtualRow.index).amount.unit}` : '-' }}
               </td>
             </tr>
           </template>
