@@ -9,7 +9,7 @@
  */
 
 import type { SuggestionStrategy, StrategyContext } from "./interface.ts";
-import type { FilterSuggestion } from "../../types/index.ts";
+import type { FilterSuggestion, OperatorDefinition } from "../../types/index.ts";
 import type {
   MatchMetadata,
   DetectedValues,
@@ -22,6 +22,44 @@ import { detectValueTokens, selectNonOverlappingMatches, toHypothesisValue } fro
 import { createSuggestion, createDateSuggestion, countForDateFilter } from "../engine/suggestion-helpers.ts";
 import { SCORING_CONFIG } from "../constants.ts";
 import { formatDateForDisplay } from "../../date-parser.ts";
+
+/**
+ * Check if an operator is variadic (accepts multiple arguments).
+ * Derived from patterns - checks if any pattern has:
+ * - A variadic placeholder ({...} or {name...})
+ * - 2+ argument placeholders
+ */
+function isOperatorVariadic(op: OperatorDefinition | undefined): boolean {
+  if (!op) return false;
+  if (!op.patterns) return false;
+  
+  return op.patterns.some(p => {
+    // Check for variadic placeholder syntax: {...} or {name...}
+    if (/\{\w*\.\.\.\}/.test(p)) return true;
+    // Check for 2+ argument placeholders
+    return (p.match(/\{[^}]*\}/g) || []).length >= 2;
+  });
+}
+
+/**
+ * Check if an operator requires an argument.
+ * Derived from patterns - checks if any pattern has argument placeholders.
+ */
+function operatorRequiresArgument(op: OperatorDefinition | undefined): boolean {
+  if (!op) return false;
+  return op.patterns?.some(p => /\{[^}]*\}/.test(p)) ?? false;
+}
+
+/**
+ * Get minimum number of arguments for an operator.
+ */
+function getMinArguments(op: OperatorDefinition | undefined): number {
+  if (!op) return 0;
+  // Derive from patterns: minimum arg count across all patterns
+  if (!op.patterns) return 0;
+  const counts = op.patterns.map(p => (p.match(/\{[^}]+\}/g) || []).length);
+  return Math.min(...counts, 0);
+}
 
 /**
  * Strategy for value-only inference
@@ -203,18 +241,18 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
 
       if (filteredValues.length === 0) continue;
 
-      const ops = getOperatorsForType(col.type, i18nProvider);
+      const ops = getOperatorsForType(col.type);
       const baseScore = SCORING_CONFIG.BONUS.VALUE_ONLY_BASE;
 
       if (filteredValues.length >= 2) {
         // Multiple values: prioritize between, in operators
         for (const op of ops) {
-          const opInfo = getOperator(op.id, i18nProvider);
+          const opInfo = getOperator(op.id);
           let valuesUsed = 0;
           let suggestionArgs: import("../../types/index.ts").HypothesisValueType[] | undefined;
 
-          if (opInfo.isVariadic) {
-            const minArgs = opInfo.minArguments ?? 1;
+          if (isOperatorVariadic(opInfo)) {
+            const minArgs = getMinArguments(opInfo) || 1;
 
             if (minArgs === 2) {
               valuesUsed = 2;
@@ -224,7 +262,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
               valuesUsed = filteredValues.length;
               suggestionArgs = filteredValues.map((v) => toHypothesisValue(v));
             }
-          } else if (opInfo.requiresArgument) {
+          } else if (operatorRequiresArgument(opInfo)) {
             valuesUsed = 1;
             suggestionArgs = [toHypothesisValue(filteredValues[0]!)];
           }
@@ -253,8 +291,8 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
         // Single numeric value
         const numVal = filteredValues[0]!;
         for (const op of ops.slice(0, 5)) {
-          const opInfo = getOperator(op.id, i18nProvider);
-          if (!opInfo.requiresArgument || opInfo.isVariadic) continue;
+          const opInfo = getOperator(op.id);
+          if (!operatorRequiresArgument(opInfo) || isOperatorVariadic(opInfo)) continue;
 
           suggestions.push(
             createSuggestion(
@@ -301,7 +339,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
 
       if (filteredValues.length === 0) continue;
 
-      const ops = getOperatorsForType(col.type, i18nProvider);
+      const ops = getOperatorsForType(col.type);
       const baseScore = SCORING_CONFIG.BONUS.VALUE_ONLY_BASE;
 
       // Separate date ranges from single dates
@@ -337,17 +375,15 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
           };
 
           suggestions.push(
-            createDateSuggestion(
-              col,
-              betweenOp.id,
-              dateEntry.parsed!,
-              baseScore * 1.0, // Full coverage
-              undefined, // Count will be computed later
-              undefined,
-              matchMeta,
-              tokens,
-              i18nProvider
-            )
+            createDateSuggestion({
+              column: col,
+              operator: betweenOp.id,
+              parsedDate: dateEntry.parsed!,
+              score: baseScore * 1.0, // Full coverage
+              matchMetadata: matchMeta,
+              queryTokens: tokens,
+              i18nProvider,
+            })
           );
         }
       }
@@ -355,7 +391,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
       if (nonRangeDates.length >= 2) {
         // Multiple dates: prioritize between
         for (const op of ops) {
-          const opInfo = getOperator(op.id, i18nProvider);
+          const opInfo = getOperator(op.id);
           let valuesUsed = 0;
           let suggestionArgs: import("../../types/index.ts").HypothesisValueType[] | undefined;
           let valueMatchEntries: Array<{
@@ -366,8 +402,8 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
             score: number;
           }> = [];
 
-          if (opInfo.isVariadic) {
-            const minArgs = opInfo.minArguments ?? 1;
+          if (isOperatorVariadic(opInfo)) {
+            const minArgs = getMinArguments(opInfo) || 1;
 
             if (minArgs === 2) {
               valuesUsed = 2;
@@ -393,7 +429,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
                 score: 0,
               }));
             }
-          } else if (opInfo.requiresArgument) {
+          } else if (operatorRequiresArgument(opInfo)) {
             valuesUsed = 1;
             const firstVal = nonRangeDates[0]!;
             suggestionArgs = [toHypothesisValue(firstVal.value, firstVal.parsed)];
@@ -435,8 +471,8 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
         const dateEntry = nonRangeDates[0]!;
         const dateVal = dateEntry.value;
         for (const op of ops.slice(0, 5)) {
-          const opInfo = getOperator(op.id, i18nProvider);
-          if (!opInfo.requiresArgument || opInfo.isVariadic) continue;
+          const opInfo = getOperator(op.id);
+          if (!operatorRequiresArgument(opInfo) || isOperatorVariadic(opInfo)) continue;
 
           const matchMeta: MatchMetadata = {
             values: [{
@@ -482,7 +518,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
     const ops = getOperatorsForType(col.type, i18nProvider);
     const variadicOps = ops.filter((op) => {
       const opInfo = getOperator(op.id, i18nProvider);
-      return opInfo.isVariadic && (opInfo.minArguments ?? 1) === 1;
+      return isOperatorVariadic(opInfo) && (getMinArguments(opInfo) || 1) === 1;
     });
 
     // Build match metadata for highlighting
@@ -577,10 +613,14 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
 
       // Only generate multi-value suggestions if we have 2+ values
       if (aggregatedValues.length >= 2) {
-        const ops = getOperatorsForType(col.type, i18nProvider);
+        const ops = getOperatorsForType(col.type);
         const variadicOps = ops.filter((op) => {
-          const opInfo = getOperator(op.id, i18nProvider);
-          return opInfo.isVariadic && (opInfo.minArguments ?? 1) === 1;
+          const opInfo = getOperator(op.id);
+          if (!opInfo) return false;
+          // Check if variadic - either from isVariadic flag or patterns with 2+ args
+          const isVariadic = isOperatorVariadic(opInfo);
+          const minArgs = getMinArguments(opInfo) || 1;
+          return isVariadic && minArgs === 1;
         });
 
         for (const op of variadicOps) {
@@ -674,16 +714,20 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
         matchIndexes: opMatchIndexes,
       },
     ] of operatorScores) {
-      const opInfo = getOperator(operator, i18nProvider);
+      const opInfo = getOperator(operator);
       const schema = this.getSchema();
-      if (!schema) continue;
+      if (!schema || !opInfo) continue;
+
+      // Check if variadic - either from isVariadic flag or patterns with 2+ args
+      const isVariadic = isOperatorVariadic(opInfo);
+      const minArgs = getMinArguments(opInfo) || 1;
 
       for (const col of getColumns(schema)) {
         // Skip if this is a type-specific alias that doesn't match the column type
         if (forType && forType !== col.type) continue;
 
         if (!opInfo.supportedTypes.includes(col.type)) continue;
-        if (!opInfo.isVariadic || (opInfo.minArguments ?? 1) !== 1) continue;
+        if (!isVariadic || minArgs !== 1) continue;
 
         const matchesForCol = allValueMatchesByColumnForOp.get(col.id);
         if (!matchesForCol || matchesForCol.length < 2) continue;

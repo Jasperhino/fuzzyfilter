@@ -26,20 +26,16 @@ import type {
   FilterResult,
 } from "../types/index.ts";
 import { DEFAULT_CONFIG } from "../types/index.ts";
-import { DataType } from "../types/index.ts";
+import { DataType, FuzzyFilterable, FuzzyFilterableStatic, TypeHandler } from "../types/index.ts";
 import {
   getAllOperators,
   getOperatorsForType,
   getOperator,
 } from "../operators.ts";
-import { buildSchema, getColumn, getColumns } from "../schema-builder.ts";
+import { InstanceRegistry } from "../registry.ts";
+import { buildSchema, getColumn, getColumns, findSimilarColumns, UnknownColumnError } from "../schema-builder.ts";
 import { createTrie } from "../trie.ts";
 import { tokenize } from "../tokenizer.ts";
-import {
-  expandAliasPatterns,
-  getSpreadStartKeywords,
-  getSpreadSeparatorKeywords,
-} from "../alias-generator.ts";
 import { createFuzzyFilterState, computeFilterContext } from "./state.ts";
 import type { FuzzyFilterState, OperatorAliasEntry } from "./types.ts";
 import { SuggestionEngine } from "./engine/suggestion-engine.ts";
@@ -52,6 +48,9 @@ import {
 import { parseInput, validateInput } from "./engine/parser.ts";
 import type { I18nProvider } from "../types/i18n.ts";
 import { createDefaultEnglishProvider } from "../i18n/default-provider.ts";
+import { createEnumHandlerFromValues } from "./engine/enum-handler.ts";
+import { getBuiltInTypeHandler } from "./engine/type-handlers.ts";
+import type { ColumnDefinition } from "../types/schema.ts";
 import type {
   TelemetryCollector,
   IndexDataAsyncOptions,
@@ -73,15 +72,18 @@ import {
 /**
  * FuzzyFilter class implementation
  */
-export class FuzzyFilterImpl implements FuzzyFilter {
+export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>> = Record<string, never>> 
+  implements FuzzyFilter<TCustom> {
   private state: FuzzyFilterState;
   private suggestionEngine: SuggestionEngine;
-  private _config: FuzzyFilterConfig;
+  private _config: FuzzyFilterConfig<TCustom>;
   private i18nProvider: I18nProvider;
   private unsubscribeLanguageChange?: () => void;
   private telemetry: TelemetryCollector;
+  private registry: InstanceRegistry;
+  private customTypes: Map<string, FuzzyFilterableStatic<any>> = new Map();
 
-  constructor(userConfig?: Partial<FuzzyFilterConfig>) {
+  constructor(userConfig: FuzzyFilterConfig<TCustom>) {
     // Merge config with defaults
     this._config = {
       ...DEFAULT_CONFIG,
@@ -90,15 +92,15 @@ export class FuzzyFilterImpl implements FuzzyFilter {
         ...DEFAULT_CONFIG.scoringWeights,
         ...userConfig?.scoringWeights,
       },
-      hypothesisOptions: {
-        ...DEFAULT_CONFIG.hypothesisOptions,
-        ...userConfig?.hypothesisOptions,
-      },
-      countOptions: {
-        ...DEFAULT_CONFIG.countOptions,
-        ...userConfig?.countOptions,
-      },
-    };
+    } as FuzzyFilterConfig<TCustom>;
+
+    // Validate required fields
+    if (!this._config.i18n) {
+      throw new Error("i18n provider is required in FuzzyFilterConfig");
+    }
+    if (!this._config.columns || this._config.columns.length === 0) {
+      throw new Error("columns are required in FuzzyFilterConfig");
+    }
 
     // Initialize telemetry collector
     if (this._config.benchmark) {
@@ -110,11 +112,21 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       this.telemetry = NULL_TELEMETRY_COLLECTOR;
     }
 
-    // Initialize i18n provider (default to English if not provided)
-    this.i18nProvider = userConfig?.i18nProvider ?? createDefaultEnglishProvider();
+    // Initialize i18n provider
+    this.i18nProvider = this._config.i18n;
+
+    // Extract custom FuzzyFilterable types from columns
+    this.extractCustomTypes();
+
+    // Initialize instance registry with custom operators/types if provided
+    // Pass i18n provider for pattern compilation
+    this.registry = new InstanceRegistry(this._config, this.i18nProvider);
 
     // Initialize state with i18n provider
     this.state = createFuzzyFilterState(this.i18nProvider);
+
+    // Set schema from config columns
+    this.setSchema({ columns: this._config.columns });
 
     // Build operator trie with translations
     this.rebuildOperatorTrie();
@@ -128,12 +140,67 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     // Subscribe to language changes if provider supports it
     if (this.i18nProvider.onChange) {
       this.unsubscribeLanguageChange = this.i18nProvider.onChange(() => {
+        // Recompile patterns with new translations
+        this.registry.compilePatterns();
         this.rebuildOperatorTrie();
         this.rebuildColumnTrie();
         this.rebuildValueTrieTranslations();
         this.state.contextCache.clear();
       });
     }
+  }
+
+  /**
+   * Extracts custom FuzzyFilterable types from column definitions.
+   * Stores them for use in type resolution.
+   */
+  private extractCustomTypes(): void {
+    // In V2, custom types are passed via generic parameter, not extracted from columns
+    // This method is a placeholder for future enhancement if needed
+    // For now, custom types must be registered separately if needed
+  }
+
+  /**
+   * Gets the type handler for a column.
+   * 
+   * Resolution order:
+   * 1. If column has `values` → returns enum handler
+   * 2. If column has `type` → checks built-in handlers, then custom FuzzyFilterable types
+   * 3. Throws error if no handler found
+   * 
+   * @param column - The column definition
+   * @returns Type handler for the column's type
+   */
+  getTypeHandler(column: ColumnDefinition<TCustom>): TypeHandler<unknown> {
+    // 1. Check if column has values (enum mode)
+    if (column.values && column.values.length > 0) {
+      return createEnumHandlerFromValues(column, this.i18nProvider);
+    }
+
+    // 2. Check if column has explicit type
+    if (!column.type) {
+      throw new Error(
+        `Column "${column.id}" must have either 'values' (enum mode) or 'type' specified`
+      );
+    }
+
+    const typeName = String(column.type);
+
+    // 3. Check built-in types
+    const builtInHandler = getBuiltInTypeHandler(typeName);
+    if (builtInHandler) {
+      return builtInHandler;
+    }
+
+    // 4. Check custom FuzzyFilterable types
+    // Note: In V2, custom types are handled via generic parameter
+    // This would need runtime type registration if we want to support it
+    // For now, we assume custom types are handled elsewhere
+
+    throw new Error(
+      `No type handler found for column "${column.id}" with type "${typeName}". ` +
+      `Register it as a FuzzyFilterable type or use built-in types.`
+    );
   }
 
   /**
@@ -149,7 +216,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
   
   /**
    * Rebuilds the column trie using the current I18nProvider.
-   * Includes both static names/aliases and translated names from i18n keys.
+   * Includes both static aliases and translated names from i18n keys.
    */
   private rebuildColumnTrie(): void {
     if (!this.state.schema) return;
@@ -158,8 +225,23 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     this.state.columnTrie.clear();
     
     for (const col of getColumns(this.state.schema)) {
-      // Insert static column name
-      this.state.columnTrie.insert(col.name, col);
+      // Insert column ID as a searchable target
+      const colIdStr = typeof col.id === 'string' ? col.id : String(col.id);
+      this.state.columnTrie.insert(colIdStr, col);
+      
+      // Insert translated column label from labelKey
+      const translatedLabel = this.i18nProvider.getLabel(col.labelKey);
+      if (translatedLabel) {
+        this.state.columnTrie.insert(translatedLabel, col);
+      }
+      
+      // Insert all aliases from labelKey (if getAliases returns multiple)
+      const labelAliases = this.i18nProvider.getAliases(col.labelKey);
+      for (const alias of labelAliases) {
+        if (alias !== translatedLabel) {
+          this.state.columnTrie.insert(alias, col);
+        }
+      }
       
       // Insert static aliases
       if (col.aliases) {
@@ -168,20 +250,12 @@ export class FuzzyFilterImpl implements FuzzyFilter {
         }
       }
       
-      // Insert translated column name if available
-      if (col.nameKey && this.i18nProvider.translate) {
-        const translatedName = this.i18nProvider.translate(col.nameKey);
-        if (translatedName && translatedName !== col.name) {
-          this.state.columnTrie.insert(translatedName, col);
-        }
-      }
-      
       // Insert translated aliases if available
-      if (col.aliasKeys && this.i18nProvider.translate) {
+      if (col.aliasKeys) {
         for (const aliasKey of col.aliasKeys) {
-          const translatedAlias = this.i18nProvider.translate(aliasKey);
-          if (translatedAlias) {
-            this.state.columnTrie.insert(translatedAlias, col);
+          const translatedAliases = this.i18nProvider.getAliases(aliasKey);
+          for (const alias of translatedAliases) {
+            this.state.columnTrie.insert(alias, col);
           }
         }
       }
@@ -191,51 +265,57 @@ export class FuzzyFilterImpl implements FuzzyFilter {
   /**
    * Rebuilds the operator trie using the current I18nProvider.
    * Only rebuilds the operator trie, NOT data indexes.
+   * Uses operators from the instance registry.
    */
   private rebuildOperatorTrie(): void {
     // Clear existing operator trie
     this.state.operatorTrie.clear();
 
-    // Get all operators with translations applied
-    const operators = getAllOperators(this.i18nProvider);
+    // Get all compiled operators from the registry
+    // This includes expanded patterns with i18n resolution
+    const compiledOperators = this.registry.getAllCompiledOperators();
+    const operators = this.registry.getAllOperators();
 
-    // Build operator trie with translated aliases
-    for (const op of operators) {
-      // Insert operator id and label as general (no type restriction)
-      this.state.operatorTrie.insert(op.id, { operator: op.id });
-      this.state.operatorTrie.insert(op.label, { operator: op.id });
-
-      // Insert explicit aliases (no type restriction)
-      for (const alias of op.aliases) {
-        this.state.operatorTrie.insert(alias, { operator: op.id });
+    // Build operator trie from compiled patterns
+    for (const compiled of compiledOperators) {
+      const opId = compiled.key;
+      
+      // Insert general (non-type-specific) trie keywords
+      for (const keyword of compiled.trieKeywords) {
+        this.state.operatorTrie.insert(keyword, { operator: opId });
       }
-
-      // Insert expanded aliases from patterns (no type restriction)
-      // Use i18nProvider for word set translations
-      if (op.aliasPatterns) {
-        const expandedAliases = expandAliasPatterns(op.aliasPatterns, this.i18nProvider);
-        for (const alias of expandedAliases) {
-          this.state.operatorTrie.insert(alias, { operator: op.id });
-        }
-      }
-
-      // Insert type-specific aliases with their type restriction
-      // Note: Type-specific aliases come from the operator definition, not translations
-      if (op.typeSpecificAliases) {
-        for (const [dataType, aliases] of Object.entries(op.typeSpecificAliases)) {
-          for (const alias of aliases) {
-            this.state.operatorTrie.insert(alias, {
-              operator: op.id,
+      
+      // Insert type-specific keywords with their type restriction
+      if (compiled.typeSpecificTrieKeywords) {
+        for (const [dataType, keywords] of Object.entries(compiled.typeSpecificTrieKeywords)) {
+          for (const keyword of keywords) {
+            this.state.operatorTrie.insert(keyword, {
+              operator: opId,
               forType: dataType as DataType,
             });
           }
         }
       }
     }
+
+    // Also insert aliases from i18n provider
+    for (const op of operators) {
+      const i18nAliases = this.i18nProvider.getOperatorAliases?.(op.id as Operator) ?? [];
+      for (const alias of i18nAliases) {
+        this.state.operatorTrie.insert(alias, { operator: op.id });
+      }
+    }
   }
 
-  get config(): Readonly<FuzzyFilterConfig> {
-    return this._config as Readonly<FuzzyFilterConfig>;
+  /**
+   * Get the instance registry (for internal use by strategies and compiler).
+   */
+  getRegistry(): InstanceRegistry {
+    return this.registry;
+  }
+
+  get config(): Readonly<FuzzyFilterConfig<TCustom>> {
+    return this._config as Readonly<FuzzyFilterConfig<TCustom>>;
   }
 
   /**
@@ -248,7 +328,12 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     
     const columnTypes: Record<string, number> = {};
     for (const col of getColumns(this.state.schema)) {
-      columnTypes[col.type] = (columnTypes[col.type] ?? 0) + 1;
+      // For enum columns (with values), count as "enum"
+      // For other columns, use their type
+      const typeKey = col.values && col.values.length > 0 
+        ? "enum" 
+        : (col.type ? String(col.type) : "unknown");
+      columnTypes[typeKey] = (columnTypes[typeKey] ?? 0) + 1;
     }
     
     return {
@@ -268,7 +353,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     };
   }
 
-  configure(options: Partial<FuzzyFilterConfig>): void {
+  configure(options: Partial<FuzzyFilterConfig<TCustom>>): void {
     const i18nProviderChanged = options.i18nProvider !== undefined && options.i18nProvider !== this.i18nProvider;
     
     this._config = {
@@ -300,6 +385,8 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       // Subscribe to new provider's onChange if available
       if (this.i18nProvider.onChange) {
         this.unsubscribeLanguageChange = this.i18nProvider.onChange(() => {
+          // Recompile patterns with new translations
+          this.registry.compilePatterns();
           this.rebuildOperatorTrie();
           this.rebuildColumnTrie();
           this.state.contextCache.clear();
@@ -314,7 +401,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     });
   }
 
-  setSchema(schema: SchemaInput): void {
+  setSchema(schema: SchemaInput<TCustom>): void {
     const hadExistingData = this.state.data.length > 0;
     const event = this.telemetry.startEvent<SetSchemaEvent>("setSchema", {
       had_existing_data: hadExistingData,
@@ -347,7 +434,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     return this.state.schema;
   }
 
-  getColumn(id: ColumnId | string): import("../types/index.ts").AnyColumnDefinition | null {
+  getColumn(id: ColumnId | string): ColumnDefinition<TCustom> | null {
     if (!this.state.schema) return null;
     return getColumn(this.state.schema, id);
   }
@@ -355,7 +442,21 @@ export class FuzzyFilterImpl implements FuzzyFilter {
   getOperatorsForColumn(colId: ColumnId | string): Operator[] {
     const col = this.getColumn(colId);
     if (!col) return [];
-    return getOperatorsForType(col.type, this.i18nProvider).map((op) => op.id);
+    
+    // If column has values (enum mode), use enum-compatible operators
+    if (col.values && col.values.length > 0) {
+      return getOperatorsForType(DataType.ENUM).map((op) => op.id);
+    }
+    
+    // Otherwise use operators for the column's type
+    if (!col.type) return [];
+    const typeName = String(col.type);
+    
+    // Map custom types to built-in types for operator compatibility
+    // For now, assume custom types map to their base type
+    // This could be enhanced with a compatibility mapping
+    const dataType = typeName as DataType;
+    return getOperatorsForType(dataType).map((op) => op.id);
   }
 
   indexData(data: Array<Record<string, unknown>>): void {
@@ -581,29 +682,33 @@ export class FuzzyFilterImpl implements FuzzyFilter {
   /**
    * Adds translated enum values to the value trie.
    * This allows fuzzy searching by translated value names.
+   * 
+   * Uses the new V2 pattern: {valuesI18nPrefix ?? column.id}.{value}
    */
   private addTranslatedValuesToTrie(): void {
-    if (!this.state.schema || !this.i18nProvider.translate) return;
+    if (!this.state.schema) return;
     
     for (const col of getColumns(this.state.schema)) {
-      // Handle enum columns with translated value keys
-      if (col.type === DataType.ENUM && "valueKeys" in col && col.valueKeys) {
-        const enumCol = col as import("../types/index.ts").EnumColumnDefinition;
-        const valueKeys = enumCol.valueKeys!;
+      // Handle columns with values (enum mode)
+      if (col.values && col.values.length > 0) {
+        const prefix = col.valuesI18nPrefix ?? (typeof col.id === 'string' ? col.id : String(col.id));
         
-        for (let i = 0; i < enumCol.values.length; i++) {
-          const originalValue = enumCol.values[i]!;
-          const valueKey = valueKeys[i];
+        for (const originalValue of col.values) {
+          const valueKey = `${prefix}.${originalValue}`;
           
-          if (valueKey) {
-            const translatedValue = this.i18nProvider.translate(valueKey);
-            if (translatedValue && translatedValue !== originalValue) {
-              // Insert translated value pointing to the original value
-              // Check if original value exists in trie to get its count
-              const existingEntry = this.state.valueTrie.lookup(originalValue);
-              const rowCount = existingEntry?.rowCount ?? 0;
-              
-              this.state.valueTrie.insert(translatedValue, {
+          // Get all aliases for this value
+          const aliases = this.i18nProvider.getAliases(valueKey);
+          
+          // Check if original value exists in trie to get its count
+          const strValue = String(originalValue);
+          const existingEntry = this.state.valueTrie.lookup(strValue);
+          const rowCount = existingEntry?.rowCount ?? 0;
+          
+          // Insert each alias into the trie pointing to the original value
+          for (const alias of aliases) {
+            // Skip if alias matches the original value (already in trie)
+            if (alias.toLowerCase() !== strValue.toLowerCase()) {
+              this.state.valueTrie.insert(alias, {
                 value: originalValue, // Store original value for filter creation
                 columnId: col.id,
                 rowCount,
@@ -615,45 +720,6 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     }
   }
 
-  updateRows(
-    changes: Array<{
-      rowId: number;
-      oldData?: Record<string, unknown>;
-      newData?: Record<string, unknown>;
-    }>
-  ): void {
-    const previousCount = this.state.data.length;
-    const event = this.telemetry.startEvent<DataMutationEvent>("addRow", {
-      mutation: {
-        rows_affected: changes.length,
-        previous_row_count: previousCount,
-        new_row_count: previousCount, // Will be updated
-      },
-    });
-    
-    try {
-      // Simple implementation: just re-index
-      for (const change of changes) {
-        if (change.oldData && change.newData) {
-          this.state.data[change.rowId] = change.newData;
-        } else if (change.newData) {
-          this.state.data.push(change.newData);
-        }
-      }
-      this.indexData(this.state.data);
-      
-      event.set("mutation", {
-        rows_affected: changes.length,
-        previous_row_count: previousCount,
-        new_row_count: this.state.data.length,
-      });
-      event.success();
-    } catch (error) {
-      event.recordError(error instanceof Error ? error : String(error));
-      event.error();
-      throw error;
-    }
-  }
 
   addRow(row: Record<string, unknown>): void {
     const previousCount = this.state.data.length;
@@ -902,7 +968,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     
     try {
       const parsed = this.parse(input);
-      const result = compileFromParsed(parsed, (id) => this.getColumn(id));
+      const result = compileFromParsed(parsed, (id) => this.getColumn(id), this.registry);
       
       // Get column type by looking up the column from the result's columnId
       const column = result ? this.getColumn(result.columnId) : null;
@@ -928,6 +994,13 @@ export class FuzzyFilterImpl implements FuzzyFilter {
   ): CompiledFilter | null {
     const col = this.getColumn(columnId);
     
+    // Validate column exists - throw helpful error if not
+    if (!col && this.state.schema) {
+      const suggestions = findSimilarColumns(this.state.schema, String(columnId));
+      const availableColumns = this.state.schema.columnOrder.map(String);
+      throw new UnknownColumnError(String(columnId), suggestions, availableColumns);
+    }
+    
     const event = this.telemetry.startEvent<CompileEvent>("compileFilter", {
       input: {
         type: "structured",
@@ -943,7 +1016,8 @@ export class FuzzyFilterImpl implements FuzzyFilter {
         operator,
         value,
         (id) => this.getColumn(id),
-        this.state.data
+        this.state.data,
+        this.registry
       );
       
       event.set("result", {
@@ -994,13 +1068,43 @@ export class FuzzyFilterImpl implements FuzzyFilter {
 }
 
 /**
- * Factory function for backward compatibility
- * Creates a new FuzzyFilter instance
+ * Creates a new FuzzyFilter instance.
+ * 
+ * @typeParam TCustom - Map of custom type names to their FuzzyFilterable types.
+ *                     Only needed when using custom FuzzyFilterable types.
+ *                     Native enums don't need to be declared here.
+ * 
+ * @param config - Configuration including columns and i18n provider (required in V2)
+ * @returns FuzzyFilter instance
+ * 
+ * @example With native enums
+ * ```typescript
+ * enum Status { ACTIVE = 'active', INACTIVE = 'inactive' }
+ * 
+ * const filter = createFuzzyFilter({
+ *   columns: [
+ *     { id: 'status', labelKey: 'columns.status', values: Object.values(Status) },
+ *   ],
+ *   i18n: myI18nProvider,
+ * });
+ * ```
+ * 
+ * @example With custom FuzzyFilterable type
+ * ```typescript
+ * class Amount implements FuzzyFilterable<Amount> { ... }
+ * 
+ * const filter = createFuzzyFilter<{ amount: Amount }>({
+ *   columns: [
+ *     { id: 'weight', labelKey: 'columns.weight', type: 'amount' },
+ *   ],
+ *   i18n: myI18nProvider,
+ * });
+ * ```
  */
-export function createFuzzyFilter(
-  userConfig?: Partial<FuzzyFilterConfig>
-): FuzzyFilter {
-  return new FuzzyFilterImpl(userConfig);
+export function createFuzzyFilter<TCustom extends Record<string, FuzzyFilterable<any>> = Record<string, never>>(
+  config: FuzzyFilterConfig<TCustom>
+): FuzzyFilter<TCustom> {
+  return new FuzzyFilterImpl<TCustom>(config);
 }
 
 // ============================================================================

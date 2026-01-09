@@ -5,7 +5,7 @@
  */
 
 import { test, expect, describe, beforeEach } from "bun:test";
-import { createFuzzyFilter, columnId, DataType } from "./index.ts";
+import { createFuzzyFilter, columnId, DataType, UnknownColumnError, createDefaultEnglishProvider } from "./index.ts";
 import type { FuzzyFilter } from "./types/index.ts";
 import {
   TASK_SCHEMA,
@@ -29,8 +29,12 @@ describe("FuzzyFilter", () => {
   >[];
 
   beforeEach(() => {
-    filter = createFuzzyFilter({ maxSuggestions: 10 });
-    filter.setSchema(TASK_SCHEMA);
+    // V2 API: columns and i18n are required in config
+    filter = createFuzzyFilter({
+      columns: TASK_SCHEMA.columns,
+      i18n: createDefaultEnglishProvider(),
+      maxSuggestions: 10,
+    });
     filter.indexData(sampleData);
   });
 
@@ -45,8 +49,9 @@ describe("FuzzyFilter", () => {
     test("getColumn returns column by ID", () => {
       const col = filter.getColumn("status");
       expect(col).not.toBeNull();
-      expect(col?.name).toBe("Status");
-      expect(col?.type).toBe("enum");
+      expect(col?.labelKey).toBe("columns.status");
+      // Status column has values, so it's in enum mode (no explicit type needed)
+      expect(col?.values).toEqual(["Open", "In Progress", "Closed", "Blocked"]);
     });
 
     test("getOperatorsForColumn returns valid operators", () => {
@@ -81,9 +86,11 @@ describe("FuzzyFilter", () => {
 
     test("column name query returns column suggestions", async () => {
       const response = await filter.suggest("stat");
-      expect(response.suggestions.some((s) => s.column.name === "Status")).toBe(
-        true
-      );
+      // Column suggestions will have the column's labelKey resolved via i18n
+      expect(response.suggestions.length).toBeGreaterThan(0);
+      // The column should be the status column
+      const statusSuggestion = response.suggestions.find(s => s.column.id === "status");
+      expect(statusSuggestion).toBeDefined();
     });
 
     test("operator query returns operator suggestions", async () => {
@@ -217,15 +224,16 @@ describe("FuzzyFilter", () => {
     test("'in' operator arguments should not exceed the number of tokens (no token reuse)", async () => {
       // Test case: When searching with tokens, the "in" operator should NOT
       // suggest more arguments than tokens. Each token should contribute at most one value.
-      const filter = createFuzzyFilter({ maxSuggestions: 20 });
-      filter.setSchema({
+      const filter = createFuzzyFilter({
         columns: [
           { 
             id: columnId("tags"), 
-            name: "Tags", 
+            labelKey: "columns.tags",
             type: "string" 
           },
         ],
+        i18n: createDefaultEnglishProvider(),
+        maxSuggestions: 20,
       });
       
       // Create data where "hello" matches multiple values
@@ -384,11 +392,11 @@ describe("FuzzyFilter", () => {
      */
     test("'in' operator matchCount is accurate", () => {
       // Create a controlled dataset
-      const testFilter = createFuzzyFilter();
-      testFilter.setSchema({
+      const testFilter = createFuzzyFilter({
         columns: [
-          { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed", "In Progress"] },
+          { id: columnId("status"), labelKey: "columns.status", values: ["Open", "Closed", "In Progress"] },
         ],
+        i18n: createDefaultEnglishProvider(),
       });
       testFilter.indexData([
         { status: "Open" },
@@ -758,8 +766,8 @@ describe("Type-Specific Aliases", () => {
     expect(dateSuggestion).toBeDefined();
     // The matchedAlias should be "on"
     expect(dateSuggestion?.parts.operator.matchedAlias).toBe("on");
-    // The text should still be the operator label
-    expect(dateSuggestion?.parts.operator.text).toBe("equals");
+    // The text should be the operator id (label is deprecated)
+    expect(dateSuggestion?.parts.operator.text).toBe("eq");
     // The label should use the matched alias
     expect(dateSuggestion?.label).toContain("on");
   });
@@ -2583,7 +2591,6 @@ describe("i18n Column Translation", () => {
     // Create an i18n provider that translates the key
     const translations = {
       operators: {},
-      wordSets: {},
     };
     const provider = createObjectProvider(translations);
     
@@ -2616,7 +2623,6 @@ describe("i18n Column Translation", () => {
     // Create an i18n provider that doesn't translate the key
     const translations = {
       operators: {},
-      wordSets: {},
     };
     const provider = createObjectProvider(translations);
     
@@ -2655,7 +2661,6 @@ describe("i18n Column Translation", () => {
     // Create an i18n provider that translates the keys
     const translations = {
       operators: {},
-      wordSets: {},
     };
     const provider = createObjectProvider(translations);
     
@@ -2722,7 +2727,6 @@ describe("i18n Column Translation", () => {
     // Create an i18n provider that translates the keys
     const translations = {
       operators: {},
-      wordSets: {},
     };
     const provider = createObjectProvider(translations);
     
@@ -2887,5 +2891,146 @@ describe("Data Mutation - Index Updates", () => {
     expect(stats.totalRows).toBe(200);
     // All 200 unique values should be indexed (not capped at 100)
     expect(stats.uniqueValues).toBe(200);
+  });
+});
+
+// ============================================================================
+// Plain String Column IDs (No columnId() required)
+// ============================================================================
+
+describe("Plain String Column IDs", () => {
+  test("schema accepts plain strings for column IDs", () => {
+    const filter = createFuzzyFilter();
+    
+    // Use plain strings instead of columnId()
+    filter.setSchema({
+      columns: [
+        { id: "status", name: "Status", type: "enum", values: ["Open", "Closed"] },
+        { id: "priority", name: "Priority", type: "number" },
+        { id: "assignee", name: "Assignee", type: "string" },
+      ],
+    });
+
+    filter.indexData([
+      { status: "Open", priority: 1, assignee: "Alice" },
+      { status: "Closed", priority: 2, assignee: "Bob" },
+    ]);
+
+    // getColumn should work with plain strings
+    const statusCol = filter.getColumn("status");
+    expect(statusCol).not.toBeNull();
+    expect(statusCol?.name).toBe("Status");
+    expect(statusCol?.type).toBe("enum");
+  });
+
+  test("compileFilter works with plain string column IDs", () => {
+    const filter = createFuzzyFilter();
+    
+    filter.setSchema({
+      columns: [
+        { id: "status", name: "Status", type: "enum", values: ["Open", "Closed"] },
+      ],
+    });
+    filter.indexData([
+      { status: "Open" },
+      { status: "Closed" },
+      { status: "Open" },
+    ]);
+
+    // Use plain string for column ID
+    const compiled = filter.compileFilter("status", "eq", "Open");
+    
+    expect(compiled).not.toBeNull();
+    expect(compiled?.matchCount).toBe(2);
+    expect(compiled?.predicate({ status: "Open" })).toBe(true);
+    expect(compiled?.predicate({ status: "Closed" })).toBe(false);
+  });
+
+  test("suggestions work with plain string column IDs", async () => {
+    const filter = createFuzzyFilter();
+    
+    filter.setSchema({
+      columns: [
+        { id: "status", name: "Status", type: "enum", values: ["Open", "Closed"] },
+      ],
+    });
+    filter.indexData([{ status: "Open" }, { status: "Closed" }]);
+
+    const response = await filter.suggest("stat");
+    expect(response.suggestions.some((s) => s.column.name === "Status")).toBe(true);
+  });
+});
+
+// ============================================================================
+// UnknownColumnError with "Did You Mean?" suggestions
+// ============================================================================
+
+describe("UnknownColumnError", () => {
+  test("compileFilter throws UnknownColumnError for invalid column", () => {
+    const filter = createFuzzyFilter();
+    
+    filter.setSchema({
+      columns: [
+        { id: "status", name: "Status", type: "enum", values: ["Open", "Closed"] },
+        { id: "priority", name: "Priority", type: "number" },
+      ],
+    });
+    filter.indexData([{ status: "Open", priority: 1 }]);
+
+    // Typo: "stauts" instead of "status"
+    expect(() => filter.compileFilter("stauts", "eq", "Open")).toThrow();
+    
+    try {
+      filter.compileFilter("stauts", "eq", "Open");
+    } catch (error) {
+      expect(error).toBeInstanceOf(UnknownColumnError);
+      const err = error as UnknownColumnError;
+      expect(err.name).toBe("UnknownColumnError");
+      expect(err.columnId).toBe("stauts");
+      expect(err.suggestions).toContain("status");
+      expect(err.message).toContain("Did you mean");
+    }
+  });
+
+  test("UnknownColumnError suggests similar column names", () => {
+    const filter = createFuzzyFilter();
+    
+    filter.setSchema({
+      columns: [
+        { id: "firstName", name: "First Name", type: "string" },
+        { id: "lastName", name: "Last Name", type: "string" },
+        { id: "email", name: "Email", type: "string" },
+      ],
+    });
+    filter.indexData([{ firstName: "John", lastName: "Doe", email: "john@example.com" }]);
+
+    // Typo: "fristName" instead of "firstName"
+    try {
+      filter.compileFilter("fristName", "eq", "John");
+    } catch (error) {
+      const err = error as Error;
+      expect(err.message).toContain("firstName");
+    }
+  });
+
+  test("UnknownColumnError lists available columns", () => {
+    const filter = createFuzzyFilter();
+    
+    filter.setSchema({
+      columns: [
+        { id: "status", name: "Status", type: "enum", values: ["Open", "Closed"] },
+        { id: "priority", name: "Priority", type: "number" },
+      ],
+    });
+    filter.indexData([{ status: "Open", priority: 1 }]);
+
+    try {
+      filter.compileFilter("nonexistent", "eq", "value");
+    } catch (error) {
+      const err = error as Error;
+      expect(err.message).toContain("Available columns:");
+      expect(err.message).toContain("status");
+      expect(err.message).toContain("priority");
+    }
   });
 });

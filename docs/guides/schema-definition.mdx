@@ -3,13 +3,13 @@ title: Schema Definition
 description: "Learn about column types, options, and schema configuration"
 ---
 
-# Schema Definition
+# Schema Definition (V2 API)
 
-This guide explains how to define schemas for FuzzyFilter, including all column types and their options.
+This guide explains how to define schemas for FuzzyFilter V2, including native enum support and column types.
 
 ## Column Types
 
-FuzzyFilter supports five column types:
+FuzzyFilter V2 supports built-in types and native TypeScript enums:
 
 ### String Columns
 
@@ -17,8 +17,8 @@ For free-text fields:
 
 ```typescript
 {
-  id: columnId("title"),
-  name: "Title",
+  id: "title",
+  labelKey: "columns.title", // i18n key (required)
   type: "string",
 }
 ```
@@ -31,8 +31,8 @@ For numeric fields:
 
 ```typescript
 {
-  id: columnId("priority"),
-  name: "Priority",
+  id: "priority",
+  labelKey: "columns.priority",
   type: "number",
 }
 ```
@@ -45,8 +45,8 @@ For date/datetime fields:
 
 ```typescript
 {
-  id: columnId("createdAt"),
-  name: "Created At",
+  id: "createdAt",
+  labelKey: "columns.createdAt",
   type: "date",
 }
 ```
@@ -55,22 +55,30 @@ For date/datetime fields:
 
 Date columns automatically support natural language expressions like "today", "last week", etc.
 
-### Enum Columns
+### Native Enum Columns (V2)
 
-For fields with a known set of values:
+For fields with a known set of values - **no `type: "enum"` needed!**
 
 ```typescript
+// Native TypeScript enum
+enum Status {
+  OPEN = "Open",
+  CLOSED = "Closed",
+  IN_PROGRESS = "In Progress",
+}
+
+// Column definition - just provide values!
 {
-  id: columnId("status"),
-  name: "Status",
-  type: "enum",
-  values: ["Open", "Closed", "In Progress", "Pending"],
+  id: "status",
+  labelKey: "columns.status",
+  values: Object.values(Status), // Automatic enum handling!
+  valuesI18nPrefix: "status", // Maps to "status.Open", "status.Closed", etc.
 }
 ```
 
-**Supported operators**: `eq`, `neq`, `in`, `notin`, `contains`, `notcontains`, `isempty`, `isnotempty`
+**Supported operators**: `eq`, `neq`, `in`, `notin` (equality operators work automatically!)
 
-The `values` array is required for enum columns and enables value suggestions with counts.
+The `values` array triggers enum mode - the library automatically handles parsing, formatting, and comparison. Equality operators work automatically because they use simple `===` comparison.
 
 ### Boolean Columns
 
@@ -78,8 +86,8 @@ For true/false fields:
 
 ```typescript
 {
-  id: columnId("isActive"),
-  name: "Active",
+  id: "isActive",
+  labelKey: "columns.isActive",
   type: "boolean",
 }
 ```
@@ -98,8 +106,8 @@ Provide alternative names for fuzzy matching:
 
 ```typescript
 {
-  id: columnId("createdAt"),
-  name: "Created At",
+  id: "createdAt",
+  labelKey: "columns.createdAt",
   type: "date",
   aliases: ["created", "creation date", "date created"],
 }
@@ -113,60 +121,72 @@ Add a description for tooltips or help text:
 
 ```typescript
 {
-  id: columnId("priority"),
-  name: "Priority",
+  id: "priority",
+  labelKey: "columns.priority",
   type: "number",
   description: "1 = highest priority, 5 = lowest",
+  descriptionKey: "descriptions.priority", // i18n key for description
 }
 ```
 
-### Accessor Function
+### Enum Value i18n Prefix
 
-Custom function to extract the value from a data row:
+For enum columns, specify the i18n key prefix for value translations:
 
 ```typescript
+enum Status {
+  OPEN = "Open",
+  CLOSED = "Closed",
+}
+
 {
-  id: columnId("fullName"),
-  name: "Full Name",
-  type: "string",
-  accessor: (row) => `${row.firstName} ${row.lastName}`,
+  id: "status",
+  labelKey: "columns.status",
+  values: Object.values(Status),
+  valuesI18nPrefix: "status", // Maps to "status.Open", "status.Closed"
+  // If omitted, defaults to column id ("status")
 }
 ```
 
-By default, FuzzyFilter uses the column ID as the property key.
-
-## Complete Schema Example
+## Complete Schema Example (V2)
 
 ```typescript
-import { createFuzzyFilter, columnId } from "@jasperhino/fuzzyfilter";
+import { createFuzzyFilter, createDefaultEnglishProvider } from "fuzzyfilter";
 
-const filter = createFuzzyFilter();
+// Native enums
+enum Status {
+  OPEN = "Open",
+  CLOSED = "Closed",
+  IN_PROGRESS = "In Progress",
+  PENDING = "Pending",
+  BLOCKED = "Blocked",
+}
 
-filter.setSchema({
+const filter = createFuzzyFilter({
   columns: [
     {
-      id: columnId("status"),
-      name: "Status",
-      type: "enum",
-      values: ["Open", "Closed", "In Progress", "Pending", "Blocked"],
+      id: "status",
+      labelKey: "columns.status",
+      values: Object.values(Status), // Native enum - automatic!
+      valuesI18nPrefix: "status",
       aliases: ["state", "progress"],
     },
     {
-      id: columnId("priority"),
-      name: "Priority",
+      id: "priority",
+      labelKey: "columns.priority",
       type: "number",
       description: "1-5 scale, 1 is highest",
       aliases: ["importance", "urgency"],
     },
     {
-      id: columnId("assignee"),
-      name: "Assignee",
+      id: "assignee",
+      labelKey: "columns.assignee",
       type: "string",
       aliases: ["assigned to", "owner", "responsible"],
     },
     {
-      id: columnId("createdAt"),
-      name: "Created At",
+      id: "createdAt",
+      labelKey: "columns.createdAt",
       type: "date",
       aliases: ["created", "creation date"],
     },

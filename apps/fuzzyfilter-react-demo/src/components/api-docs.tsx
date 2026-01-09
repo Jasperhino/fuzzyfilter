@@ -6,7 +6,7 @@
  */
 
 import * as React from "react";
-import { OPERATORS, getOperatorsForType, DataType, type OperatorInfo } from "@jasperhino/fuzzyfilter";
+import { OPERATORS, getOperatorsForType, DataType, type OperatorDefinition } from "@jasperhino/fuzzyfilter";
 import { Tabs } from "@base-ui/react/tabs";
 import {
   BookOpenIcon,
@@ -32,10 +32,17 @@ function OperatorBadge({ text }: { text: string }) {
 /**
  * Get the number of arguments for an operator
  */
-function getArgCount(operator: OperatorInfo): number {
-  if (!operator.requiresArgument) return 0;
-  if (operator.id === "between") return 2;
-  if (operator.isVariadic) return -1; // Unlimited (in, nin)
+function getArgCount(operator: OperatorDefinition): number {
+  // Derive from patterns
+  const hasArgs = operator.patterns.some(p => /\{[^}]*\}/.test(p));
+  if (!hasArgs) return 0;
+  
+  // Check if variadic (has patterns with 2+ args)
+  const isVariadic = operator.patterns.some(p => (p.match(/\{[^}]*\}/g) || []).length >= 2);
+  if (isVariadic) {
+    if (operator.id === "between") return 2;
+    return -1; // Unlimited (in, nin)
+  }
   return 1;
 }
 
@@ -53,7 +60,7 @@ function ArgPlaceholder({ label }: { label: string }) {
 /**
  * Argument display component based on operator type
  */
-function OperatorArgs({ operator }: { operator: OperatorInfo }) {
+function OperatorArgs({ operator }: { operator: OperatorDefinition }) {
   const argCount = getArgCount(operator);
 
   if (argCount === 0) {
@@ -90,7 +97,7 @@ function OperatorArgs({ operator }: { operator: OperatorInfo }) {
 /**
  * Operator documentation item
  */
-function OperatorDoc({ operator }: { operator: OperatorInfo }) {
+function OperatorDoc({ operator }: { operator: OperatorDefinition }) {
   const [isExpanded, setIsExpanded] = React.useState(false);
 
   return (
@@ -109,7 +116,7 @@ function OperatorDoc({ operator }: { operator: OperatorInfo }) {
         
         {/* Operator label */}
         <span className="text-xs text-foreground truncate flex-1 min-w-0">
-          {operator.label}
+          {operator.id}
         </span>
 
         {/* Argument placeholders */}
@@ -247,11 +254,11 @@ function HookDocs() {
  * Main API Documentation Panel
  */
 export function ApiDocs() {
-  const operators = Object.values(OPERATORS) as OperatorInfo[];
+  const operators = Object.values(OPERATORS) as OperatorDefinition[];
 
   // Group operators by category
   const operatorGroups = React.useMemo(() => {
-    const groups: Record<string, OperatorInfo[]> = {
+    const groups: Record<string, OperatorDefinition[]> = {
       Equality: [],
       Comparison: [],
       "Set Membership": [],

@@ -1,5 +1,9 @@
 /**
  * English (default) locale translations for FuzzyFilter
+ * 
+ * The `operators` section provides translatable aliases for each operator.
+ * These are referenced in operator definitions using `t(operators.eq)` syntax.
+ * Each key can map to an array of alternative phrasings.
  */
 import type { FuzzyFilterTranslations } from "../../fuzzyfilter/src/types/i18n.ts";
 
@@ -7,105 +11,87 @@ export const en: FuzzyFilterTranslations = {
   operators: {
     eq: {
       label: "equals",
-      aliases: ["equal", "equals", "is", "=", "==", "==="],
+      aliases: ["equal", "equals", "is"],
     },
     neq: {
       label: "not equals",
-      aliases: ["!=", "!==", "<>", "≠"],
+      aliases: ["not equals", "not equal", "is not", "isn't", "doesn't equal", "does not equal"],
     },
     eqIgnoreCase: {
       label: "equals (ignore case)",
-      aliases: ["equalsIgnoreCase", "eqic", "equals ignore case", "~=", "≈"],
+      aliases: ["equals ignore case", "equal ignore case"],
     },
     neqIgnoreCase: {
       label: "not equals (ignore case)",
-      aliases: ["notEqualsIgnoreCase", "neqic", "not equals ignore case", "≉"],
+      aliases: ["not equals ignore case", "not equal ignore case"],
     },
     lt: {
       label: "less than",
-      aliases: ["<", "before", "under"],
+      aliases: ["less than", "smaller than", "lower than"],
     },
     lte: {
       label: "less than or equal",
-      aliases: ["<=", "max", "at most", "≤"],
+      aliases: ["less than or equal", "at most", "no more than"],
     },
     gt: {
       label: "greater than",
-      aliases: [">", "after"],
+      aliases: ["greater than", "bigger than", "larger than", "more than"],
     },
     gte: {
       label: "greater than or equal",
-      aliases: [">=", "min", "at least", "≥"],
+      aliases: ["greater than or equal", "at least", "no less than"],
     },
     in: {
       label: "in",
-      aliases: ["oneOf", "one of", "any of", "anyOf", "includes", "∈"],
+      aliases: ["one of", "any of"],
     },
     nin: {
       label: "not in",
-      aliases: ["notIn", "not one of", "none of", "noneOf", "excludes", "∉"],
+      aliases: ["not in", "not one of", "none of"],
     },
     contains: {
       label: "contains",
-      aliases: ["has", "includes", "like", "~", "⊃"],
+      aliases: ["contains", "has", "includes"],
     },
     notContains: {
       label: "does not contain",
-      aliases: ["doesNotContain", "notIncludes", "excludes", "!~", "⊅"],
+      aliases: ["does not contain", "doesn't contain", "not contains"],
     },
     startsWith: {
       label: "starts with",
-      aliases: ["prefix", "^", "^…"],
+      aliases: ["starts with", "begins with"],
     },
     endsWith: {
       label: "ends with",
-      aliases: ["suffix", "$", "…$"],
+      aliases: ["ends with"],
     },
     isEmpty: {
       label: "is empty",
-      aliases: ["isNull", "null", "∅", "hasValue"],
+      aliases: ["is empty", "is blank", "is null", "is missing"],
     },
     isNotEmpty: {
       label: "is not empty",
-      aliases: ["isNotNull", "notNull", "exists", "present", "≠∅"],
+      aliases: ["is not empty", "is not blank", "has value"],
     },
     isTrue: {
       label: "is true",
-      aliases: ["true", "yes", "on", "enabled", "active", "✓"],
+      aliases: ["is true", "is yes", "is on", "is enabled", "is active"],
     },
     isFalse: {
       label: "is false",
-      aliases: ["false", "no", "off", "disabled", "inactive", "✗"],
+      aliases: ["is false", "is no", "is off", "is disabled", "is inactive"],
     },
     before: {
       label: "before",
-      aliases: ["earlier", "prior to", "priorTo", "earlier than", "preceding", "until", "up to", "←"],
+      aliases: ["before", "earlier than", "prior to"],
     },
     after: {
       label: "after",
-      aliases: ["later", "since", "later than", "following", "from", "starting", "→"],
+      aliases: ["after", "later than", "since"],
     },
     between: {
       label: "between",
-      aliases: ["range", "within", "↔"],
+      aliases: ["between", "in range", "within"],
     },
-  },
-  wordSets: {
-    less: ["less", "smaller", "lower", "under"],
-    greater: ["greater", "bigger", "larger", "more", "over", "above"],
-    than: ["than"],
-    equal: ["equal", "equals", "eq"],
-    or: ["or"],
-    not: ["not"],
-    from: ["from"],
-    to: ["to", "till", "until"],
-    between: ["between"],
-    and: ["and"],
-    contains: ["contains", "has", "includes"],
-    starts: ["starts", "begins"],
-    ends: ["ends"],
-    with: ["with"],
-    is: ["is"],
-    empty: ["empty", "blank", "null", "missing"],
   },
 };

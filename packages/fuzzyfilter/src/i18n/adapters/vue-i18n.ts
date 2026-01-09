@@ -29,7 +29,7 @@
  */
 
 import type { I18nProvider } from "../../types/i18n.ts";
-import type { Operator, WordSetKey } from "../../operators.ts";
+import type { OperatorKey } from "../../operators.ts";
 import type { I18n } from "vue-i18n";
 
 /**
@@ -73,61 +73,76 @@ export function createVueI18nProvider(
   const t = i18nInstance.global.t as (key: string) => unknown;
 
   return {
-    getOperatorLabel: (operatorId: Operator): string => {
-      const key = getKey(`operators.${operatorId}.label`);
-      try {
-        const translated = t(key);
-        // If translation returns the key itself, it means translation not found
-        return translated !== key ? String(translated) : operatorId;
-      } catch {
-        // Fallback to operator ID if translation not found
-        return operatorId;
-      }
+    get locale(): string {
+      return getCurrentLocale();
     },
 
-    getOperatorAliases: (operatorId: Operator): string[] => {
-      const key = getKey(`operators.${operatorId}.aliases`);
-      const translated = getRawMessage(key);
-      
-      // If translation returns an array, use it
-      if (Array.isArray(translated) && translated.length > 0) {
-        return translated.map(String);
-      }
-      
-      // Fallback to empty array if translation not found
-      return [];
-    },
-
-    getWordSet: (wordSetKey: WordSetKey): string[] => {
-      const key = getKey(`wordSets.${wordSetKey}`);
-      const translated = getRawMessage(key);
-      
-      // If translation returns an array, use it
-      if (Array.isArray(translated) && translated.length > 0) {
-        return translated.map(String);
-      }
-      
-      // Fallback to empty array if translation not found
-      return [];
-    },
-
-    translate: (key: string): string | undefined => {
-      // Use the app namespace for column/value translations
+    /**
+     * Get all aliases for a key (always returns array).
+     * Supports nested keys like "columns.status", "status.active", etc.
+     */
+    getAliases(key: string): string[] {
+      // Try app namespace first (for user-defined translations)
       const appKey = `app.${key}`;
       try {
-        const translated = t(appKey);
-        // If translation returns the key itself, it means translation not found
-        if (translated === appKey) {
-          return undefined;
+        const appTranslated = getRawMessage(appKey);
+        
+        if (Array.isArray(appTranslated) && appTranslated.length > 0) {
+          return appTranslated.map(String);
         }
-        return String(translated);
+        
+        if (typeof appTranslated === "string") {
+          return [appTranslated];
+        }
       } catch {
-        return undefined;
+        // Translation not found in app namespace
       }
+      
+      // Try fuzzyfilter namespace
+      const fuzzyKey = getKey(key);
+      try {
+        const fuzzyTranslated = getRawMessage(fuzzyKey);
+        
+        if (Array.isArray(fuzzyTranslated) && fuzzyTranslated.length > 0) {
+          return fuzzyTranslated.map(String);
+        }
+        
+        if (typeof fuzzyTranslated === "string") {
+          return [fuzzyTranslated];
+        }
+      } catch {
+        // Translation not found
+      }
+      
+      // Fallback: return key as single-item array
+      const parts = key.split(".");
+      return [parts[parts.length - 1] ?? key];
     },
 
-    getLocale: (): string | undefined => {
-      return getCurrentLocale();
+    /**
+     * Get primary display label for a key.
+     */
+    getLabel(key: string): string {
+      const aliases = this.getAliases(key);
+      return aliases[0] ?? key;
+    },
+
+    // Legacy methods for backward compatibility
+    getOperatorLabel(operatorId: OperatorKey): string {
+      return this.getLabel(`operators.${operatorId}`);
+    },
+
+    getOperatorAliases(operatorId: OperatorKey): string[] {
+      return this.getAliases(`operators.${operatorId}`);
+    },
+
+    translate(key: string): string | string[] | undefined {
+      const aliases = this.getAliases(key);
+      return aliases.length === 1 ? aliases[0] : aliases;
+    },
+
+    getLocale(): string | undefined {
+      return this.locale;
     },
 
     onChange: (callback: () => void): (() => void) => {

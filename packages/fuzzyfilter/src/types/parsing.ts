@@ -4,7 +4,7 @@
  */
 
 import type { ColumnId } from "./core.ts";
-import type { Operator } from "../operators.ts";
+import type { OperatorKey } from "../operators.ts";
 import type { AnyColumnDefinition } from "./schema.ts";
 
 // ============================================================================
@@ -56,14 +56,13 @@ export type TokenType = "column" | "operator" | "value" | "unknown";
 export interface ColumnClassificationMatch {
   column: AnyColumnDefinition;
   score: number;
-  matchedOn: "name" | "alias";
 }
 
 /**
  * An operator match during classification
  */
 export interface OperatorClassificationMatch {
-  operator: Operator;
+  operator: OperatorKey;
   score: number;
 }
 
@@ -122,8 +121,6 @@ export interface ParsedInput {
     token: Token;
     match: ValueClassificationMatch;
   };
-  /** What's missing to complete the filter? */
-  missing: Array<"column" | "operator" | "value">;
   /** Cursor position in the input (for autocomplete) */
   cursorPosition?: number;
 }

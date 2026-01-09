@@ -17,7 +17,7 @@ import DataTypeIcon from "./DataTypeIcon.vue"
 import {
   getOperatorsForType,
   DataType,
-  type OperatorInfo,
+  type OperatorDefinition,
   type AnyColumnDefinition,
 } from "@jasperhino/fuzzyfilter"
 import { cn } from "@/lib/utils"
@@ -33,10 +33,17 @@ const operators = computed(() => getOperatorsForType(props.column.type as DataTy
 /**
  * Get the number of arguments for an operator (matching API reference)
  */
-function getArgCount(operator: OperatorInfo): number {
-  if (!operator.requiresArgument) return 0
-  if (operator.id === "between") return 2
-  if (operator.isVariadic) return -1 // Unlimited (in, nin)
+function getArgCount(operator: OperatorDefinition): number {
+  // Derive from patterns
+  const hasArgs = operator.patterns.some(p => /\{[^}]*\}/.test(p))
+  if (!hasArgs) return 0
+  
+  // Check if variadic (has patterns with 2+ args)
+  const isVariadic = operator.patterns.some(p => (p.match(/\{[^}]*\}/g) || []).length >= 2)
+  if (isVariadic) {
+    if (operator.id === "between") return 2
+    return -1 // Unlimited (in, nin)
+  }
   return 1
 }
 </script>
@@ -89,7 +96,7 @@ function getArgCount(operator: OperatorInfo): number {
                     <span class="shrink-0 text-[10px] h-4 px-1 rounded inline-flex items-center font-medium bg-muted text-muted-foreground">
                       {{ op.symbol || op.id }}
                     </span>
-                    <span class="text-muted-foreground truncate">{{ op.label }}</span>
+                    <span class="text-muted-foreground truncate">{{ op.id }}</span>
                   </div>
 
                   <!-- Argument placeholders -->

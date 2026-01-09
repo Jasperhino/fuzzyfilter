@@ -14,64 +14,105 @@ import type {
   QueryMatch,
   ParsedDate,
   ColumnId,
-  EnumColumnDefinition,
-  BooleanColumnDefinition,
 } from "../../types/index.ts";
 import type { ScoreBreakdown, MatchMetadata } from "../types.ts";
 import type { I18nProvider } from "../../types/i18n.ts";
-import { getOperator } from "../../operators.ts";
+import { getOperator, type OperatorKey } from "../../operators.ts";
+import type { OperatorDefinition } from "../../types/core.ts";
 import { formatDateForDisplay } from "../../date-parser.ts";
-import { SCORING_CONFIG } from "../constants.ts";
 import { calculateQueryExplanationScore } from "./scorer.ts";
 
+// ============================================================================
+// OPERATOR PROPERTY HELPERS
+// These derive isVariadic/requiresArgument from patterns since these are only
+// available on CompiledOperator, not the raw OperatorDefinition.
+// ============================================================================
+
 /**
- * Get the translated column name using i18n, falling back to static name.
+ * Check if an operator is variadic (accepts multiple arguments).
+ * Derived from patterns - checks if any pattern has:
+ * - A variadic placeholder ({...} or {name...})
+ * - 2+ argument placeholders
+ */
+function isOperatorVariadic(op: OperatorDefinition | undefined): boolean {
+  if (!op || !op.patterns) return false;
+  
+  return op.patterns.some(p => {
+    // Check for variadic placeholder syntax: {...} or {name...}
+    if (/\{\w*\.\.\.\}/.test(p)) return true;
+    // Check for 2+ argument placeholders
+    return (p.match(/\{[^}]*\}/g) || []).length >= 2;
+  });
+}
+
+/**
+ * Check if an operator requires an argument.
+ * Derived from patterns - checks if any pattern has argument placeholders.
+ */
+function operatorRequiresArgument(op: OperatorDefinition | undefined): boolean {
+  if (!op) return false;
+  return op.patterns?.some(p => /\{[^}]*\}/.test(p)) ?? false;
+}
+
+/**
+ * Get minimum number of arguments for an operator.
+ * Derived from the pattern with the fewest argument placeholders.
+ */
+function getMinArguments(op: OperatorDefinition | undefined): number {
+  if (!op || !op.patterns) return 0;
+  const counts = op.patterns.map(p => (p.match(/\{[^}]+\}/g) || []).length);
+  return Math.min(...counts);
+}
+
+/**
+ * Get the translated column name using i18n.
+ * 
+ * In V2, columns always have a labelKey which is resolved via i18n provider.
+ * Falls back to extracting the last part of the labelKey if translation fails.
  * 
  * @param column - The column definition
- * @param i18nProvider - Optional i18n provider for translations
- * @returns The translated column name, or the static name if no translation found
+ * @param i18nProvider - i18n provider for translations (required in V2)
+ * @returns The translated column name
  */
 export function getTranslatedColumnName(
   column: AnyColumnDefinition,
   i18nProvider?: I18nProvider
 ): string {
-  // Try to translate using i18n key if available
-  if (column.nameKey && i18nProvider?.translate) {
-    const translated = i18nProvider.translate(column.nameKey);
-    if (translated) {
-      return translated;
-    }
+  if (!i18nProvider) {
+    // Fallback: extract last part of labelKey
+    const parts = column.labelKey.split(".");
+    return parts[parts.length - 1] ?? column.labelKey;
   }
-  // Fall back to static name
-  return column.name;
+  
+  // Use getLabel to get the primary display label
+  return i18nProvider.getLabel(column.labelKey);
 }
 
 /**
- * Get the translated enum value label using i18n, falling back to static label or value.
+ * Get the translated enum value label using i18n.
  * 
- * @param column - The enum column definition
- * @param valueIndex - The index of the value in the values array
- * @param i18nProvider - Optional i18n provider for translations
- * @returns The translated label, or the static label/value if no translation found
+ * In V2, enum values use the pattern {valuesI18nPrefix ?? column.id}.{value}
+ * to generate i18n keys.
+ * 
+ * @param column - The column definition with values
+ * @param value - The enum value to get label for
+ * @param i18nProvider - i18n provider for translations (required in V2)
+ * @returns The translated label, or the value itself if no translation found
  */
 export function getTranslatedEnumValueLabel(
-  column: EnumColumnDefinition,
-  valueIndex: number,
+  column: AnyColumnDefinition,
+  value: unknown,
   i18nProvider?: I18nProvider
 ): string {
-  // Try to translate using i18n key if available
-  if (column.valueKeys && column.valueKeys[valueIndex] && i18nProvider?.translate) {
-    const translated = i18nProvider.translate(column.valueKeys[valueIndex]);
-    if (translated) {
-      return translated;
-    }
+  if (!column.values || !i18nProvider) {
+    return String(value);
   }
-  // Fall back to static labels array
-  if (column.labels && column.labels[valueIndex]) {
-    return column.labels[valueIndex];
-  }
-  // Fall back to values array
-  return column.values[valueIndex] ?? "";
+
+  const prefix = column.valuesI18nPrefix ?? (typeof column.id === 'string' ? column.id : String(column.id));
+  const valueKey = `${prefix}.${value}`;
+  
+  // Use getLabel to get the primary display label
+  return i18nProvider.getLabel(valueKey);
 }
 
 /**
@@ -233,7 +274,7 @@ function isSameDay(date1: Date, date2: Date): boolean {
  */
 export function createSuggestion(
   column: AnyColumnDefinition,
-  operator: Operator,
+  operatorKey: OperatorKey,
   args: HypothesisValueType[] | undefined,
   scoreOrBreakdown: number | ScoreBreakdown,
   resultCount?: number,
@@ -242,7 +283,7 @@ export function createSuggestion(
   queryTokens?: Token[],
   i18nProvider?: I18nProvider
 ): FilterSuggestion {
-  const opInfo = getOperator(operator, i18nProvider);
+  const opInfo = getOperator(operatorKey);
 
   // Format value text based on arguments
   let valueText = "";
@@ -254,12 +295,11 @@ export function createSuggestion(
       .map((arg, index) => {
         if (arg.kind === "string") {
           // Check if this is an enum value that should be translated
-          if (column.type === "enum" && "values" in column && "valueKeys" in column) {
-            const enumCol = column as EnumColumnDefinition;
-            const valueIndex = enumCol.values.indexOf(arg.value);
-            if (valueIndex >= 0) {
+          if (column.values && column.values.length > 0) {
+            // Check if the value is in the column's values array
+            if (column.values.includes(arg.value)) {
               // Use translated label for display
-              return getTranslatedEnumValueLabel(enumCol, valueIndex, i18nProvider);
+              return getTranslatedEnumValueLabel(column, arg.value, i18nProvider);
             }
           }
           return arg.value;
@@ -324,7 +364,7 @@ export function createSuggestion(
   }
 
   // Use matched alias in label if provided, otherwise use operator label
-  const operatorDisplay = matchedAlias ?? opInfo.label;
+  const operatorDisplay = matchedAlias ?? opInfo.id;
   
   // Get translated column name for display
   const columnDisplayName = getTranslatedColumnName(column, i18nProvider);
@@ -333,9 +373,10 @@ export function createSuggestion(
     ? `${columnDisplayName} ${operatorDisplay} ${valueText}`
     : `${columnDisplayName} ${operatorDisplay}`;
 
+  const columnDisplayName = getTranslatedColumnName(column, i18nProvider);
   const completionText = valueText
-    ? `${column.name} ${operator} "${valueText}"`
-    : `${column.name} ${operator} `;
+    ? `${columnDisplayName} ${operator} "${valueText}"`
+    : `${columnDisplayName} ${operator} `;
 
   // Calculate query explanation score using the new centralized scorer
   // This replaces the old scattered scoring logic with a unified "how well does this explain the query?" approach
@@ -422,8 +463,7 @@ export function createSuggestion(
     parts: {
       column: { text: columnDisplayName },
       operator: {
-        text: opInfo.label,
-        symbol: opInfo.symbol,
+        text: opInfo.id,
         matchedAlias: matchedAlias,
       },
       arguments: argumentParts.length > 0 ? argumentParts : undefined,
@@ -437,11 +477,11 @@ export function createSuggestion(
     score,
     scoreBreakdown,
     isComplete:
-      !opInfo.requiresArgument ||
+      !operatorRequiresArgument(opInfo) ||
       (args !== undefined &&
         args.length > 0 &&
         // Variadic operators may require a minimum number of arguments
-        (!opInfo.isVariadic || args.length >= (opInfo.minArguments ?? 1))),
+        (!isOperatorVariadic(opInfo) || args.length >= (getMinArguments(opInfo) || 1))),
     completionText,
     cursorPositionAfter: completionText.length,
     category:
@@ -456,34 +496,58 @@ export function createSuggestion(
 }
 
 /**
+ * Options for creating a date suggestion
+ */
+export interface CreateDateSuggestionOptions {
+  /** The column definition */
+  column: AnyColumnDefinition;
+  /** The operator */
+  operator: Operator;
+  /** The parsed date information */
+  parsedDate: ParsedDate;
+  /** The suggestion score (fallback if no matchMetadata/tokens) */
+  score: number;
+  /** Optional pre-computed result count */
+  resultCount?: number;
+  /** Optional custom label for the date */
+  customLabel?: string;
+  /** Optional metadata for highlighting */
+  matchMetadata?: MatchMetadata;
+  /** Optional query tokens for score calculation */
+  queryTokens?: Token[];
+  /** Optional i18n provider */
+  i18nProvider?: I18nProvider;
+}
+
+/**
  * Create a suggestion for a date value
  *
- * @param column - The column definition
- * @param operator - The operator
- * @param parsedDate - The parsed date information
- * @param score - The suggestion score (fallback if no matchMetadata/tokens)
- * @param resultCount - Optional pre-computed result count
- * @param customLabel - Optional custom label for the date
- * @param matchMetadata - Optional metadata for highlighting
- * @param queryTokens - Optional query tokens for score calculation
- * @param i18nProvider - Optional i18n provider
+ * @param options - Options for creating the date suggestion
  * @returns A FilterSuggestion object
  */
-export function createDateSuggestion(
-  column: AnyColumnDefinition,
-  operator: Operator,
-  parsedDate: ParsedDate,
-  score: number,
-  resultCount?: number,
-  customLabel?: string,
-  matchMetadata?: MatchMetadata,
-  queryTokens?: Token[],
-  i18nProvider?: I18nProvider
-): FilterSuggestion {
-  const opInfo = getOperator(operator, i18nProvider);
+export function createDateSuggestion(options: CreateDateSuggestionOptions): FilterSuggestion {
+  const {
+    column,
+    operator,
+    parsedDate,
+    score,
+    resultCount,
+    customLabel,
+    matchMetadata,
+    queryTokens,
+    i18nProvider,
+  } = options;
+
+  const opInfo = getOperator(operator);
+  if (!opInfo) {
+    throw new Error(`Unknown operator: ${operator}`);
+  }
+
+  // Check if operator is variadic using the helper function
+  const isVariadic = isOperatorVariadic(opInfo);
 
   // For date ranges with variadic operators, show both dates
-  const isRangeOperator = opInfo.isVariadic && parsedDate.rangeStart && parsedDate.rangeEnd;
+  const isRangeOperator = isVariadic && parsedDate.rangeStart && parsedDate.rangeEnd;
   const displayDate = customLabel ??
     (isRangeOperator
       ? `${formatDateForDisplay(parsedDate.rangeStart!)} - ${formatDateForDisplay(parsedDate.rangeEnd!)}`
@@ -492,10 +556,11 @@ export function createDateSuggestion(
   // Get translated column name for display
   const columnDisplayName = getTranslatedColumnName(column, i18nProvider);
   
-  const label = `${columnDisplayName} ${opInfo.label} ${displayDate}`;
+  const label = `${columnDisplayName} ${opInfo.id} ${displayDate}`;
 
   // Use the original text for completion to preserve natural language
-  const completionText = `${column.name} ${operator} "${parsedDate.text}"`;
+  const columnDisplayName = getTranslatedColumnName(column, i18nProvider);
+  const completionText = `${columnDisplayName} ${operator} "${parsedDate.text}"`;
 
   // Build arguments array - either a range (2 dates) or a single date
   const args: HypothesisValueType[] = isRangeOperator
@@ -589,7 +654,7 @@ export function createDateSuggestion(
     label,
     parts: {
       column: { text: columnDisplayName },
-      operator: { text: opInfo.label, symbol: opInfo.symbol },
+      operator: { text: opInfo.id },
       arguments: argumentParts,
     },
     column,

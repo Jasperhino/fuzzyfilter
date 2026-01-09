@@ -7,6 +7,8 @@
  * @module fuzzyfilter/types/core
  */
 
+import type { I18nProvider } from "./i18n.ts";
+
 // ============================================================================
 // DATA TYPES
 // ============================================================================
@@ -76,113 +78,249 @@ export type OperatorCategory = (typeof OperatorCategory)[keyof typeof OperatorCa
 // Note: Operator type is derived from OPERATORS in operators.ts
 // and re-exported from types/index.ts
 
+
 // ============================================================================
-// ALIAS PATTERNS
+// FUZZYFILTERABLE INTERFACE - For custom types
 // ============================================================================
 
 /**
- * Pattern for generating combinatorial aliases.
+ * Interface that custom types must implement to be used in FuzzyFilter.
+ * The type itself knows how to parse, format, and compare its values.
  * 
- * Parts are word set keys that get expanded into all combinations.
- * Suffix "?" means the part is optional.
+ * @typeParam T - The type itself (for self-referencing)
  * 
  * @example
  * ```typescript
- * // Pattern: ["less", "than?", "or?", "equal"]
- * // Generates: "less equal", "less than equal", "less or equal", 
- * //            "less than or equal", plus all synonym combinations
+ * class Amount implements FuzzyFilterable<Amount> {
+ *   constructor(public value: number, public unit: string) {}
+ *   
+ *   format(): string {
+ *     return `${this.value} ${this.unit}`;
+ *   }
+ *   
+ *   compare(other: Amount): number {
+ *     return this.value - other.value;
+ *   }
+ * }
  * ```
  */
-export interface AliasPattern {
-  /** Word set keys to combine. Suffix "?" means optional */
-  parts: readonly string[];
+export interface FuzzyFilterable<T> {
+  /** Format this value for display in suggestions */
+  format(): string;
+  
+  /** Compare this value to another (-1, 0, 1) for range operators */
+  compare(other: T): number;
 }
 
 /**
- * Pattern for operators with spread syntax (keywords around arguments).
+ * Static methods that FuzzyFilterable classes must provide.
  * 
- * Used for operators like "between" where the query looks like:
- * "from yesterday to today" or "between 10 and 20"
- * 
- * @example
- * ```typescript
- * spreadPatterns: [
- *   { keywords: ["from", "to"], keywordSets: ["from", "to"] },
- *   { keywords: ["between", "and"], keywordSets: ["between", "and"] },
- * ]
- * ```
+ * @typeParam T - The FuzzyFilterable type
  */
-export interface SpreadPattern {
-  /** The literal keywords that delimit arguments (start, middle) */
-  keywords: readonly [string, string];
-  /** Word set keys for synonym expansion of each keyword */
-  keywordSets: readonly [string, string];
+export interface FuzzyFilterableStatic<T extends FuzzyFilterable<T>> {
+  /** Parse user input string into an instance */
+  parse(input: string): T | null;
 }
 
+/**
+ * Constructor type combining instance and static requirements.
+ */
+export type FuzzyFilterableConstructor<T extends FuzzyFilterable<T>> = 
+  FuzzyFilterableStatic<T> & (new (...args: any[]) => T);
+
 // ============================================================================
-// OPERATOR METADATA
+// TYPE HANDLER - Runtime type handling
 // ============================================================================
 
 /**
- * Base operator metadata for display and validation.
- * Used as the constraint type for OPERATORS.
- * The full OperatorInfo type is derived in registry.ts.
+ * Handler for parsing, formatting, and comparing values of a specific type.
+ * Used internally by the library to handle both built-in types and custom types.
+ * 
+ * @typeParam T - The value type
  */
-export interface OperatorInfoBase {
-  /** Category for grouping operators in UI */
-  category: OperatorCategory;
+export interface TypeHandler<T> {
+  /** Parse user input string into a value */
+  parse(input: string, i18n?: I18nProvider): T | null;
+  
+  /** Format value for display (returns i18n key or literal) */
+  format(value: T): string;
+  
+  /** Compare two values (-1, 0, 1) for range operators */
+  compare(a: T, b: T): number;
+  
+  /** All possible values (for enum-like types) */
+  values?: T[];
+}
+
+// ============================================================================
+// TYPE DEFINITION (LEGACY - kept for backward compatibility during migration)
+// ============================================================================
+
+/**
+ * Definition for a custom data type.
+ * 
+ * @deprecated Use FuzzyFilterable interface instead for custom types.
+ * This is kept temporarily for migration purposes.
+ * 
+ * @typeParam TValue - The TypeScript type for values of this type
+ */
+export interface TypeDefinition<TValue = unknown> {
+  /** Unique identifier for this type */
+  id: string;
   /** Human-readable label */
   label: string;
-  /** 
-   * Explicit aliases for fuzzy matching.
-   * These are in addition to any generated from aliasPatterns.
-   * Use for symbols (<=, >=) and single words that don't fit patterns.
-   */
-  aliases: readonly string[];
   /**
-   * Patterns for generating combinatorial aliases.
-   * Each pattern expands word set references into all combinations.
+   * Maps to a base DataType for operator compatibility.
+   * Operators that support this DataType will be available for columns of this type.
+   */
+  compatibilityType: DataType;
+  /** Parse user input string into typed value */
+  parseValue?: (input: string) => TValue | null;
+  /** Format typed value for display */
+  formatValue?: (value: TValue) => string;
+  /** Compare two values (for range operators) */
+  compare?: (a: TValue, b: TValue) => number;
+}
+
+/**
+ * Built-in type definitions that map to DataType values.
+ * 
+ * @deprecated This is kept for backward compatibility. In v2, built-in types
+ * are handled automatically and don't need to be registered.
+ */
+export const DATA_TYPES: TypeDefinition[] = [
+  { id: "string", label: "String", compatibilityType: DataType.STRING },
+  { id: "number", label: "Number", compatibilityType: DataType.NUMBER },
+  { id: "boolean", label: "Boolean", compatibilityType: DataType.BOOLEAN },
+  { id: "date", label: "Date", compatibilityType: DataType.DATE },
+  { id: "enum", label: "Enum", compatibilityType: DataType.ENUM },
+  { id: "array", label: "Array", compatibilityType: DataType.ARRAY },
+];
+
+// ============================================================================
+// OPERATOR DEFINITION (PATTERN-BASED API)
+// ============================================================================
+
+/**
+ * Definition for a filter operator using the pattern-based syntax.
+ * 
+ * The new pattern syntax consolidates aliases, template patterns, and i18n
+ * into a single `patterns` array with special reference syntax:
+ * 
+ * | Syntax | Meaning | Resolution |
+ * |--------|---------|------------|
+ * | `{arg}` | Argument placeholder | User provides value |
+ * | `@keyword` | Local alias reference | Resolves from `aliases["@keyword"]` |
+ * | `$keyword` | i18n translation key | Resolves from `i18nProvider.translate(keyword)` |
+ * | `literal` | Literal text | Matches exactly |
+ * 
+ * @typeParam TValue - The type of cell values this operator handles
+ * @typeParam TArgs - The type of arguments passed to the predicate
+ * 
+ * @example
+ * ```typescript
+ * const customOperator: OperatorDefinition = {
+ *   key: 'hasMoreThan',
+ *   category: OperatorCategory.COMPARISON,
+ *   patterns: ['@more {value}', 'exceeds {value}'],
+ *   aliases: {
+ *     '@more': ['more than', 'greater than', '>'],
+ *   },
+ *   supportedTypes: [DataType.NUMBER],
+ *   predicate: (cell, [arg]) => (cell as number) > (arg as number),
+ * };
+ * ```
+ */
+export interface OperatorDefinition<TValue = unknown, TArgs extends unknown[] = unknown[]> {
+  /** 
+   * Unique identifier for this operator.
+   * Used as the programmatic key for lookups.
+   */
+  id: string;
+  
+  /** Category for grouping operators in UI */
+  category: OperatorCategory;
+  
+  /** Which data types this operator supports */
+  supportedTypes: readonly DataType[] | readonly string[];
+  
+  /**
+   * Pattern strings for matching user input.
+   * 
+   * Patterns use a special syntax:
+   * - `{}` or `{name}` - Argument placeholder that captures user input
+   * - `@keyword` - Reference to local aliases (resolved from `aliases` field)
+   * - `t(key)` - i18n translation key (resolved via i18nProvider.translate(), can return array)
+   * - `literal` - Matches text literally
+   * 
+   * Multi-word literals should use underscores: `not_equals` becomes "not equals" in display.
    * 
    * @example
    * ```typescript
-   * aliasPatterns: [
-   *   { parts: ["less", "than?", "or?", "equal"] },
+   * patterns: [
+   *   "@is {}",                    // Matches: "is X", "= X", "== X"
+   *   "t(between) {} @and {}",     // Matches: "between 1 and 10", "zwischen 1 und 10"
+   *   "t(operators.isEmpty)",      // Matches: "is empty", "is blank", etc.
    * ]
    * ```
    */
-  aliasPatterns?: readonly AliasPattern[];
+  patterns: readonly string[];
+  
   /**
-   * Patterns for spread syntax operators.
-   * Enables parsing "from X to Y" as a between operator.
-   */
-  spreadPatterns?: readonly SpreadPattern[];
-  /**
-   * Type-specific aliases that only apply for certain column types.
-   * For example, "at" and "on" only make sense for date equality.
-   *
+   * Local alias expansions for @keyword references.
+   * 
+   * Each key (prefixed with @) maps to an array of literal strings
+   * or t(key) i18n references that get resolved at runtime.
+   * Use underscores for multi-word aliases: "not_equals" instead of "not equals".
+   * 
    * @example
    * ```typescript
-   * typeSpecificAliases: {
-   *   date: ["at", "on"],
+   * aliases: {
+   *   "@eq": ["=", "==", "is", "equal", "equals", "t(operators.eq)"],
+   *   "@and": ["and", "&", "t(and)"],
    * }
    * ```
    */
-  typeSpecificAliases?: Partial<Record<DataType, readonly string[]>>;
-  /** Which data types this operator supports */
-  supportedTypes: readonly DataType[];
-  /** Does this operator require an argument? */
-  requiresArgument: boolean;
-  /** For binary operators, can accept multiple values */
-  isVariadic?: boolean;
-  /** 
-   * Minimum number of arguments required for variadic operators.
-   * For example, "between" requires exactly 2, while "in" requires at least 1.
-   * Only meaningful when isVariadic is true.
-   * @default 1
+  aliases?: Record<string, readonly string[]>;
+  
+  /**
+   * Type-specific patterns that only apply for certain column types.
+   * For example, "at" and "on" only make sense for date equality.
+   * 
+   * @example
+   * ```typescript
+   * typeSpecificPatterns: {
+   *   [DataType.DATE]: ["at {value}", "on {value}"],
+   * }
+   * ```
    */
-  minArguments?: number;
-  /** Display symbol (e.g., "=" for eq, "!=" for neq) */
-  symbol?: string;
+  typeSpecificPatterns?: Partial<Record<DataType, readonly string[]>>;
+  
+  /**
+   * The predicate function that implements the operator logic.
+   * REQUIRED for all operators.
+   * 
+   * @param cellValue - The value from the cell being filtered
+   * @param args - The filter argument(s) as an array
+   * @param row - Optional: the entire row for cross-column logic
+   * @returns true if the row matches the filter
+   * 
+   * @example
+   * ```typescript
+   * // Simple equality
+   * predicate: (cell, [arg]) => cell === arg
+   * 
+   * // Between operator
+   * predicate: (cell, [min, max]) => cell >= min && cell <= max
+   * 
+   * // Cross-column comparison
+   * predicate: (cell, [_arg], row) => {
+   *   const endDate = row?.endDate as Date;
+   *   return (cell as Date) < endDate;
+   * }
+   * ```
+   */
+  predicate: (cellValue: TValue, args: TArgs, row?: Record<string, unknown>) => boolean;
 }
 
 // ============================================================================
@@ -192,13 +330,16 @@ export interface OperatorInfoBase {
 /**
  * Unique identifier for a column in the schema.
  *
- * This is a branded type (nominal typing) that prevents accidentally
- * passing a regular string where a ColumnId is expected.
- *
- * Use the {@link columnId} helper function to create ColumnId values.
+ * This is a branded type (nominal typing). However, plain strings are
+ * accepted in most places for convenience. The {@link columnId} helper
+ * function is optional and can be used for explicit typing if desired.
  *
  * @example
  * ```typescript
+ * // Plain strings work everywhere (recommended)
+ * { id: "status", name: "Status", type: "enum", ... }
+ *
+ * // Explicit ColumnId (optional)
  * const id: ColumnId = columnId("status");
  * ```
  */
@@ -214,30 +355,28 @@ export type RowId = number;
 /**
  * Creates a typed ColumnId from a string.
  *
- * ColumnId is a branded type that provides compile-time safety,
- * ensuring you don't accidentally pass arbitrary strings where
- * column identifiers are expected.
+ * **Note:** This helper is optional. Plain strings are accepted everywhere
+ * in the FuzzyFilter API. Use this only if you want explicit branded types.
  *
  * @param id - The string identifier for the column
  * @returns A branded ColumnId
  *
  * @example
  * ```typescript
- * import { columnId } from "fuzzyfilter";
+ * import { createFuzzyFilter } from "fuzzyfilter";
  *
- * // Creating column IDs for schema definition
- * const statusId = columnId("status");
- * const priorityId = columnId("priority");
+ * const filter = createFuzzyFilter();
  *
+ * // Recommended: Just use plain strings
  * filter.setSchema({
  *   columns: [
- *     { id: statusId, name: "Status", type: "enum", values: ["Open", "Closed"] },
- *     { id: priorityId, name: "Priority", type: "number" },
+ *     { id: "status", name: "Status", type: "enum", values: ["Open", "Closed"] },
+ *     { id: "priority", name: "Priority", type: "number" },
  *   ],
  * });
  *
- * // Use the same IDs for programmatic filter creation
- * const compiled = filter.compileFilter(statusId, "eq", "Open");
+ * // Plain strings work for all API calls
+ * const compiled = filter.compileFilter("status", "eq", "Open");
  * ```
  */
 export function columnId(id: string): ColumnId {

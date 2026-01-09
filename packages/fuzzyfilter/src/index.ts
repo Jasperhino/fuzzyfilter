@@ -23,9 +23,9 @@
  * // 2. Define your schema
  * filter.setSchema({
  *   columns: [
- *     { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
- *     { id: columnId("priority"), name: "Priority", type: "number" },
- *     { id: columnId("createdAt"), name: "Created At", type: "date" },
+ *     { id: "status", name: "Status", type: "enum", values: ["Open", "Closed"] },
+ *     { id: "priority", name: "Priority", type: "number" },
+ *     { id: "createdAt", name: "Created At", type: "date" },
  *   ],
  * });
  *
@@ -121,15 +121,20 @@ export {
   isValidOperatorForType,
   /** Get the default operator for a data type */
   getDefaultOperatorForType,
-  /** Get all search terms (aliases) for an operator, with optional type-specific aliases */
+  /** Get all search terms (aliases) for an operator */
   getOperatorSearchTerms,
-  /** Get aliases for an operator, with optional type-specific aliases */
-  getOperatorAliases,
-  /** Check if an alias matches an operator for a specific type */
+  /** Check if an alias matches an operator */
   isAliasForOperator,
   /** Type guard to check if a string is a valid operator */
   isOperator,
+  /** Array of all built-in operators for spreading into config */
+  OPERATORS_ARRAY,
 } from "./operators.ts";
+
+/**
+ * Instance registry for custom operators and types.
+ */
+export { InstanceRegistry } from "./registry.ts";
 
 // ============================================================================
 // MAIN FACTORY
@@ -175,7 +180,15 @@ export { createTrie } from "./trie.ts";
 /**
  * Schema utilities for building and querying schemas.
  */
-export { buildSchema, getColumn, getColumns, getColumnIds } from "./schema-builder.ts";
+export { 
+  buildSchema, 
+  getColumn, 
+  getColumns, 
+  getColumnIds,
+  getColumnOrThrow,
+  findSimilarColumns,
+  UnknownColumnError,
+} from "./schema-builder.ts";
 
 // ============================================================================
 // DATE PARSING
@@ -240,10 +253,6 @@ export type { DateLocale } from "./date-parser.ts";
  *     eq: { label: "es igual a", aliases: ["igual", "="] },
  *     contains: { label: "contiene", aliases: ["tiene"] },
  *   },
- *   wordSets: {
- *     less: ["menos", "menor"],
- *     than: ["que"],
- *   },
  * };
  *
  * const spanishProvider = createObjectProvider(spanishTranslations);
@@ -257,8 +266,6 @@ export {
   type FuzzyFilterTranslations,
   /** Type for operator-specific translations */
   type OperatorTranslations,
-  /** Type for word set translations */
-  type WordSetTranslations,
   /** Create a default English i18n provider */
   createDefaultEnglishProvider,
   /** Create an i18n provider from a simple object */
@@ -294,34 +301,17 @@ export {
   createI18nextProvider,
   /** Create an i18n provider from a vue-i18n instance */
   createVueI18nProvider,
-} from "./i18n/adapters/index.ts";/**
- * Pre-built locale translations.
- *
- * The core package only includes English translations.
- * For additional languages, use @fuzzyfilter/i18n-locales.
- *
- * @example Using English locale
- * ```typescript
- * import { createFuzzyFilter, createObjectProvider } from "fuzzyfilter";
- * import { en } from "fuzzyfilter/i18n/locales";
- *
- * const provider = createObjectProvider(en);
- * const filter = createFuzzyFilter({ i18nProvider: provider });
- * ```
- *
- * @example Using additional locales from @fuzzyfilter/i18n-locales
- * ```typescript
- * import { createFuzzyFilter, createObjectProvider } from "fuzzyfilter";
- * import { es, fr } from "@fuzzyfilter/i18n-locales";
- *
- * const provider = createObjectProvider(es);
- * const filter = createFuzzyFilter({ i18nProvider: provider });
- * ```
- */
-export {
-  /** English (default) translations */
-  en,
-} from "./i18n/locales/index.ts";
+} from "./i18n/adapters/index.ts";// NOTE: Locale translations are available in the @fuzzyfilter/i18n-locales package.
+// The core package uses English by default via createDefaultEnglishProvider().
+// 
+// @example Using locales from @fuzzyfilter/i18n-locales
+// ```typescript
+// import { createFuzzyFilter, createObjectProvider } from "fuzzyfilter";
+// import { en, es, fr, de } from "@fuzzyfilter/i18n-locales";
+//
+// const provider = createObjectProvider(es);
+// const filter = createFuzzyFilter({ i18nProvider: provider });
+// ```
 
 // ============================================================================
 // TELEMETRY EXPORTS

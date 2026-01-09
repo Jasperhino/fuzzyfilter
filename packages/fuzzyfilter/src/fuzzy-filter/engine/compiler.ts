@@ -3,6 +3,8 @@
  * 
  * Handles compilation of filter expressions into executable predicates
  * and execution of filters against data.
+ * 
+ * Uses operator predicates from the InstanceRegistry for unified execution.
  */
 
 import type {
@@ -12,31 +14,26 @@ import type {
   Operator,
   AnyColumnDefinition,
   ParsedInput,
+  OperatorDefinition,
 } from "../../types/index.ts";
 import { DataType } from "../../types/index.ts";
 import { parseDate } from "../../date-parser.ts";
+import type { InstanceRegistry } from "../../registry.ts";
+import { OPERATORS } from "../../operators.ts";
 
-/**
- * Check if two dates are the same calendar day
- */
-function isSameDay(date1: Date, date2: Date): boolean {
-  return (
-    date1.getFullYear() === date2.getFullYear() &&
-    date1.getMonth() === date2.getMonth() &&
-    date1.getDate() === date2.getDate()
-  );
-}
 
 /**
  * Compile a filter from parsed input
  *
  * @param parsed - The parsed input
  * @param getColumnById - Function to get column by ID
+ * @param registry - Optional instance registry for custom operators
  * @returns Compiled filter or null if invalid
  */
 export function compileFromParsed(
   parsed: ParsedInput,
-  getColumnById: (id: ColumnId | string) => AnyColumnDefinition | null
+  getColumnById: (id: ColumnId | string) => AnyColumnDefinition | null,
+  registry?: InstanceRegistry
 ): CompiledFilter | null {
   if (!parsed.column || !parsed.operator) return null;
 
@@ -44,7 +41,9 @@ export function compileFromParsed(
     parsed.column.match.column.id,
     parsed.operator.match.operator,
     parsed.value?.match.value,
-    getColumnById
+    getColumnById,
+    [],
+    registry
   );
 }
 
@@ -56,159 +55,74 @@ export function compileFromParsed(
  * @param value - Optional value for the operator
  * @param getColumnById - Function to get column by ID
  * @param data - The data array (for computing match count)
+ * @param registry - Optional instance registry for custom operators
  * @returns Compiled filter or null if invalid
  */
 export function compileFilter(
   colId: ColumnId | string,
-  operator: Operator,
+  operator: Operator | string,
   value: unknown,
   getColumnById: (id: ColumnId | string) => AnyColumnDefinition | null,
-  data: Array<Record<string, unknown>> = []
+  data: Array<Record<string, unknown>> = [],
+  registry?: InstanceRegistry
 ): CompiledFilter | null {
   const col = getColumnById(colId);
   if (!col) return null;
 
   const columnId = typeof colId === "string" ? (colId as ColumnId) : colId;
 
-  // For date columns, try to parse the value as a date expression
-  let dateValue: Date | null = null;
-  let dateRangeStart: Date | null = null;
-  let dateRangeEnd: Date | null = null;
+  // Get operator definition from registry or fall back to built-in OPERATORS
+  const opDef: OperatorDefinition | undefined = registry 
+    ? registry.getOperator(operator) 
+    : OPERATORS[operator];
 
-  if (col.type === DataType.DATE && value !== undefined) {
-    if (value instanceof Date) {
-      dateValue = value;
-    } else if (Array.isArray(value) && value.length === 2) {
-      // Handle date range as [start, end] array
-      const [start, end] = value;
-      if (start instanceof Date && end instanceof Date) {
-        dateValue = start;
-        dateRangeStart = start;
-        dateRangeEnd = end;
-      } else {
-        const startDate = start instanceof Date ? start : new Date(String(start));
-        const endDate = end instanceof Date ? end : new Date(String(end));
-        if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
-          dateValue = startDate;
-          dateRangeStart = startDate;
-          dateRangeEnd = endDate;
-        }
-      }
-    } else if (typeof value === "string") {
-      // Try to parse as natural language date
-      const parsed = parseDate(value);
-      if (parsed) {
-        dateValue = parsed.date;
-        if (parsed.isRange && parsed.rangeStart && parsed.rangeEnd) {
-          dateRangeStart = parsed.rangeStart;
-          dateRangeEnd = parsed.rangeEnd;
-        }
-      } else {
-        // Fallback: try direct Date parsing
-        const directParse = new Date(value);
-        if (!isNaN(directParse.getTime())) {
-          dateValue = directParse;
-        }
-      }
-    }
+  if (!opDef) {
+    console.warn(`Unknown operator: "${operator}"`);
+    return null;
   }
 
+  if (!opDef.predicate) {
+    console.warn(`Operator "${operator}" is missing a predicate implementation`);
+    return null;
+  }
+
+  // For date columns, parse the value as a date expression
+  let processedValue = value;
+  
+  if (col.type === DataType.DATE && value !== undefined) {
+    processedValue = parseDateValue(value);
+  }
+
+  // Convert value to arguments array (predicates now expect arrays)
+  const argsArray: unknown[] = processedValue !== undefined 
+    ? (Array.isArray(processedValue) ? processedValue : [processedValue]) 
+    : [];
+
+  // Create the predicate using the operator's predicate function
   const predicate = (row: Record<string, unknown>): boolean => {
     const cellValue = row[columnId as string];
-
-    // Handle date-specific operators
-    if (col.type === DataType.DATE && dateValue) {
+    
+    // Handle date-specific processing for date columns
+    if (col.type === DataType.DATE && processedValue !== undefined) {
       if (cellValue == null) return false;
-
-      const cellDate =
-        cellValue instanceof Date ? cellValue : new Date(String(cellValue));
-
+      
+      const cellDate = cellValue instanceof Date ? cellValue : new Date(String(cellValue));
       if (isNaN(cellDate.getTime())) return false;
-
-      switch (operator) {
-        case "eq":
-          return isSameDay(cellDate, dateValue);
-        case "neq":
-          return !isSameDay(cellDate, dateValue);
-        case "lt":
-        case "before":
-          return cellDate < dateValue;
-        case "lte":
-          return cellDate <= dateValue;
-        case "gt":
-        case "after":
-          return cellDate > dateValue;
-        case "gte":
-          return cellDate >= dateValue;
-        case "between":
-          if (dateRangeStart && dateRangeEnd) {
-            return cellDate >= dateRangeStart && cellDate <= dateRangeEnd;
-          }
-          return false;
-        default:
-          // Fall through to standard operators
-          break;
+      
+      // For date equality, we need special handling for "same day" comparison
+      if (operator === "eq" && argsArray[0] instanceof Date) {
+        return isSameDay(cellDate, argsArray[0]);
       }
+      if (operator === "neq" && argsArray[0] instanceof Date) {
+        return !isSameDay(cellDate, argsArray[0]);
+      }
+      
+      // For other date operators, pass args array to predicate
+      return opDef.predicate(cellDate, argsArray, row);
     }
-
-    // Standard operators
-    switch (operator) {
-      case "eq":
-        return cellValue === value;
-      case "eqIgnoreCase":
-        return String(cellValue).toLowerCase() === String(value).toLowerCase();
-      case "neq":
-        return cellValue !== value;
-      case "neqIgnoreCase":
-        return (
-          String(cellValue).toLowerCase() !== String(value).toLowerCase()
-        );
-      case "lt":
-        return (cellValue as number) < (value as number);
-      case "lte":
-        return (cellValue as number) <= (value as number);
-      case "gt":
-        return (cellValue as number) > (value as number);
-      case "gte":
-        return (cellValue as number) >= (value as number);
-      case "contains":
-        return String(cellValue).includes(String(value));
-      case "notContains":
-        return !String(cellValue).includes(String(value));
-      case "startsWith":
-        return String(cellValue).startsWith(String(value));
-      case "endsWith":
-        return String(cellValue).endsWith(String(value));
-      case "isEmpty":
-        return cellValue == null || cellValue === "";
-      case "isNotEmpty":
-        return cellValue != null && cellValue !== "";
-      case "isTrue":
-        return cellValue === true;
-      case "isFalse":
-        return cellValue === false;
-      case "in":
-        return Array.isArray(value) && value.includes(cellValue);
-      case "nin":
-        return Array.isArray(value) && !value.includes(cellValue);
-      case "before":
-        // Non-date fallback for before operator
-        return String(cellValue) < String(value);
-      case "after":
-        // Non-date fallback for after operator
-        return String(cellValue) > String(value);
-      case "between":
-        // For between with array value [start, end]
-        if (Array.isArray(value) && value.length === 2) {
-          const numValue = cellValue as number;
-          return (
-            numValue >= (value[0] as number) && numValue <= (value[1] as number)
-          );
-        }
-        return false;
-      default:
-        return true;
-    }
+    
+    // Use the operator's predicate with args array for non-date columns
+    return opDef.predicate(cellValue, argsArray, row);
   };
 
   // Calculate match count
@@ -217,19 +131,60 @@ export function compileFilter(
     if (predicate(row)) matchCount++;
   }
 
-  // Convert value to arguments array
-  const args: unknown[] = value !== undefined ? (Array.isArray(value) ? value : [value]) : [];
-
   return {
     columnId,
-    operator,
-    arguments: args,
+    operator: operator as Operator,
+    arguments: argsArray,
     predicate,
     matchCount,
     toString() {
-      return `${col.name} ${operator}${args.length > 0 ? ` ${args.join(", ")}` : ""}`;
+      // Extract label from labelKey for display (e.g., "columns.status" -> "status")
+      const labelParts = col.labelKey.split(".");
+      const displayLabel = labelParts[labelParts.length - 1] ?? col.labelKey;
+      return `${displayLabel} ${opDef.id}${argsArray.length > 0 ? ` ${argsArray.join(", ")}` : ""}`;
     },
   };
+}
+
+/**
+ * Parse a value for date filtering.
+ * Handles Date objects, arrays (for ranges), and string expressions.
+ */
+function parseDateValue(value: unknown): unknown {
+  if (value instanceof Date) {
+    return value;
+  }
+  
+  if (Array.isArray(value) && value.length === 2) {
+    // Handle date range as [start, end] array
+    const [start, end] = value;
+    const startDate = start instanceof Date ? start : new Date(String(start));
+    const endDate = end instanceof Date ? end : new Date(String(end));
+    
+    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+      return [startDate, endDate];
+    }
+    return value;
+  }
+  
+  if (typeof value === "string") {
+    // Try to parse as natural language date
+    const parsed = parseDate(value);
+    if (parsed) {
+      if (parsed.isRange && parsed.rangeStart && parsed.rangeEnd) {
+        return [parsed.rangeStart, parsed.rangeEnd];
+      }
+      return parsed.date;
+    }
+    
+    // Fallback: try direct Date parsing
+    const directParse = new Date(value);
+    if (!isNaN(directParse.getTime())) {
+      return directParse;
+    }
+  }
+  
+  return value;
 }
 
 /**

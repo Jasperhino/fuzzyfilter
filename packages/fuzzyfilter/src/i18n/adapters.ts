@@ -7,10 +7,27 @@
  */
 
 import type { I18nProvider } from "../types/i18n.ts";
-import type { Operator } from "../operators.ts";
-import type { WordSetKey } from "../operators.ts";
+import type { OperatorKey } from "../operators.ts";
 import { getOperator } from "../operators.ts";
-import { WORD_SETS } from "../operators.ts";
+
+/**
+ * Flatten the aliases object from a pattern-based operator into an array.
+ */
+function flattenOperatorAliases(operatorId: OperatorKey): string[] {
+  const op = getOperator(operatorId);
+  if (!op?.aliases) return [];
+  
+  const result: string[] = [];
+  for (const values of Object.values(op.aliases)) {
+    for (const val of values) {
+      // Skip i18n refs (they get resolved dynamically)
+      if (!val.startsWith("$")) {
+        result.push(val);
+      }
+    }
+  }
+  return result;
+}
 
 /**
  * Options for i18next adapter
@@ -32,8 +49,6 @@ export interface I18nextAdapterOptions {
  *     eq:
  *       label: "equals"
  *       aliases: ["equal", "=", "=="]
- *   wordSets:
- *     less: ["less", "smaller", "lower"]
  * ```
  * 
  * @param i18n - The i18next instance
@@ -66,8 +81,9 @@ export function createI18nextAdapter(
   const prefix = options?.keyPrefix ?? "";
   
   return {
-    getOperatorLabel(operatorId: Operator): string {
-      const defaultValue = getOperator(operatorId).label;
+    getOperatorLabel(operatorId: OperatorKey): string {
+      const op = getOperator(operatorId);
+      const defaultValue = op?.id ?? operatorId;
       const result = i18n.t(`${prefix}operators.${operatorId}.label`, {
         ns: namespace,
         defaultValue,
@@ -75,8 +91,8 @@ export function createI18nextAdapter(
       return typeof result === "string" ? result : defaultValue;
     },
 
-    getOperatorAliases(operatorId: Operator): string[] {
-      const defaultValue = getOperator(operatorId).aliases;
+    getOperatorAliases(operatorId: OperatorKey): string[] {
+      const defaultValue = flattenOperatorAliases(operatorId);
       const result = i18n.t(`${prefix}operators.${operatorId}.aliases`, {
         ns: namespace,
         returnObjects: true,
@@ -88,23 +104,7 @@ export function createI18nextAdapter(
       if (typeof result === "string") {
         return [result];
       }
-      return [...defaultValue];
-    },
-
-    getWordSet(wordSetKey: WordSetKey): string[] {
-      const defaultValue = WORD_SETS[wordSetKey];
-      const result = i18n.t(`${prefix}wordSets.${wordSetKey}`, {
-        ns: namespace,
-        returnObjects: true,
-        defaultValue,
-      });
-      if (Array.isArray(result)) {
-        return result.map(String);
-      }
-      if (typeof result === "string") {
-        return [result];
-      }
-      return [...defaultValue];
+      return defaultValue;
     },
 
     onChange(callback: () => void): () => void {
@@ -132,8 +132,6 @@ export interface VueI18nAdapterOptions {
  *     eq:
  *       label: "equals"
  *       aliases: ["equal", "="]
- *   wordSets:
- *     less: ["less", "smaller"]
  * ```
  * 
  * @param i18n - The vue-i18n Composer or VueI18n instance
@@ -170,14 +168,16 @@ export function createVueI18nAdapter(
       };
   
   return {
-    getOperatorLabel(operatorId: Operator): string {
-      const defaultValue = getOperator(operatorId).label;
+    getOperatorLabel(operatorId: OperatorKey): string {
+      const op = getOperator(operatorId);
+      const defaultValue = op?.id ?? operatorId;
       const result = t(`operators.${operatorId}.label`, defaultValue);
       return typeof result === "string" ? result : defaultValue;
     },
 
-    getOperatorAliases(operatorId: Operator): string[] {
-      const defaultValue = getOperator(operatorId).aliases.join(",");
+    getOperatorAliases(operatorId: OperatorKey): string[] {
+      const defaultAliases = flattenOperatorAliases(operatorId);
+      const defaultValue = defaultAliases.join(",");
       const result = t(`operators.${operatorId}.aliases`, defaultValue);
       if (Array.isArray(result)) {
         return result.map(String);
@@ -186,20 +186,7 @@ export function createVueI18nAdapter(
         // Handle comma-separated string
         return result.split(",").map(s => s.trim()).filter(Boolean);
       }
-      return [...getOperator(operatorId).aliases];
-    },
-
-    getWordSet(wordSetKey: WordSetKey): string[] {
-      const defaultValue = WORD_SETS[wordSetKey].join(",");
-      const result = t(`wordSets.${wordSetKey}`, defaultValue);
-      if (Array.isArray(result)) {
-        return result.map(String);
-      }
-      if (typeof result === "string") {
-        // Handle comma-separated string
-        return result.split(",").map(s => s.trim()).filter(Boolean);
-      }
-      return [...WORD_SETS[wordSetKey]];
+      return defaultAliases;
     },
   };
 }

@@ -88,17 +88,19 @@ export interface UseFuzzyFilterReturn {
  * @param options - Configuration options
  * @returns Reactive state and actions
  *
- * @example Basic usage
+ * @example Basic usage (V2 API)
  * ```vue
  * <script setup lang="ts">
  * import { useFuzzyFilter } from "fuzzyfilter-vue";
- * import { createFuzzyFilter, columnId } from "@jasperhino/fuzzyfilter";
+ * import { createFuzzyFilter, createDefaultEnglishProvider } from "fuzzyfilter";
  *
- * const filter = createFuzzyFilter();
- * filter.setSchema({
+ * enum Status { OPEN = "Open", CLOSED = "Closed" }
+ *
+ * const filter = createFuzzyFilter({
  *   columns: [
- *     { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
+ *     { id: "status", labelKey: "columns.status", values: Object.values(Status) },
  *   ],
+ *   i18n: createDefaultEnglishProvider(),
  * });
  * filter.indexData(myData);
  *

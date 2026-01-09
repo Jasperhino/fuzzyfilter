@@ -13,7 +13,7 @@ import type {
   ValScoreEntry,
 } from "../types.ts";
 import { EmptyQueryStrategy } from "../strategies/empty-query.ts";
-import { SpreadPatternStrategy } from "../strategies/spread-pattern.ts";
+import { TemplatedOperatorStrategy } from "../strategies/templated-operator.ts";
 import { NgramMatchStrategy } from "../strategies/ngram-match.ts";
 import { ValueInferenceStrategy } from "../strategies/value-inference.ts";
 import { generateNgrams } from "./ngrams.ts";
@@ -55,7 +55,6 @@ function buildStrategyContext(options: BuildContextOptions): StrategyContext {
     // Column matches
     const colMatches = state.columnTrie.fuzzySearch(ngram.text, 5);
     for (const match of colMatches) {
-      // NEW: Use smart scoring
       const score = calculateSmartScore(
         match.score, 
         match.indexes, 
@@ -92,11 +91,11 @@ function buildStrategyContext(options: BuildContextOptions): StrategyContext {
     const opMatches = state.operatorTrie.fuzzySearch(ngram.text, 5);
     for (const match of opMatches) {
       const opEntry = match.value;
-      const opInfo = getAllOperators(state.i18nProvider).find((op) => op.id === opEntry.operator);
+      const opInfo = getAllOperators().find((op) => op.id === opEntry.operator);
       if (!opInfo) continue;
 
       // Use the matched alias/key as target text for smart scoring
-      const targetText = match.key || opInfo.label;
+      const targetText = match.key || opInfo.id;
       const score = calculateSmartScore(
         match.score,
         match.indexes,
@@ -253,7 +252,7 @@ export class SuggestionEngine {
   ) {
     this.strategies = [
       new EmptyQueryStrategy(() => this.state.schema),
-      new SpreadPatternStrategy(() => this.state.schema, () => this.state.data),
+      new TemplatedOperatorStrategy(() => this.state.schema, () => this.state.data),
       new NgramMatchStrategy(
         () => this.state.schema,
         () => this.state.data,

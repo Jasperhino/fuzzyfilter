@@ -28,7 +28,7 @@
  */
 
 import type { I18nProvider } from "../../types/i18n.ts";
-import type { Operator, WordSetKey } from "../../operators.ts";
+import type { OperatorKey } from "../../operators.ts";
 import type { i18n as I18nextInstance } from "i18next";
 
 /**
@@ -47,54 +47,66 @@ export function createI18nextProvider(
   };
 
   return {
-    getOperatorLabel: (operatorId: Operator): string => {
-      const key = getKey(`operators.${operatorId}.label`);
-      const translated = i18nInstance.t(key, { defaultValue: undefined });
-      // Fallback to operator ID if translation not found
-      return translated !== key ? translated : operatorId;
-    },
+    locale: i18nInstance.language,
 
-    getOperatorAliases: (operatorId: Operator): string[] => {
-      const key = getKey(`operators.${operatorId}.aliases`);
-      const translated = i18nInstance.t(key, { defaultValue: undefined, returnObjects: true });
-      
-      // If translation returns an array, use it
-      if (Array.isArray(translated) && translated.length > 0) {
-        return translated.map(String);
-      }
-      
-      // Fallback to empty array if translation not found
-      return [];
-    },
-
-    getWordSet: (wordSetKey: WordSetKey): string[] => {
-      const key = getKey(`wordSets.${wordSetKey}`);
-      const translated = i18nInstance.t(key, { defaultValue: undefined, returnObjects: true });
-      
-      // If translation returns an array, use it
-      if (Array.isArray(translated) && translated.length > 0) {
-        return translated.map(String);
-      }
-      
-      // Fallback to empty array if translation not found
-      return [];
-    },
-
-    translate: (key: string): string | undefined => {
-      // Use the app namespace for column/value translations
+    /**
+     * Get all aliases for a key (always returns array).
+     * Supports nested keys like "columns.status", "status.active", etc.
+     */
+    getAliases(key: string): string[] {
+      // Try app namespace first (for user-defined translations)
       const appKey = `app:${key}`;
-      const translated = i18nInstance.t(appKey, { defaultValue: undefined });
+      const appTranslated = i18nInstance.t(appKey, { defaultValue: undefined, returnObjects: true });
       
-      // If translation returns the key itself, it means translation not found
-      if (translated === appKey || translated === undefined) {
-        return undefined;
+      if (Array.isArray(appTranslated) && appTranslated.length > 0) {
+        return appTranslated.map(String);
       }
       
-      return String(translated);
+      if (typeof appTranslated === "string" && appTranslated !== appKey) {
+        return [appTranslated];
+      }
+      
+      // Try fuzzyfilter namespace
+      const fuzzyKey = getKey(key);
+      const fuzzyTranslated = i18nInstance.t(fuzzyKey, { defaultValue: undefined, returnObjects: true });
+      
+      if (Array.isArray(fuzzyTranslated) && fuzzyTranslated.length > 0) {
+        return fuzzyTranslated.map(String);
+      }
+      
+      if (typeof fuzzyTranslated === "string" && fuzzyTranslated !== fuzzyKey) {
+        return [fuzzyTranslated];
+      }
+      
+      // Fallback: return key as single-item array
+      const parts = key.split(".");
+      return [parts[parts.length - 1] ?? key];
     },
 
-    getLocale: (): string | undefined => {
-      return i18nInstance.language;
+    /**
+     * Get primary display label for a key.
+     */
+    getLabel(key: string): string {
+      const aliases = this.getAliases(key);
+      return aliases[0] ?? key;
+    },
+
+    // Legacy methods for backward compatibility
+    getOperatorLabel(operatorId: OperatorKey): string {
+      return this.getLabel(`operators.${operatorId}`);
+    },
+
+    getOperatorAliases(operatorId: OperatorKey): string[] {
+      return this.getAliases(`operators.${operatorId}`);
+    },
+
+    translate(key: string): string | string[] | undefined {
+      const aliases = this.getAliases(key);
+      return aliases.length === 1 ? aliases[0] : aliases;
+    },
+
+    getLocale(): string | undefined {
+      return this.locale;
     },
 
     onChange: (callback: () => void): (() => void) => {

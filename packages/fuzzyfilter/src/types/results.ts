@@ -4,7 +4,7 @@
  */
 
 import type { ColumnId, RowId } from "./core.ts";
-import type { Operator } from "../operators.ts";
+import type { OperatorKey } from "../operators.ts";
 import type { AnyColumnDefinition } from "./schema.ts";
 import type { HypothesisValueType } from "./hypothesis.ts";
 import type { RoaringBitmap } from "./index-layer.ts";
@@ -86,7 +86,7 @@ export interface FilterSuggestion {
   column: AnyColumnDefinition;
 
   /** The operator */
-  operator: Operator;
+  operator: OperatorKey;
 
   /** The argument values (array to support variadic operators) */
   arguments?: HypothesisValueType[];
@@ -241,7 +241,7 @@ export interface CompiledFilter {
   columnId: ColumnId;
 
   /** The operator */
-  operator: Operator;
+  operator: OperatorKey;
 
   /** The argument values (array to support variadic operators) */
   arguments: unknown[];
@@ -289,19 +289,6 @@ export type CountStrategy =
   | "estimate" // Statistical estimation
   | "cached"; // Use cached result
 
-/**
- * Options for count calculation
- */
-export interface CountOptions {
-  /** Maximum time to spend calculating (ms) */
-  timeout: number;
-  /** Preferred strategy */
-  preferredStrategy: CountStrategy;
-  /** Use cached counts if available? */
-  useCache: boolean;
-  /** Cache TTL in seconds */
-  cacheTtl: number;
-}
 
 /**
  * Count result with metadata
@@ -378,7 +365,7 @@ export interface OperatorBitmapStrategy {
  */
 export interface CacheKey {
   columnId: ColumnId;
-  operator: Operator;
+  operator: OperatorKey;
   arguments: Array<string | number | boolean | Date | null>;
 }
 

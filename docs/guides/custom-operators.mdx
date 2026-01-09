@@ -1,0 +1,315 @@
+---
+title: "Custom Operators & Types"
+description: "Extend FuzzyFilter with custom operators and data types"
+---
+
+# Custom Operators & Types
+
+FuzzyFilter supports a fully extensible operator and type system. You can:
+
+- **Add custom operators** with your own matching logic
+- **Define custom data types** for domain-specific columns
+- **Override built-in operators** for customized behavior
+- **Create templated operators** like "from X to Y"
+
+## Quick Start
+
+### Adding a Custom Operator
+
+```typescript
+import { createFuzzyFilter, OPERATORS_ARRAY, OperatorCategory, DataType } from "@jasperhino/fuzzyfilter";
+
+// Define a custom operator
+const fuzzyMatchOperator = {
+  id: "fuzzyMatch",
+  category: OperatorCategory.PATTERN_MATCHING,
+  label: "fuzzy match",
+  aliases: ["fuzz", "~?", "approximately"],
+  supportedTypes: [DataType.STRING],
+  requiresArgument: true,
+  predicate: (cell, arg) => {
+    // Your custom matching logic
+    const cellStr = String(cell).toLowerCase();
+    const argStr = String(arg).toLowerCase();
+    return cellStr.includes(argStr) || levenshteinDistance(cellStr, argStr) < 3;
+  },
+};
+
+// Create filter with custom operator
+const filter = createFuzzyFilter({
+  operators: [...OPERATORS_ARRAY, fuzzyMatchOperator],
+});
+```
+
+## Replace vs Extend Semantics
+
+When you provide the `operators` option, it **replaces** the built-in operators entirely. This gives you full control over which operators are available.
+
+### Extending Built-ins (Recommended)
+
+```typescript
+// Add custom operators while keeping all built-ins
+const filter = createFuzzyFilter({
+  operators: [...OPERATORS_ARRAY, myCustomOperator],
+});
+```
+
+### Replacing Built-ins
+
+```typescript
+// Only use your custom operators (removes all built-ins)
+const filter = createFuzzyFilter({
+  operators: [myOperator1, myOperator2],
+});
+```
+
+### Overriding a Built-in
+
+```typescript
+// Override the 'eq' operator with case-insensitive matching
+const caseInsensitiveEq = {
+  ...OPERATORS.eq,
+  predicate: (cell, arg) => 
+    String(cell).toLowerCase() === String(arg).toLowerCase(),
+};
+
+const filter = createFuzzyFilter({
+  operators: OPERATORS_ARRAY.map(op => 
+    op.id === "eq" ? caseInsensitiveEq : op
+  ),
+});
+```
+
+## Operator Definition Interface
+
+Every operator must implement the `OperatorDefinition` interface:
+
+```typescript
+interface OperatorDefinition {
+  /** Unique identifier */
+  id: string;
+  
+  /** Category for UI grouping */
+  category: OperatorCategory;
+  
+  /** Human-readable label */
+  label: string;
+  
+  /** Aliases for fuzzy matching */
+  aliases: readonly string[];
+  
+  /** Which data types this operator supports */
+  supportedTypes: readonly DataType[];
+  
+  /** Does this operator require an argument? */
+  requiresArgument: boolean;
+  
+  /** For operators accepting multiple values */
+  isVariadic?: boolean;
+  minArguments?: number;
+  
+  /** Template patterns for syntax like "from X to Y" */
+  templatePatterns?: readonly TemplatePattern[];
+  
+  /**
+   * The predicate that implements the matching logic.
+   * REQUIRED for all operators.
+   */
+  predicate: (
+    cellValue: unknown, 
+    args: unknown, 
+    row?: Record<string, unknown>
+  ) => boolean;
+}
+```
+
+## The Predicate Function
+
+The `predicate` function is the heart of every operator. It receives:
+
+- `cellValue` - The value from the data cell being tested
+- `args` - The filter argument(s) provided by the user
+- `row` - (Optional) The entire row for cross-column logic
+
+### Simple Predicate
+
+```typescript
+predicate: (cell, arg) => cell === arg
+```
+
+### Cross-Column Predicate
+
+Access other columns using the `row` parameter:
+
+```typescript
+const startBeforeEnd = {
+  id: "beforeEndDate",
+  category: OperatorCategory.DATE,
+  label: "before end date",
+  aliases: ["beforeEnd"],
+  supportedTypes: [DataType.DATE],
+  requiresArgument: false,
+  predicate: (cell, arg, row) => {
+    const endDate = row?.endDate as Date;
+    return (cell as Date) < endDate;
+  },
+};
+```
+
+### Variadic Predicate
+
+For operators accepting multiple values:
+
+```typescript
+const containsAll = {
+  id: "containsAll",
+  category: OperatorCategory.PATTERN_MATCHING,
+  label: "contains all",
+  aliases: ["hasAll"],
+  supportedTypes: [DataType.STRING],
+  requiresArgument: true,
+  isVariadic: true,
+  minArguments: 1,
+  predicate: (cell, args) => {
+    const cellStr = String(cell).toLowerCase();
+    const terms = args as string[];
+    return terms.every(term => cellStr.includes(term.toLowerCase()));
+  },
+};
+```
+
+## Templated Operators
+
+Template patterns enable syntax like "from X to Y" or "between X and Y":
+
+```typescript
+const betweenOperator = {
+  id: "between",
+  category: OperatorCategory.DATE,
+  label: "between",
+  aliases: ["range", "within"],
+  supportedTypes: [DataType.NUMBER, DataType.DATE],
+  requiresArgument: true,
+  isVariadic: true,
+  minArguments: 2,
+  templatePatterns: [
+    { keywords: ["from", "to"], keywordSets: ["from", "to"] },
+    { keywords: ["between", "and"], keywordSets: ["between", "and"] },
+  ],
+  predicate: (cell, args) => {
+    const [min, max] = args as [number, number];
+    return (cell as number) >= min && (cell as number) <= max;
+  },
+};
+```
+
+With this definition, users can type:
+- `price from 10 to 50`
+- `price between 10 and 50`
+
+Both will be recognized as a `between` filter.
+
+## Custom Data Types
+
+Define custom types for domain-specific data:
+
+```typescript
+import { DATA_TYPES, DataType } from "@jasperhino/fuzzyfilter";
+
+const amountType = {
+  id: "amount",
+  label: "Amount",
+  compatibilityType: DataType.NUMBER, // Use NUMBER operators
+  parseValue: (input) => parseAmount(input), // Your parser
+  formatValue: (value) => formatAmount(value), // Your formatter
+  compare: (a, b) => a.valueInBaseUnit - b.valueInBaseUnit,
+};
+
+const filter = createFuzzyFilter({
+  types: [...DATA_TYPES, amountType],
+});
+```
+
+The `compatibilityType` determines which operators are available. If you set it to `DataType.NUMBER`, all number operators (lt, gt, between, etc.) will work with your custom type.
+
+## Validation
+
+FuzzyFilter validates your custom operators and types at initialization:
+
+```typescript
+// Throws: 'Duplicate operator ID: "eq"'
+createFuzzyFilter({
+  operators: [
+    { id: "eq", /* ... */ },
+    { id: "eq", /* ... */ }, // Duplicate!
+  ],
+});
+
+// Throws: 'Operator "broken" is missing a predicate implementation'
+createFuzzyFilter({
+  operators: [
+    { id: "broken", /* missing predicate */ },
+  ],
+});
+```
+
+## Framework Usage
+
+### React
+
+```tsx
+import { useFuzzyFilter, OPERATORS_ARRAY, OperatorDefinition } from "@jasperhino/fuzzyfilter-react";
+
+const myOperator: OperatorDefinition = { /* ... */ };
+
+const filter = createFuzzyFilter({
+  operators: [...OPERATORS_ARRAY, myOperator],
+});
+
+function App() {
+  const { query, setQuery, suggestions } = useFuzzyFilter(filter);
+  // ...
+}
+```
+
+### Vue
+
+```vue
+<script setup lang="ts">
+import { useFuzzyFilter, OPERATORS_ARRAY } from "@jasperhino/fuzzyfilter-vue";
+import type { OperatorDefinition } from "@jasperhino/fuzzyfilter-vue";
+
+const myOperator: OperatorDefinition = { /* ... */ };
+
+const filter = createFuzzyFilter({
+  operators: [...OPERATORS_ARRAY, myOperator],
+});
+
+const { query, suggestions } = useFuzzyFilter(filter);
+</script>
+```
+
+## Best Practices
+
+1. **Always include a predicate** - Operators without predicates will throw at initialization
+
+2. **Use descriptive IDs** - The ID appears in compiled filters and debug output
+
+3. **Provide useful aliases** - These enable fuzzy matching for better UX
+
+4. **Set the correct category** - Categories group operators in UI components
+
+5. **Match supportedTypes correctly** - Only list types your predicate actually handles
+
+6. **Handle null/undefined** - Your predicate may receive undefined cell values
+
+7. **Consider performance** - Predicates run for every row during filtering
+
+## API Reference
+
+- [`OperatorDefinition`](/core#operatordefinition) - Full operator interface
+- [`TypeDefinition`](/core#typedefinition) - Custom type interface
+- [`TemplatePattern`](/core#templatepattern) - Template pattern interface
+- [`OPERATORS_ARRAY`](/core#operators_array) - All built-in operators as array
+- [`DATA_TYPES`](/core#data_types) - All built-in types
+- [`InstanceRegistry`](/core#instanceregistry) - Registry class for advanced usage

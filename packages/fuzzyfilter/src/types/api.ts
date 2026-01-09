@@ -7,8 +7,8 @@
  * @module fuzzyfilter/types/api
  */
 
-import type { ColumnId } from "./core.ts";
-import type { Operator } from "../operators.ts";
+import type { ColumnId, TypeDefinition, OperatorDefinition, FuzzyFilterable } from "./core.ts";
+import type { OperatorKey } from "../operators.ts";
 import type { Schema, SchemaInput, AnyColumnDefinition } from "./schema.ts";
 import type { ParsedInput } from "./parsing.ts";
 import type { ScoringWeights, HypothesisGenerationOptions } from "./hypothesis.ts";
@@ -17,7 +17,6 @@ import type {
   FilterSuggestion,
   CompiledFilter,
   FilterResult,
-  CountOptions,
 } from "./results.ts";
 import type { I18nProvider } from "./i18n.ts";
 import type {
@@ -32,9 +31,37 @@ import type {
 // ============================================================================
 
 /**
- * Configuration options for FuzzyFilter
+ * Configuration options for FuzzyFilter.
+ * 
+ * @typeParam TCustom - Map of custom type names to their FuzzyFilterable types.
+ *                     Only needed when using custom FuzzyFilterable types.
+ *                     Native enums don't need to be declared here.
+ * 
+ * @example With custom FuzzyFilterable type
+ * ```typescript
+ * class Amount implements FuzzyFilterable<Amount> { ... }
+ * 
+ * const config: FuzzyFilterConfig<{ amount: Amount }> = {
+ *   columns: [
+ *     { id: 'weight', labelKey: 'columns.weight', type: 'amount' },
+ *   ],
+ *   i18n: myI18nProvider,
+ *   maxSuggestions: 10,
+ * };
+ * ```
+ * 
+ * @example With native enums (no generic needed)
+ * ```typescript
+ * const config: FuzzyFilterConfig = {
+ *   columns: [
+ *     { id: 'status', labelKey: 'columns.status', values: ['active', 'inactive'] },
+ *   ],
+ *   i18n: myI18nProvider,
+ *   maxSuggestions: 10,
+ * };
+ * ```
  */
-export interface FuzzyFilterConfig {
+export interface FuzzyFilterConfig<TCustom extends Record<string, FuzzyFilterable<any>> = Record<string, never>> {
   /** Maximum suggestions to return */
   maxSuggestions: number;
 
@@ -43,12 +70,6 @@ export interface FuzzyFilterConfig {
 
   /** Scoring weights for ranking */
   scoringWeights: ScoringWeights;
-
-  /** Hypothesis generation options */
-  hypothesisOptions: Partial<HypothesisGenerationOptions>;
-
-  /** Count calculation options */
-  countOptions: Partial<CountOptions>;
 
   /** Enable caching */
   enableCache: boolean;
@@ -62,8 +83,6 @@ export interface FuzzyFilterConfig {
   /** Enable debug logging */
   debug: boolean;
 
-  /** Optional i18n provider for translations. If not provided, uses default English provider. */
-  i18nProvider?: I18nProvider;
 
   /**
    * Enable benchmark/telemetry mode.
@@ -77,29 +96,60 @@ export interface FuzzyFilterConfig {
    * Only used when benchmark is true.
    */
   telemetryOptions?: Partial<TelemetryConfig>;
+
+  /**
+   * Column definitions.
+   * 
+   * Defines the columns available for filtering, including their types,
+   * enum values, and i18n keys.
+   */
+  columns: SchemaInput<TCustom>["columns"];
+
+  /**
+   * Operator definitions. When provided, replaces built-in operators entirely.
+   * Spread OPERATORS_ARRAY to extend with custom operators:
+   * 
+   * @example
+   * ```typescript
+   * operators: [...OPERATORS_ARRAY, myCustomOperator]
+   * ```
+   */
+  operators?: OperatorDefinition[];
+
+  /**
+   * i18n provider for translations.
+   * 
+   * Required for proper label resolution and enum value translations.
+   */
+  i18n: I18nProvider;
+
+  /**
+   * Type definitions. When provided, replaces built-in types entirely.
+   * 
+   * @deprecated In V2, use FuzzyFilterable interface for custom types instead.
+   * This is kept for backward compatibility during migration.
+   * 
+   * @example
+   * ```typescript
+   * types: [...DATA_TYPES, myCustomType]
+   * ```
+   */
+  types?: TypeDefinition[];
 }
 
 /**
- * Default configuration
+ * Default configuration.
+ * 
+ * Note: In V2, `columns` and `i18n` are required and must be provided
+ * when creating a FuzzyFilter instance.
  */
-export const DEFAULT_CONFIG: FuzzyFilterConfig = {
+export const DEFAULT_CONFIG: Partial<FuzzyFilterConfig> = {
   maxSuggestions: 10,
   minScore: 0.1,
   scoringWeights: {
     column: 0.4,
     operator: 0.35,
-    arguments: 0.25,
-    orderBonus: 0.1,
-    completenessBonus: 0.2,
-  },
-  hypothesisOptions: {
-    maxHypotheses: 50,
-    maxEditDistance: 2,
-  },
-  countOptions: {
-    timeout: 100,
-    useCache: true,
-    cacheTtl: 60,
+    arguments: 0.4,
   },
   enableCache: true,
   maxCacheSize: 1000,
@@ -114,27 +164,42 @@ export const DEFAULT_CONFIG: FuzzyFilterConfig = {
  * It combines fuzzy string matching with schema awareness to help users build
  * filter expressions quickly and accurately.
  *
- * @example Basic usage
+ * @typeParam TCustom - Map of custom type names to their FuzzyFilterable types.
+ *                     Only needed when using custom FuzzyFilterable types.
+ *
+ * @example Basic usage with native enums
  * ```typescript
- * import { createFuzzyFilter, columnId } from "fuzzyfilter";
+ * import { createFuzzyFilter } from "fuzzyfilter";
  *
- * const filter = createFuzzyFilter();
+ * enum Status { OPEN = 'open', CLOSED = 'closed' }
  *
- * // Define schema
- * filter.setSchema({
+ * const filter = createFuzzyFilter({
  *   columns: [
- *     { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
+ *     { id: "status", labelKey: "columns.status", values: Object.values(Status) },
  *   ],
+ *   i18n: myI18nProvider,
  * });
  *
  * // Index data
- * filter.indexData([{ status: "Open" }, { status: "Closed" }]);
+ * filter.indexData([{ status: Status.OPEN }, { status: Status.CLOSED }]);
  *
  * // Get suggestions
  * const suggestions = await filter.suggest("stat");
  * ```
+ * 
+ * @example With custom FuzzyFilterable type
+ * ```typescript
+ * class Amount implements FuzzyFilterable<Amount> { ... }
+ *
+ * const filter = createFuzzyFilter<{ amount: Amount }>({
+ *   columns: [
+ *     { id: "weight", labelKey: "columns.weight", type: "amount" },
+ *   ],
+ *   i18n: myI18nProvider,
+ * });
+ * ```
  */
-export interface FuzzyFilter {
+export interface FuzzyFilter<TCustom extends Record<string, FuzzyFilterable<any>> = Record<string, never>> {
   // -------------------------------------------------------------------------
   // Configuration
   // -------------------------------------------------------------------------
@@ -144,7 +209,7 @@ export interface FuzzyFilter {
    *
    * @readonly
    */
-  readonly config: Readonly<FuzzyFilterConfig>;
+  readonly config: Readonly<FuzzyFilterConfig<TCustom>>;
 
   /**
    * Updates the configuration.
@@ -156,7 +221,7 @@ export interface FuzzyFilter {
    * filter.configure({ maxSuggestions: 20, debounceMs: 200 });
    * ```
    */
-  configure(options: Partial<FuzzyFilterConfig>): void;
+  configure(options: Partial<FuzzyFilterConfig<TCustom>>): void;
 
   // -------------------------------------------------------------------------
   // Schema Management
@@ -166,7 +231,8 @@ export interface FuzzyFilter {
    * Sets the schema definition for the filter.
    *
    * The schema defines the available columns, their types, and valid values.
-   * This must be called before indexing data or generating suggestions.
+   * In V2, columns are defined in the config, but this method can be used
+   * to update the schema after creation.
    *
    * @param schema - The schema definition
    *
@@ -174,14 +240,14 @@ export interface FuzzyFilter {
    * ```typescript
    * filter.setSchema({
    *   columns: [
-   *     { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
-   *     { id: columnId("priority"), name: "Priority", type: "number" },
-   *     { id: columnId("assignee"), name: "Assignee", type: "string", aliases: ["owner"] },
+   *     { id: "status", labelKey: "columns.status", values: ["Open", "Closed"] },
+   *     { id: "priority", labelKey: "columns.priority", type: "number" },
+   *     { id: "assignee", labelKey: "columns.assignee", type: "string", aliases: ["owner"] },
    *   ],
    * });
    * ```
    */
-  setSchema(schema: SchemaInput): void;
+  setSchema(schema: SchemaInput<TCustom>): void;
 
   /**
    * Returns the current schema, or null if not set.
@@ -208,7 +274,7 @@ export interface FuzzyFilter {
    * // → ["eq", "neq", "lt", "lte", "gt", "gte", "in", "nin", "isEmpty", "isNotEmpty"]
    * ```
    */
-  getOperatorsForColumn(columnId: ColumnId | string): Operator[];
+  getOperatorsForColumn(columnId: ColumnId | string): OperatorKey[];
 
   // -------------------------------------------------------------------------
   // Data Indexing
@@ -258,29 +324,42 @@ export interface FuzzyFilter {
   ): Promise<void>;
 
   /**
-   * Updates the index incrementally for changed rows.
+   * Upserts (inserts or updates) rows and incrementally updates the index.
    *
    * More efficient than re-indexing the entire dataset when only
    * a few rows have changed.
    *
-   * @param changes - Array of row changes
+   * @param rows - Array of rows to upsert
    *
    * @example
    * ```typescript
-   * filter.updateRows([
-   *   { rowId: 5, oldData: { status: "Open" }, newData: { status: "Closed" } },
-   *   { rowId: 10, newData: { status: "New" } }, // Insert
-   *   { rowId: 3, oldData: { status: "Open" } }, // Delete
+   * filter.upsertRows([
+   *   { rowId: 5, data: { status: "Closed" } }, // Update existing row
+   *   { rowId: 10, data: { status: "New" } }, // Insert new row
    * ]);
    * ```
    */
-  updateRows(
-    changes: Array<{
+  upsertRows(
+    rows: Array<{
       rowId: number;
-      oldData?: Record<string, unknown>;
-      newData?: Record<string, unknown>;
+      data: Record<string, unknown>;
     }>
   ): void;
+
+  /**
+   * Deletes rows and incrementally updates the index.
+   *
+   * More efficient than re-indexing the entire dataset when only
+   * a few rows need to be removed.
+   *
+   * @param rowIds - Array of row IDs to delete
+   *
+   * @example
+   * ```typescript
+   * filter.deleteRows([3, 5, 7]); // Delete rows with IDs 3, 5, and 7
+   * ```
+   */
+  deleteRows(rowIds: number[]): void;
 
   /**
    * Adds a single row and updates the index.
@@ -474,7 +553,7 @@ export interface FuzzyFilter {
    */
   compileFilter(
     columnId: ColumnId | string,
-    operator: Operator,
+    operator: OperatorKey,
     value?: unknown
   ): CompiledFilter | null;
 

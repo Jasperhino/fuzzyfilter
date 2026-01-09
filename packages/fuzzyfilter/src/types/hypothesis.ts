@@ -3,7 +3,7 @@
  * Generating and ranking possible filter interpretations.
  */
 
-import type { Operator } from "../operators.ts";
+import type { OperatorKey } from "../operators.ts";
 import type { AnyColumnDefinition } from "./schema.ts";
 import type { Token, ParsedDate } from "./parsing.ts";
 import type { RoaringBitmap } from "./index-layer.ts";
@@ -36,7 +36,7 @@ export interface Hypothesis {
   column: AnyColumnDefinition;
 
   /** The operator to apply */
-  operator: Operator;
+  operator: OperatorKey;
 
   /** The argument values (array to support variadic operators like between, in) */
   arguments?: HypothesisValueType[];
@@ -82,22 +82,8 @@ export interface ScoringWeights {
   operator: number;
   /** Weight for arguments match score */
   arguments: number;
-  /** Bonus for components appearing in natural order */
-  orderBonus?: number;
-  /** Bonus for completeness */
-  completenessBonus?: number;
 }
 
-/**
- * Default scoring weights
- */
-export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {
-  column: 0.4,
-  operator: 0.35,
-  arguments: 0.25,
-  orderBonus: 0.1,
-  completenessBonus: 0.2,
-} as const;
 
 /**
  * A scored hypothesis ready for ranking

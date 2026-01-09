@@ -26,6 +26,49 @@ import {
 import { SCORING_CONFIG } from "../constants.ts";
 import { calculateSmartScore } from "../engine/scorer.ts";
 import fuzzysort from "fuzzysort";
+import type { OperatorDefinition } from "../../types/index.ts";
+
+// ============================================================================
+// OPERATOR PROPERTY HELPERS
+// These derive isVariadic/requiresArgument from patterns since these are only
+// available on CompiledOperator, not the raw OperatorDefinition.
+// ============================================================================
+
+/**
+ * Check if an operator is variadic (accepts multiple arguments).
+ * Derived from patterns - checks if any pattern has:
+ * - A variadic placeholder ({...} or {name...})
+ * - 2+ argument placeholders
+ */
+function isOperatorVariadic(op: OperatorDefinition | undefined): boolean {
+  if (!op || !op.patterns) return false;
+  
+  return op.patterns.some(p => {
+    // Check for variadic placeholder syntax: {...} or {name...}
+    if (/\{\w*\.\.\.\}/.test(p)) return true;
+    // Check for 2+ argument placeholders
+    return (p.match(/\{[^}]*\}/g) || []).length >= 2;
+  });
+}
+
+/**
+ * Check if an operator requires an argument.
+ * Derived from patterns - checks if any pattern has argument placeholders.
+ */
+function operatorRequiresArgument(op: OperatorDefinition | undefined): boolean {
+  if (!op) return false;
+  return op.patterns?.some(p => /\{[^}]*\}/.test(p)) ?? false;
+}
+
+/**
+ * Get minimum number of arguments for an operator.
+ * Derived from the pattern with the fewest argument placeholders.
+ */
+function getMinArguments(op: OperatorDefinition | undefined): number {
+  if (!op || !op.patterns) return 0;
+  const counts = op.patterns.map(p => (p.match(/\{[^}]+\}/g) || []).length);
+  return Math.min(...counts);
+}
 
 /**
  * Strategy for handling n-gram matches (explicit column/operator/value matching)
@@ -169,20 +212,26 @@ export class NgramMatchStrategy implements SuggestionStrategy {
   ): Set<number> {
     const used = new Set<number>();
     for (const [_key, { operator: opId }] of operatorScores) {
-      const opInfo = getOperator(opId, i18nProvider);
+      const opInfo = getOperator(opId);
+      if (!opInfo) continue;
+      
       // Find token(s) that best match this operator
       for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i]!;
         const opMatch = fuzzysort.single(token.normalized, opInfo.id.toLowerCase());
-        const labelMatch = fuzzysort.single(token.normalized, opInfo.label.toLowerCase());
-        if ((opMatch && opMatch.score > -500) || (labelMatch && labelMatch.score > -500)) {
+        if (opMatch && opMatch.score > -500) {
           used.add(i);
         }
-        // Also check aliases
-        for (const alias of opInfo.aliases) {
-          const aliasMatch = fuzzysort.single(token.normalized, alias.toLowerCase());
-          if (aliasMatch && aliasMatch.score > -500) {
-            used.add(i);
+        // Also check aliases (now an object, not array)
+        if (opInfo.aliases) {
+          for (const values of Object.values(opInfo.aliases)) {
+            for (const alias of values) {
+              if (alias.startsWith("$")) continue; // Skip i18n refs
+              const aliasMatch = fuzzysort.single(token.normalized, alias.toLowerCase());
+              if (aliasMatch && aliasMatch.score > -500) {
+                used.add(i);
+              }
+            }
           }
         }
       }
@@ -214,7 +263,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
         matchedTarget: colMatchedTarget,
         matchIndexes: colMatchIndexes,
       } = colScoreEntry;
-      const ops = getOperatorsForType(col.type, i18nProvider);
+      const ops = getOperatorsForType(col.type);
 
       // Get compatible values for this column type, filtered by context availability
       const compatibleValues: (number | Date)[] =
@@ -309,12 +358,12 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     const suggestions: FilterSuggestion[] = [];
 
     for (const op of ops) {
-      const opInfo = getOperator(op.id, i18nProvider);
+      const opInfo = getOperator(op.id);
       let valuesUsed = 0;
       let suggestionArgs: import("../../types/index.ts").HypothesisValueType[] | undefined;
 
-      if (opInfo.isVariadic) {
-        const minArgs = opInfo.minArguments ?? 1;
+      if (isOperatorVariadic(opInfo)) {
+        const minArgs = getMinArguments(opInfo) || 1;
 
         if (minArgs === 2) {
           // Operators like "between" that need exactly 2 values
@@ -332,7 +381,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
           valuesUsed = compatibleValues.length;
           suggestionArgs = compatibleValues.map((val) => toHypothesisValue(val));
         }
-      } else if (opInfo.requiresArgument) {
+      } else if (operatorRequiresArgument(opInfo)) {
         // Single-value operator - uses first value
         valuesUsed = 1;
         suggestionArgs = [toHypothesisValue(compatibleValues[0]!)];
@@ -404,8 +453,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     const argValue = toHypothesisValue(firstVal);
 
     for (const op of ops.slice(0, 5)) {
-      const opInfo = getOperator(op.id, i18nProvider);
-      if (!opInfo.requiresArgument) continue;
+      const opInfo = getOperator(op.id);
+      if (!operatorRequiresArgument(opInfo)) continue;
 
       // Check if this operator was also matched in the input
       const generalKey = op.id;
@@ -472,8 +521,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
 
     // First, check if any no-argument operators for this column were matched in operatorScores
     const noArgOps = ops.filter((op) => {
-      const opInfo = getOperator(op.id, i18nProvider);
-      return !opInfo.requiresArgument;
+      const opInfo = getOperator(op.id);
+      return !operatorRequiresArgument(opInfo);
     });
     const matchedNoArgOps: Array<{
       opId: import("../../types/index.ts").Operator;
@@ -652,7 +701,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
           // Check if this column was also matched in columnScores
           const colMatchEntry = columnScores.get(col.id as string);
 
-          if (colMatchEntry && !opInfo.requiresArgument) {
+          if (colMatchEntry && !operatorRequiresArgument(opInfo)) {
             // Both column and no-argument operator matched
             const matchMeta: MatchMetadata = {
               column: {
@@ -686,7 +735,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 i18nProvider
               )
             );
-          } else if (colMatchEntry && opInfo.requiresArgument) {
+          } else if (colMatchEntry && operatorRequiresArgument(opInfo)) {
             // Both column and operator matched, but operator requires arguments
             const matchMeta: MatchMetadata = {
               column: {
@@ -720,7 +769,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
                 i18nProvider
               )
             );
-          } else if (opInfo.requiresArgument && !colMatchEntry) {
+          } else if (operatorRequiresArgument(opInfo) && !colMatchEntry) {
             // Operator matched but no column matched - check for compatible detected values
             const compatibleValues: (number | Date)[] =
               col.type === DataType.NUMBER
@@ -748,8 +797,8 @@ export class NgramMatchStrategy implements SuggestionStrategy {
               let valuesUsed = 0;
               let suggestionArgs: import("../../types/index.ts").HypothesisValueType[] | undefined;
 
-              if (opInfo.isVariadic) {
-                const minArgs = opInfo.minArguments ?? 1;
+              if (isOperatorVariadic(opInfo)) {
+                const minArgs = getMinArguments(opInfo) || 1;
 
                 if (minArgs === 2) {
                   // Operators like "between" that need exactly 2 values
@@ -926,10 +975,10 @@ export class NgramMatchStrategy implements SuggestionStrategy {
         let bestOpEntry: import("../types.ts").OpScoreEntry | undefined = opEntry;
 
         for (const [, opScoreEntry] of operatorScores) {
-          const opInfo = getOperator(opScoreEntry.operator, i18nProvider);
+          const opInfo = getOperator(opScoreEntry.operator);
           if (
             opInfo.supportedTypes.includes(col.type) &&
-            opInfo.requiresArgument
+            operatorRequiresArgument(opInfo)
           ) {
             if (
               !bestOpEntry ||
@@ -1008,9 +1057,9 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     const suggestions: FilterSuggestion[] = [];
     const col = parsed.column!.match.column;
     const op = parsed.operator!.match.operator;
-    const opInfo = getOperator(op, i18nProvider);
+    const opInfo = getOperator(op);
 
-    if (!opInfo.requiresArgument) {
+    if (!operatorRequiresArgument(opInfo)) {
       // Operator doesn't need value - suggest the complete filter
       // Normalize raw fuzzysort scores and apply weights
       const colMatch = parsed.column!.match;
@@ -1029,7 +1078,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
           inputStart: parsed.operator!.token.start,
           inputEnd: parsed.operator!.token.end,
           inputText: parsed.operator!.token.text,
-          matchedTarget: opInfo.label,
+          matchedTarget: opInfo.id,
           score: opMatch.score,
         },
       };
@@ -1073,7 +1122,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
           const valueEnd =
             valueTokens[valueTokens.length - 1]?.end ?? valueQuery.length;
           const isRangeDate =
-            parsedDate.rangeStart && parsedDate.rangeEnd && opInfo.isVariadic;
+            parsedDate.rangeStart && parsedDate.rangeEnd && isOperatorVariadic(opInfo);
 
           const dateMatchMeta: MatchMetadata = {
             column: {
@@ -1087,7 +1136,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
               inputStart: opToken.start,
               inputEnd: opToken.end,
               inputText: opToken.text,
-              matchedTarget: opInfo.label,
+              matchedTarget: opInfo.id,
               score: parsed.operator!.match.score,
             },
             values: isRangeDate
@@ -1122,22 +1171,21 @@ export class NgramMatchStrategy implements SuggestionStrategy {
           if (!seenValues.has(key)) {
             seenValues.add(key);
             suggestions.push(
-              createDateSuggestion(
-                col,
-                op,
+              createDateSuggestion({
+                column: col,
+                operator: op,
                 parsedDate,
-                SCORING_CONFIG.BONUS.DATE_FILTER_COMPLETE,
-                countForDateFilter(
+                score: SCORING_CONFIG.BONUS.DATE_FILTER_COMPLETE,
+                resultCount: countForDateFilter(
                   col.id,
                   op,
                   parsedDate,
                   this.getData(),
                   contextRowIndices
                 ),
-                undefined,
-                dateMatchMeta,
-                tokens
-              )
+                matchMetadata: dateMatchMeta,
+                queryTokens: tokens,
+              })
             );
           }
         }
@@ -1220,7 +1268,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
             inputStart: opToken.start,
             inputEnd: opToken.end,
             inputText: opToken.text,
-            matchedTarget: opInfo.label,
+            matchedTarget: opInfo.id,
             score: parsed.operator!.match.score,
           },
         };
@@ -1236,22 +1284,22 @@ export class NgramMatchStrategy implements SuggestionStrategy {
             if (!seenValues.has(key)) {
               seenValues.add(key);
               suggestions.push(
-                createDateSuggestion(
-                  col,
-                  op,
+                createDateSuggestion({
+                  column: col,
+                  operator: op,
                   parsedDate,
-                  parsed.column!.match.score,
-                  countForDateFilter(
+                  score: parsed.column!.match.score,
+                  resultCount: countForDateFilter(
                     col.id,
                     op,
                     parsedDate,
                     this.getData(),
                     contextRowIndices
                   ),
-                  dateSuggestion.label,
-                  colOpMatchMeta,
-                  tokens
-                )
+                  customLabel: dateSuggestion.label,
+                  matchMetadata: colOpMatchMeta,
+                  queryTokens: tokens,
+                })
               );
             }
           }
@@ -1260,7 +1308,7 @@ export class NgramMatchStrategy implements SuggestionStrategy {
     } else {
       // Non-date columns - handle variadic operators specially
       if (valueTokens.length > 0) {
-        if (opInfo.isVariadic && valueTokens.length >= 1) {
+        if (isOperatorVariadic(opInfo) && valueTokens.length >= 1) {
           // For variadic operators, search for EACH value token separately
           const tokenMatchInfo: Array<{
             token: import("../../types/index.ts").Token;

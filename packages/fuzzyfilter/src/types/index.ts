@@ -4,29 +4,27 @@
 
 // Core types (type-only exports)
 export type {
-  OperatorInfoBase,
-  AliasPattern,
-  SpreadPattern,
+  TypeDefinition,
+  OperatorDefinition,
   ColumnId,
   RowId,
   Match,
+  FuzzyFilterable,
+  FuzzyFilterableStatic,
+  FuzzyFilterableConstructor,
+  TypeHandler,
 } from "./core.ts";
 
 // Core values (DataType and OperatorCategory are both a value and type with same name)
-export { DataType, OperatorCategory, columnId } from "./core.ts";
+export { DataType, OperatorCategory, columnId, DATA_TYPES } from "./core.ts";
 
 // Operator types (derived from registry)
-export type { Operator, OperatorInfo } from "../operators.ts";
+export type { OperatorKey as Operator } from "../operators.ts";
+export { OPERATORS, OPERATORS_ARRAY } from "../operators.ts";
 
 // Schema types
 export type {
   ColumnDefinition,
-  StringColumnDefinition,
-  NumberColumnDefinition,
-  DateColumnDefinition,
-  EnumColumnDefinition,
-  BooleanColumnDefinition,
-  ArrayColumnDefinition,
   AnyColumnDefinition,
   Schema,
   SchemaInput,
@@ -75,8 +73,6 @@ export type {
   BeamSearchOptions,
 } from "./hypothesis.ts";
 
-export { DEFAULT_SCORING_WEIGHTS } from "./hypothesis.ts";
-
 // Result types
 export type {
   QueryMatch,
@@ -86,7 +82,6 @@ export type {
   CompiledFilter,
   FilterResult,
   CountStrategy,
-  CountOptions,
   CountResult,
   OperatorBitmapStrategy,
   CacheKey,

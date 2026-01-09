@@ -25,79 +25,96 @@ pnpm add fuzzyfilter
 ## Quick Start
 
 ```typescript
-import { createFuzzyFilter, columnId } from "fuzzyfilter";
+import { createFuzzyFilter, createDefaultEnglishProvider } from "fuzzyfilter";
 
-// 1. Create a filter instance
-const filter = createFuzzyFilter();
+// Native TypeScript enums work automatically!
+enum Status {
+  OPEN = "Open",
+  IN_PROGRESS = "In Progress",
+  CLOSED = "Closed",
+}
 
-// 2. Define your schema
-filter.setSchema({
+// 1. Create a filter instance with columns and i18n (V2 API)
+const filter = createFuzzyFilter({
   columns: [
     { 
-      id: columnId("status"), 
-      name: "Status", 
-      type: "enum", 
-      values: ["Open", "In Progress", "Closed"] 
+      id: "status", 
+      labelKey: "columns.status", // i18n key for column label
+      values: Object.values(Status), // Native enum - automatic handling!
+      valuesI18nPrefix: "status", // Maps to "status.Open", "status.In Progress", etc.
     },
     { 
-      id: columnId("assignee"), 
-      name: "Assignee", 
+      id: "assignee", 
+      labelKey: "columns.assignee",
       type: "string",
-      aliases: ["owner", "assigned to"] // Alternative names for fuzzy matching
+      aliases: ["owner", "assigned to"], // Alternative names for fuzzy matching
     },
     { 
-      id: columnId("priority"), 
-      name: "Priority", 
+      id: "priority", 
+      labelKey: "columns.priority",
       type: "number" 
     },
     { 
-      id: columnId("createdAt"), 
-      name: "Created At", 
+      id: "createdAt", 
+      labelKey: "columns.createdAt",
       type: "date" 
     },
   ],
+  i18n: createDefaultEnglishProvider(), // Required in V2
 });
 
-// 3. Index your data
+// 2. Index your data
 filter.indexData([
-  { status: "Open", assignee: "Alice Chen", priority: 3, createdAt: "2024-01-15" },
-  { status: "In Progress", assignee: "Bob Smith", priority: 2, createdAt: "2024-02-01" },
-  { status: "Closed", assignee: "Alice Chen", priority: 1, createdAt: "2024-01-20" },
+  { status: Status.OPEN, assignee: "Alice Chen", priority: 3, createdAt: "2024-01-15" },
+  { status: Status.IN_PROGRESS, assignee: "Bob Smith", priority: 2, createdAt: "2024-02-01" },
+  { status: Status.CLOSED, assignee: "Alice Chen", priority: 1, createdAt: "2024-01-20" },
 ]);
 
-// 4. Get suggestions as the user types
+// 3. Get suggestions as the user types
 const suggestions = await filter.suggest("alice");
 console.log(suggestions);
 // → [
 //     { label: "Assignee = Alice Chen", resultCount: 2, score: 3501 },
 //     ...
 //   ]
+
+// Equality operators work automatically with native enums!
+const compiled = filter.compileFilter("status", "eq", Status.OPEN);
+// → { predicate: (row) => row.status === Status.OPEN, matchCount: 1 }
 ```
 
 ## Core Concepts
 
-### Schema Definition
+### Schema Definition (V2 API)
 
-Define your filterable columns with type information:
+Define your filterable columns with the new V2 API:
 
 ```typescript
-import { columnId, type AnyColumnDefinition } from "fuzzyfilter";
+import { createFuzzyFilter, createDefaultEnglishProvider } from "fuzzyfilter";
 
-const columns: AnyColumnDefinition[] = [
-  // String column
-  { 
-    id: columnId("name"), 
-    name: "Name", 
-    type: "string" 
-  },
-  
-  // Enum column with predefined values
-  { 
-    id: columnId("status"), 
-    name: "Status", 
-    type: "enum", 
-    values: ["Open", "In Progress", "Closed", "Blocked"] 
-  },
+// Native TypeScript enums - no wrapper classes needed!
+enum Status {
+  OPEN = "Open",
+  IN_PROGRESS = "In Progress",
+  CLOSED = "Closed",
+}
+
+const filter = createFuzzyFilter({
+  columns: [
+    // String column
+    { 
+      id: "name", 
+      labelKey: "columns.name", // i18n key (required)
+      type: "string" 
+    },
+    
+    // Native enum column - just provide values!
+    { 
+      id: "status", 
+      labelKey: "columns.status",
+      values: Object.values(Status), // Automatic enum handling!
+      valuesI18nPrefix: "status", // Maps to "status.Open", etc.
+    },
   
   // Number column with bounds
   { 
@@ -304,7 +321,6 @@ Customize behavior with configuration options:
 ```typescript
 const filter = createFuzzyFilter({
   maxSuggestions: 15,        // Max suggestions to return
-  minScore: -5000,           // Minimum fuzzy match score
   debounceMs: 200,           // Debounce suggestion requests
   enableCache: true,         // Enable result caching
   maxCacheSize: 1000,        // Max cache entries
@@ -328,17 +344,19 @@ Add aliases for alternative names users might type:
 }
 ```
 
-### Incremental Updates
+### Incremental Updates (V2 API)
 
 Update the index without re-indexing everything:
 
 ```typescript
-// Update specific rows
-filter.updateRows([
-  { rowId: 5, oldData: { status: "Open" }, newData: { status: "Closed" } },
-  { rowId: 10, newData: { status: "New" } }, // Insert
-  { rowId: 3, oldData: { status: "Open" } }, // Delete
+// Upsert (insert or update) rows
+filter.upsertRows([
+  { rowId: 5, data: { status: "Closed" } }, // Update existing row
+  { rowId: 10, data: { status: "New" } }, // Insert new row
 ]);
+
+// Delete rows
+filter.deleteRows([3, 7]); // Delete rows with IDs 3 and 7
 
 // Get index statistics
 const stats = filter.getIndexStats();
@@ -348,21 +366,38 @@ console.log(stats);
 
 ## API Reference
 
-### `createFuzzyFilter(config?)`
+### `createFuzzyFilter<TCustom>(config)` (V2 API)
 
-Creates a new FuzzyFilter instance.
+Creates a new FuzzyFilter instance. In V2, `columns` and `i18n` are required.
 
 ```typescript
+// With native enums (no generic needed)
 const filter = createFuzzyFilter({
+  columns: [
+    { id: "status", labelKey: "columns.status", values: ["Open", "Closed"] },
+  ],
+  i18n: createDefaultEnglishProvider(), // Required
   maxSuggestions?: number,     // Default: 10
   minScore?: number,           // Default: -10000
   debounceMs?: number,         // Default: 150
   enableCache?: boolean,       // Default: true
   debug?: boolean,             // Default: false
 });
+
+// With custom FuzzyFilterable types
+class Amount implements FuzzyFilterable<Amount> { ... }
+
+const filter = createFuzzyFilter<{ amount: Amount }>({
+  columns: [
+    { id: "weight", labelKey: "columns.weight", type: "amount" },
+  ],
+  i18n: createDefaultEnglishProvider(),
+});
 ```
 
-### `filter.setSchema(schema)`
+### `filter.setSchema(schema)` (Optional in V2)
+
+In V2, columns are defined in the config when creating the filter. You can still use `setSchema()` to update the schema after creation:
 
 Sets the schema definition.
 

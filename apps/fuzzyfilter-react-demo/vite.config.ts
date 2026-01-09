@@ -34,7 +34,6 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
       "@jasperhino/fuzzyfilter": path.resolve(packagesPath, "fuzzyfilter/src/index.ts"),
       "fuzzyfilter": path.resolve(packagesPath, "fuzzyfilter/src/index.ts"),
-      "fuzzyfilter/i18n/locales": path.resolve(packagesPath, "fuzzyfilter/src/i18n/locales/index.ts"),
       "fuzzyfilter/i18n/adapters": path.resolve(packagesPath, "fuzzyfilter/src/i18n/adapters/index.ts"),
       "fuzzyfilter/i18n/adapters/i18next": path.resolve(packagesPath, "fuzzyfilter/src/i18n/adapters/i18next.ts"),
       "fuzzyfilter/i18n/adapters/vue-i18n": path.resolve(packagesPath, "fuzzyfilter/src/i18n/adapters/vue-i18n.ts"),

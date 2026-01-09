@@ -16,11 +16,11 @@
  */
 export const SCORING_WEIGHTS = {
   /** Column match importance */
-  COLUMN: 0.4,
+  COLUMN: 0.35,
   /** Operator match importance */
   OPERATOR: 0.2,
   /** Value match importance */
-  VALUE: 0.4,
+  VALUE: 0.45,
   /** Minimum score threshold to filter noise */
   THRESHOLD: 0.1,
 } as const;
@@ -51,39 +51,6 @@ export const SCORING_CONFIG = {
    */
   BONUS: {
     /**
-     * Maximum bonus for high coverage (using more of the input)
-     * This is the PRIMARY ranking factor - matching more tokens is more valuable
-     * NOTE: Legacy constant - no longer used in new scoring system
-     */
-    FULL_COVERAGE: 3000,
-    
-    /**
-     * Maximum bonus for exact match (case-insensitive)
-     * Scaled by coverage ratio
-     * NOTE: Legacy constant - no longer used in new scoring system
-     */
-    EXACT_MATCH: 3000,
-    
-    /**
-     * Maximum bonus for match completeness (how well query covers target)
-     * NOTE: Legacy constant - no longer used in new scoring system
-     */
-    COMPLETENESS: 1000,
-    
-    /**
-     * Bonus for matching the full query (when it's a good match)
-     * NOTE: Legacy constant - no longer used in new scoring system
-     */
-    FULL_QUERY: 500,
-    
-    /**
-     * Bonus per value matched for variadic operators
-     * Used when multiple values are matched for operators like "between"
-     * NOTE: Legacy constant - no longer used in new scoring system
-     */
-    MULTI_VALUE_PER_ITEM: 1500,
-    
-    /**
      * Base score for value-only suggestions (0-1 range)
      */
     VALUE_ONLY_BASE: 0.5,
@@ -104,34 +71,24 @@ export const SCORING_CONFIG = {
     SPREAD_PATTERN_BASE: 0.95,
     
     /**
-     * Base score for combined column + operator + value matches
-     * NOTE: Legacy constant - no longer used in new scoring system (use weighted aggregation instead)
+     * Maximum bonus for full query coverage (matching all tokens)
      */
-    COMBINED_MATCH_BASE: 8000,
+    FULL_COVERAGE: 3000,
     
     /**
-     * Bonus for value coverage (how many values matched vs total tokens)
-     * NOTE: Legacy constant - no longer used in new scoring system
+     * Maximum bonus for matching more of the target
      */
-    VALUE_COVERAGE: 1000,
+    COMPLETENESS: 1000,
     
     /**
-     * Bonus for token coverage in value inference
-     * NOTE: Legacy constant - no longer used in new scoring system (now uses multiplier)
+     * Bonus for matching the full query with good quality
      */
-    TOKEN_COVERAGE: 2500,
+    FULL_QUERY: 500,
     
     /**
-     * Bonus for argument coverage (variadic operators)
-     * NOTE: Legacy constant - no longer used in new scoring system
+     * Maximum bonus for exact match (case-insensitive)
      */
-    ARGUMENT_COVERAGE: 1500,
-    
-    /**
-     * Bonus for matching additional components beyond just value
-     * NOTE: Legacy constant - no longer used in new scoring system
-     */
-    ADDITIONAL_COMPONENT: 1500,
+    EXACT_MATCH: 3000,
   },
   
   /**

@@ -7,13 +7,13 @@
 import { test, expect, describe } from "bun:test";
 import {
   columnId,
-  OPERATORS,
   getAllOperators,
   getOperator,
   getOperatorsForType,
   isValidOperatorForType,
   getDefaultOperatorForType,
   isOperator,
+  getOperatorSearchTerms,
 } from "./index.ts";
 
 // =============================================================================
@@ -35,6 +35,7 @@ describe("Operator Registry", () => {
   test("getAllOperators returns all operators", () => {
     const operators = getAllOperators();
     expect(operators.length).toBeGreaterThan(0);
+    // Check for some expected operators by id
     expect(operators.some((op) => op.id === "eq")).toBe(true);
     expect(operators.some((op) => op.id === "contains")).toBe(true);
     expect(operators.some((op) => op.id === "isEmpty")).toBe(true);
@@ -43,8 +44,9 @@ describe("Operator Registry", () => {
   test("getOperator returns operator by id", () => {
     const eq = getOperator("eq");
     expect(eq).toBeDefined();
-    expect(eq?.label).toBe("equals");
-    expect(eq?.requiresArgument).toBe(true);
+    expect(eq?.id).toBe("eq");
+    // Patterns should define argument requirements
+    expect(eq?.patterns.some(p => p.includes("{"))).toBe(true); // requires argument
   });
 
   test("getOperatorsForType returns type-compatible operators", () => {
@@ -89,15 +91,16 @@ describe("Operator Registry", () => {
   });
 
   test("operators have aliases for fuzzy matching", () => {
-    const eq = getOperator("eq");
-    expect(eq?.aliases).toContain("equals");
-    expect(eq?.aliases).toContain("is");
-    expect(eq?.aliases).toContain("=");
+    // Use getOperatorSearchTerms to get all searchable terms
+    const eqTerms = getOperatorSearchTerms("eq");
+    expect(eqTerms).toContain("equals");
+    expect(eqTerms).toContain("=");
+    expect(eqTerms).toContain("==");
 
-    const contains = getOperator("contains");
-    expect(contains?.aliases).toContain("has");
-    expect(contains?.aliases).toContain("includes");
-    expect(contains?.aliases).toContain("like");
+    const containsTerms = getOperatorSearchTerms("contains");
+    expect(containsTerms).toContain("has");
+    expect(containsTerms).toContain("includes");
+    expect(containsTerms).toContain("like");
   });
 
   test("operators specify which types they support", () => {
@@ -116,29 +119,130 @@ describe("Operator Registry", () => {
     expect(startsWith?.supportedTypes).not.toContain("number");
   });
 
-  test("variadic operators are marked correctly", () => {
+  test("variadic operators have variadic argument patterns", () => {
+    // "in" operator has {...} variadic placeholder
     const inOp = getOperator("in");
-    expect(inOp?.isVariadic).toBe(true);
+    expect(inOp?.patterns.some(p => p.includes("{...}"))).toBe(true);
 
     const ninOp = getOperator("nin");
-    expect(ninOp?.isVariadic).toBe(true);
+    expect(ninOp?.patterns.some(p => p.includes("{...}"))).toBe(true);
 
+    // "between" has patterns with two args like {} and {}
     const betweenOp = getOperator("between");
-    expect(betweenOp?.isVariadic).toBe(true);
+    expect(betweenOp?.patterns.some(p => 
+      (p.match(/\{[^}]*\}/g) || []).length >= 2
+    )).toBe(true);
 
+    // "eq" has single arg pattern (not variadic)
     const eqOp = getOperator("eq");
-    expect(eqOp?.isVariadic).toBeUndefined();
+    expect(eqOp?.patterns.every(p => 
+      (p.match(/\{[^}]*\}/g) || []).length === 1
+    )).toBe(true);
+    // eq should not have variadic patterns
+    expect(eqOp?.patterns.some(p => p.includes("{...}"))).toBe(false);
   });
 
-  test("nullability operators don't require arguments", () => {
+  test("nullability operators don't require arguments (no placeholders)", () => {
     const isEmpty = getOperator("isEmpty");
-    expect(isEmpty?.requiresArgument).toBe(false);
+    // isEmpty patterns have no {arg} placeholders
+    expect(isEmpty?.patterns.every(p => !p.includes("{"))).toBe(true);
 
     const isNotEmpty = getOperator("isNotEmpty");
-    expect(isNotEmpty?.requiresArgument).toBe(false);
+    expect(isNotEmpty?.patterns.every(p => !p.includes("{"))).toBe(true);
 
     const isTrue = getOperator("isTrue");
-    expect(isTrue?.requiresArgument).toBe(false);
+    expect(isTrue?.patterns.every(p => !p.includes("{"))).toBe(true);
+  });
+});
+
+// =============================================================================
+// Operator Predicate Tests
+// =============================================================================
+
+describe("Operator Predicates", () => {
+  test("eq predicate works correctly", () => {
+    const eq = getOperator("eq");
+    expect(eq?.predicate("hello", ["hello"])).toBe(true);
+    expect(eq?.predicate("hello", ["world"])).toBe(false);
+    expect(eq?.predicate(42, [42])).toBe(true);
+    expect(eq?.predicate(42, [43])).toBe(false);
+  });
+
+  test("neq predicate works correctly", () => {
+    const neq = getOperator("neq");
+    expect(neq?.predicate("hello", ["world"])).toBe(true);
+    expect(neq?.predicate("hello", ["hello"])).toBe(false);
+  });
+
+  test("comparison predicates work correctly", () => {
+    const lt = getOperator("lt");
+    expect(lt?.predicate(5, [10])).toBe(true);
+    expect(lt?.predicate(10, [5])).toBe(false);
+
+    const lte = getOperator("lte");
+    expect(lte?.predicate(5, [5])).toBe(true);
+    expect(lte?.predicate(5, [4])).toBe(false);
+
+    const gt = getOperator("gt");
+    expect(gt?.predicate(10, [5])).toBe(true);
+    expect(gt?.predicate(5, [10])).toBe(false);
+
+    const gte = getOperator("gte");
+    expect(gte?.predicate(5, [5])).toBe(true);
+    expect(gte?.predicate(4, [5])).toBe(false);
+  });
+
+  test("contains predicate works for strings", () => {
+    const contains = getOperator("contains");
+    expect(contains?.predicate("hello world", ["world"])).toBe(true);
+    expect(contains?.predicate("hello world", ["foo"])).toBe(false);
+  });
+
+  test("contains predicate works for arrays", () => {
+    const contains = getOperator("contains");
+    expect(contains?.predicate(["a", "b", "c"], ["b"])).toBe(true);
+    expect(contains?.predicate(["a", "b", "c"], ["d"])).toBe(false);
+  });
+
+  test("isEmpty predicate works correctly", () => {
+    const isEmpty = getOperator("isEmpty");
+    expect(isEmpty?.predicate(null, [])).toBe(true);
+    expect(isEmpty?.predicate(undefined, [])).toBe(true);
+    expect(isEmpty?.predicate("", [])).toBe(true);
+    expect(isEmpty?.predicate([], [])).toBe(true);
+    expect(isEmpty?.predicate("hello", [])).toBe(false);
+    expect(isEmpty?.predicate(["a"], [])).toBe(false);
+  });
+
+  test("boolean predicates work correctly", () => {
+    const isTrue = getOperator("isTrue");
+    expect(isTrue?.predicate(true, [])).toBe(true);
+    expect(isTrue?.predicate(false, [])).toBe(false);
+
+    const isFalse = getOperator("isFalse");
+    expect(isFalse?.predicate(false, [])).toBe(true);
+    expect(isFalse?.predicate(true, [])).toBe(false);
+  });
+
+  test("between predicate works correctly", () => {
+    const between = getOperator("between");
+    expect(between?.predicate(5, [1, 10])).toBe(true);
+    expect(between?.predicate(1, [1, 10])).toBe(true);
+    expect(between?.predicate(10, [1, 10])).toBe(true);
+    expect(between?.predicate(0, [1, 10])).toBe(false);
+    expect(between?.predicate(11, [1, 10])).toBe(false);
+  });
+
+  test("in predicate works correctly", () => {
+    const inOp = getOperator("in");
+    expect(inOp?.predicate("a", ["a", "b", "c"])).toBe(true);
+    expect(inOp?.predicate("d", ["a", "b", "c"])).toBe(false);
+  });
+
+  test("nin predicate works correctly", () => {
+    const nin = getOperator("nin");
+    expect(nin?.predicate("d", ["a", "b", "c"])).toBe(true);
+    expect(nin?.predicate("a", ["a", "b", "c"])).toBe(false);
   });
 });
 

@@ -13,7 +13,7 @@ import {
   getOperatorsByCategory,
   getAllCategories,
   DataType,
-  type OperatorInfo,
+  type OperatorDefinition,
 } from "@jasperhino/fuzzyfilter"
 import {
   BookOpenIcon,
@@ -29,10 +29,17 @@ import DataTypeIcon from "./DataTypeIcon.vue"
 /**
  * Get the number of arguments for an operator
  */
-function getArgCount(operator: OperatorInfo): number {
-  if (!operator.requiresArgument) return 0
-  if (operator.id === "between") return 2
-  if (operator.isVariadic) return -1 // Unlimited (in, nin)
+function getArgCount(operator: OperatorDefinition): number {
+  // Derive from patterns
+  const hasArgs = operator.patterns.some(p => /\{[^}]*\}/.test(p))
+  if (!hasArgs) return 0
+  
+  // Check if variadic (has patterns with 2+ args)
+  const isVariadic = operator.patterns.some(p => (p.match(/\{[^}]*\}/g) || []).length >= 2)
+  if (isVariadic) {
+    if (operator.id === "between") return 2
+    return -1 // Unlimited (in, nin)
+  }
   return 1
 }
 
@@ -221,7 +228,7 @@ const options = [
 
                     <!-- Operator label -->
                     <span class="text-xs text-foreground truncate flex-1 min-w-0">
-                      {{ operator.label }}
+                      {{ operator.id }}
                     </span>
 
                     <!-- Argument placeholders -->
@@ -345,7 +352,7 @@ const options = [
                   :key="op.id"
                   class="px-2 py-1 rounded-md bg-muted/50 text-xs text-muted-foreground"
                 >
-                  {{ op.label }}
+                  {{ op.id }}
                 </div>
               </div>
             </div>

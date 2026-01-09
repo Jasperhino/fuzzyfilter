@@ -96,73 +96,56 @@ export const COLUMN_IDS = {
 // ============================================================================
 
 /**
- * Schema definition for the task data.
+ * Schema definition for the task data (V2 API).
  * 
- * Column names and enum values use i18n keys for translation support.
- * The static `name`/`values` properties serve as fallbacks when translations are not available.
+ * Column labels and enum values use i18n keys for translation support.
+ * Native enums are defined using the `values` array - no `type: "enum"` needed.
  */
 export const TASK_SCHEMA: SchemaInput = {
   columns: [
     {
       id: COLUMN_IDS.status,
-      name: "Status",
-      nameKey: "columns.status",
-      type: "enum",
+      labelKey: "columns.status",
       values: ["Open", "In Progress", "Closed", "Blocked"],
-      valueKeys: ["values.status.open", "values.status.inProgress", "values.status.closed", "values.status.blocked"],
+      valuesI18nPrefix: "status", // Maps to "status.Open", "status.In Progress", etc.
     },
     {
       id: COLUMN_IDS.assignee,
-      name: "Assignee",
-      nameKey: "columns.assignee",
+      labelKey: "columns.assignee",
       type: "string",
       aliases: ["owner", "assigned to"],
     },
     {
       id: COLUMN_IDS.priority,
-      name: "Priority",
-      nameKey: "columns.priority",
+      labelKey: "columns.priority",
       type: "number",
-      min: 1,
-      max: 5,
-      isInteger: true,
     },
     {
       id: COLUMN_IDS.department,
-      name: "Department",
-      nameKey: "columns.department",
-      type: "enum",
+      labelKey: "columns.department",
       values: ["Engineering", "Design", "Product"],
-      valueKeys: ["values.department.engineering", "values.department.design", "values.department.product"],
+      valuesI18nPrefix: "department", // Maps to "department.Engineering", etc.
     },
     {
       id: COLUMN_IDS.dueDate,
-      name: "Due Date",
-      nameKey: "columns.dueDate",
+      labelKey: "columns.dueDate",
       type: "date",
       aliases: ["due", "deadline"],
     },
     {
       id: COLUMN_IDS.created,
-      name: "Created",
-      nameKey: "columns.created",
+      labelKey: "columns.created",
       type: "string",
       aliases: ["timestamp", "createdAt"],
     },
     {
       id: COLUMN_IDS.isBlocked,
-      name: "Is Blocked",
-      nameKey: "columns.isBlocked",
+      labelKey: "columns.isBlocked",
       type: "boolean",
-      trueLabel: "Blocked",
-      falseLabel: "Not Blocked",
-      trueLabelKey: "values.boolean.blocked",
-      falseLabelKey: "values.boolean.notBlocked",
     },
     {
       id: COLUMN_IDS.comments,
-      name: "Comments",
-      nameKey: "columns.comments",
+      labelKey: "columns.comments",
       type: "string",
       aliases: ["notes", "description", "text"],
     },

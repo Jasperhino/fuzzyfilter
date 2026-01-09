@@ -7,9 +7,8 @@
  * @module fuzzyfilter/types/i18n
  */
 
-import type { Operator, OperatorInfo } from "../operators.ts";
+import type { OperatorKey } from "../operators.ts";
 import type { DataType } from "./core.ts";
-import type { WordSetKey } from "../operators.ts";
 
 // ============================================================================
 // I18N PROVIDER INTERFACE
@@ -22,50 +21,83 @@ import type { WordSetKey } from "../operators.ts";
  * like i18next, vue-i18n, etc.
  * 
  * The default English provider implements this interface using hardcoded
- * values from the OPERATORS registry and WORD_SETS.
+ * values from the OPERATORS registry.
  */
 export interface I18nProvider {
   /**
+   * Get all aliases for matching user input (always returns array).
+   * 
+   * Used for enum values, operator aliases, and any other i18n keys that
+   * have multiple possible translations/aliases.
+   * 
+   * @param key - The i18n key (e.g., "operators.eq", "status.active")
+   * @returns Array of aliases (always returns array, never undefined)
+   * 
+   * @example
+   * ```typescript
+   * getAliases('operators.eq') // → ['is', 'equals', '=']
+   * getAliases('status.active') // → ['active', 'enabled', 'on']
+   * ```
+   */
+  getAliases(key: string): string[];
+  
+  /**
+   * Get primary display label for suggestions.
+   * 
+   * Returns the first/primary translation for display purposes.
+   * 
+   * @param key - The i18n key (e.g., "columns.status", "operators.eq")
+   * @returns Primary display label (string)
+   * 
+   * @example
+   * ```typescript
+   * getLabel('columns.status') // → 'Status'
+   * getLabel('operators.eq') // → 'is' (first alias)
+   * ```
+   */
+  getLabel(key: string): string;
+  
+  /**
+   * Current locale.
+   * 
+   * Used for locale-specific features like date parsing.
+   */
+  readonly locale: string;
+  
+  /**
    * Get the translated label for an operator.
+   * 
+   * @deprecated Use getLabel() instead. Kept for backward compatibility.
    * 
    * @param operatorId - The operator ID (e.g., "eq", "contains")
    * @returns Translated label (e.g., "igual" for Spanish "eq")
    */
-  getOperatorLabel(operatorId: Operator): string;
+  getOperatorLabel?(operatorId: OperatorKey): string;
   
   /**
    * Get all translated aliases for an operator.
    * 
+   * @deprecated Use getAliases() instead. Kept for backward compatibility.
+   * 
    * @param operatorId - The operator ID
    * @returns Array of translated aliases for fuzzy matching
    */
-  getOperatorAliases(operatorId: Operator): string[];
-  
-  /**
-   * Get translated words for a word set.
-   * 
-   * Used for expanding alias patterns and spread patterns.
-   * 
-   * @param wordSetKey - The word set key (e.g., "less", "greater", "from")
-   * @returns Array of translated words
-   */
-  getWordSet(wordSetKey: WordSetKey): string[];
+  getOperatorAliases?(operatorId: OperatorKey): string[];
   
   /**
    * Translate a generic i18n key.
    * 
-   * This is a general-purpose translation method for any i18n key.
-   * Used for column names, enum values, descriptions, etc.
+   * @deprecated Use getAliases() or getLabel() instead. Kept for backward compatibility.
    * 
-   * @param key - The i18n key (e.g., "columns.status", "values.open")
-   * @returns Translated string, or undefined if not found
+   * @param key - The i18n key (e.g., "columns.status", "operators.neq")
+   * @returns Translated string, array of strings, or undefined if not found
    */
-  translate?(key: string): string | undefined;
+  translate?(key: string): string | string[] | undefined;
   
   /**
    * Get the current locale/language code.
    * 
-   * Used for locale-specific features like date parsing.
+   * @deprecated Use locale property instead. Kept for backward compatibility.
    * 
    * @returns Locale code (e.g., "en", "de", "fr") or undefined if not available
    */
@@ -102,19 +134,28 @@ export interface OperatorTranslation {
 /**
  * Complete translations for all operators
  */
-export type OperatorTranslations = Partial<Record<Operator, OperatorTranslation>>;
+export type OperatorTranslations = Partial<Record<OperatorKey, OperatorTranslation>>;
 
-/**
- * Translations for word sets (used in alias patterns and spread patterns)
- */
-export type WordSetTranslations = Partial<Record<WordSetKey, string[]>>;
 
 /**
  * Complete translation object
  * 
  * Used by `createObjectProvider()` to create an I18nProvider from a plain object.
+ * Can be used with `@fuzzyfilter/i18n-locales` package for pre-built translations.
+ * 
+ * Translations are resolved via the `translate()` method of I18nProvider:
+ * - `t(operators.eq)` → `translate("operators.eq")` → returns aliases array
+ * - `t(between)` → `translate("between")` → returns translated word
+ * 
+ * @example
+ * ```typescript
+ * import { en, es } from "@fuzzyfilter/i18n-locales";
+ * import { createObjectProvider } from "fuzzyfilter";
+ * 
+ * const provider = createObjectProvider(en);
+ * ```
  */
 export interface FuzzyFilterTranslations {
+  /** Operator-specific translations (labels and aliases) */
   operators?: OperatorTranslations;
-  wordSets?: WordSetTranslations;
 }

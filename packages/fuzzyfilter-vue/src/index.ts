@@ -39,6 +39,19 @@ export {
 } from "./use-fuzzy-filter.ts";
 
 // Re-export commonly used types from fuzzyfilter for convenience
-export type { FuzzyFilter, FilterSuggestion } from "@jasperhino/fuzzyfilter";
+export type {
+  FuzzyFilter,
+  FilterSuggestion,
+  OperatorDefinition,
+  TypeDefinition,
+} from "@jasperhino/fuzzyfilter";
+
+// Re-export default collections for extending
+export {
+  OPERATORS,
+  OPERATORS_ARRAY,
+  DATA_TYPES,
+  InstanceRegistry,
+} from "@jasperhino/fuzzyfilter";
 
 

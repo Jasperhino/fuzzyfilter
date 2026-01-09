@@ -9,74 +9,103 @@
  */
 
 import type { ColumnId, DataType } from "./core.ts";
-import type { Operator } from "../operators.ts";
+import type { OperatorKey } from "../operators.ts";
 
 // ============================================================================
-// COLUMN DEFINITION
+// COLUMN DEFINITION - Unified V2 API
 // ============================================================================
 
 /**
- * Base column definition with common properties.
- *
- * All column types extend this interface with type-specific properties.
- *
- * @typeParam T - The data type for this column
- *
- * @example
+ * Column definition for FuzzyFilter V2.
+ * 
+ * Supports automatic enum handling when `values` is provided, or explicit
+ * type specification for built-in types (string, number, date) or custom
+ * FuzzyFilterable types.
+ * 
+ * @typeParam TTypes - Map of custom type names to their FuzzyFilterable types
+ * 
+ * @example Native enum (automatic handling)
  * ```typescript
- * const column: ColumnDefinition<"string"> = {
- *   id: columnId("name"),
- *   name: "Name",
- *   type: "string",
- *   aliases: ["title", "label"], // Alternative names users might type
- *   description: "The display name",
+ * enum Status { ACTIVE = 'active', INACTIVE = 'inactive' }
+ * 
+ * const column: ColumnDefinition = {
+ *   id: 'status',
+ *   labelKey: 'columns.status',
+ *   values: Object.values(Status),
+ *   valuesI18nPrefix: 'status', // Maps to 'status.active', 'status.inactive'
+ * };
+ * ```
+ * 
+ * @example Built-in type
+ * ```typescript
+ * const column: ColumnDefinition = {
+ *   id: 'name',
+ *   labelKey: 'columns.name',
+ *   type: 'string',
+ * };
+ * ```
+ * 
+ * @example Custom FuzzyFilterable type
+ * ```typescript
+ * class Amount implements FuzzyFilterable<Amount> { ... }
+ * 
+ * const column: ColumnDefinition<{ amount: Amount }> = {
+ *   id: 'weight',
+ *   labelKey: 'columns.weight',
+ *   type: 'amount',
  * };
  * ```
  */
-export interface ColumnDefinition<T extends DataType = DataType> {
+export interface ColumnDefinition<TTypes extends Record<string, any> = Record<string, never>> {
   /**
    * Unique identifier for this column.
    *
-   * Use the `columnId()` helper to create typed IDs.
+   * Can be a plain string or a branded ColumnId (via `columnId()` helper).
+   * Plain strings are recommended for simplicity.
    */
-  id: ColumnId;
+  id: ColumnId | string;
 
   /**
-   * Display name for the column.
-   *
-   * This is what users see in suggestions and what they can type to match.
-   * Used as fallback if `nameKey` is not provided or translation is missing.
+   * i18n key for the column label (e.g., "columns.status").
+   * 
+   * This is required and will be looked up via the i18n provider.
+   * The library uses this for display and fuzzy matching.
    */
-  name: string;
+  labelKey: string;
 
   /**
-   * i18n key for the column name (e.g., "columns.status").
-   *
-   * When provided, the column name will be looked up via the i18n provider.
-   * Falls back to `name` if translation is not found.
-   *
-   * @example
-   * ```typescript
-   * {
-   *   name: "Status",
-   *   nameKey: "columns.status", // Translated via i18n
-   * }
-   * ```
+   * Data type - required for built-in types (string, number, date) or custom FuzzyFilterable types.
+   * Optional when `values` is provided (enum mode - type inferred automatically).
+   * 
+   * Built-in types: 'string', 'number', 'date'
+   * Custom types: keys from the TTypes generic parameter
    */
-  nameKey?: string;
+  type?: keyof (BuiltInTypes & TTypes);
+
+  /**
+   * Predefined values for enum-like columns.
+   * 
+   * When provided, the library automatically handles parsing, formatting, and comparison.
+   * Equality operators (eq, neq, in, notIn) work automatically with these values.
+   * 
+   * The presence of `values` triggers enum mode, making `type` optional.
+   */
+  values?: unknown[];
+
+  /**
+   * i18n key prefix for value labels.
+   * 
+   * Defaults to column id (e.g., 'status' → 'status.active').
+   * Set to match your i18n structure (e.g., 'trackingState' → 'trackingState.incomplete').
+   * 
+   * The library generates i18n keys as: `{valuesI18nPrefix ?? id}.{value}`
+   */
+  valuesI18nPrefix?: string;
 
   /**
    * Alternative names/aliases for fuzzy matching.
    *
    * Users can type any of these to match this column.
-   *
-   * @example
-   * ```typescript
-   * {
-   *   name: "Created At",
-   *   aliases: ["created", "date", "timestamp", "when"]
-   * }
-   * ```
    */
   aliases?: string[];
 
@@ -84,19 +113,8 @@ export interface ColumnDefinition<T extends DataType = DataType> {
    * i18n keys for aliases (looked up dynamically via i18n provider).
    *
    * These are resolved at runtime and merged with static `aliases`.
-   *
-   * @example
-   * ```typescript
-   * {
-   *   aliases: ["created"], // Static aliases
-   *   aliasKeys: ["aliases.created", "aliases.date"], // Dynamic i18n aliases
-   * }
-   * ```
    */
   aliasKeys?: string[];
-
-  /** The data type of this column */
-  type: T;
 
   /** Whether this column can contain null values */
   nullable?: boolean;
@@ -114,186 +132,22 @@ export interface ColumnDefinition<T extends DataType = DataType> {
 }
 
 /**
- * String column definition.
- *
- * For free-form text values. Supports pattern matching operators like
- * `contains`, `startsWith`, and `endsWith`.
- *
- * @example
- * ```typescript
- * {
- *   id: columnId("name"),
- *   name: "Name",
- *   type: "string",
- *   caseSensitive: false,
- * }
- * ```
+ * Built-in types that are always available.
  */
-export interface StringColumnDefinition extends ColumnDefinition<"string"> {
-  /** If provided, restricts valid values to this set */
-  allowedValues?: string[];
-  /** Case sensitivity for matching (default: false) */
-  caseSensitive?: boolean;
-}
+type BuiltInTypes = {
+  string: string;
+  number: number;
+  date: Date;
+  boolean: boolean;
+  array: unknown[];
+};
 
 /**
- * Numeric column definition.
- *
- * For integer and floating-point values. Supports comparison operators
- * like `lt`, `gt`, `gte`, `lte`.
- *
- * @example
- * ```typescript
- * {
- *   id: columnId("priority"),
- *   name: "Priority",
- *   type: "number",
- *   min: 1,
- *   max: 5,
- *   isInteger: true,
- * }
- * ```
+ * Union type for all column definitions.
+ * 
+ * @deprecated In V2, use ColumnDefinition directly. This is kept for backward compatibility.
  */
-export interface NumberColumnDefinition extends ColumnDefinition<"number"> {
-  /** Minimum allowed value (for validation) */
-  min?: number;
-  /** Maximum allowed value (for validation) */
-  max?: number;
-  /** Whether values are integers only (default: false) */
-  isInteger?: boolean;
-}
-
-/**
- * Date column definition.
- *
- * For date/time values. Supports natural language parsing via chrono-node
- * (e.g., "yesterday", "last week", "next month") and date-specific operators
- * like `before`, `after`, `between`.
- *
- * @example
- * ```typescript
- * {
- *   id: columnId("createdAt"),
- *   name: "Created At",
- *   type: "date",
- *   granularity: "day",
- * }
- * ```
- */
-export interface DateColumnDefinition extends ColumnDefinition<"date"> {
-  /** Date granularity for display/parsing */
-  granularity?: "year" | "month" | "day" | "hour" | "minute" | "second";
-  /** Timezone for date operations (e.g., "America/New_York") */
-  timezone?: string;
-}
-
-/**
- * Enum column definition.
- *
- * For columns with a fixed set of allowed values. The values are indexed
- * for fast fuzzy matching and suggestions.
- *
- * @example
- * ```typescript
- * {
- *   id: columnId("status"),
- *   name: "Status",
- *   type: "enum",
- *   values: ["Open", "In Progress", "Closed", "Blocked"],
- *   labels: ["Open", "In Progress", "Closed", "Blocked"], // Optional display labels
- * }
- * ```
- */
-export interface EnumColumnDefinition extends ColumnDefinition<"enum"> {
-  /** The allowed enum values */
-  values: string[];
-  /** Display labels for each value (parallel array, optional) */
-  labels?: string[];
-  /**
-   * i18n keys for enum value labels (parallel array to values).
-   *
-   * When provided, enum value labels will be looked up via the i18n provider.
-   * Falls back to `labels` or `values` if translation is not found.
-   *
-   * @example
-   * ```typescript
-   * {
-   *   values: ["Open", "In Progress", "Closed"],
-   *   valueKeys: ["values.open", "values.inProgress", "values.closed"],
-   * }
-   * ```
-   */
-  valueKeys?: string[];
-}
-
-/**
- * Boolean column definition.
- *
- * For true/false values. Supports `isTrue` and `isFalse` operators.
- *
- * @example
- * ```typescript
- * {
- *   id: columnId("isBlocked"),
- *   name: "Is Blocked",
- *   type: "boolean",
- *   trueLabel: "Blocked",
- *   falseLabel: "Not Blocked",
- * }
- * ```
- */
-export interface BooleanColumnDefinition extends ColumnDefinition<"boolean"> {
-  /** Custom label for true values */
-  trueLabel?: string;
-  /** Custom label for false values */
-  falseLabel?: string;
-  /**
-   * i18n key for true label (e.g., "booleans.blocked").
-   *
-   * When provided, the true label will be looked up via the i18n provider.
-   * Falls back to `trueLabel` if translation is not found.
-   */
-  trueLabelKey?: string;
-  /**
-   * i18n key for false label (e.g., "booleans.notBlocked").
-   *
-   * When provided, the false label will be looked up via the i18n provider.
-   * Falls back to `falseLabel` if translation is not found.
-   */
-  falseLabelKey?: string;
-}
-
-/**
- * Array column definition.
- *
- * For columns containing arrays of values. Supports `contains` and
- * `isEmpty` operators.
- *
- * @example
- * ```typescript
- * {
- *   id: columnId("tags"),
- *   name: "Tags",
- *   type: "array",
- *   elementType: "string",
- * }
- * ```
- */
-export interface ArrayColumnDefinition extends ColumnDefinition<"array"> {
-  /** The type of elements in the array */
-  elementType: Exclude<DataType, "array">;
-}
-
-/**
- * Union type for all column definitions
- */
-export type AnyColumnDefinition =
-  | StringColumnDefinition
-  | NumberColumnDefinition
-  | DateColumnDefinition
-  | EnumColumnDefinition
-  | BooleanColumnDefinition
-  | ArrayColumnDefinition;
+export type AnyColumnDefinition = ColumnDefinition;
 
 // ============================================================================
 // SCHEMA
@@ -322,9 +176,9 @@ export interface Schema {
  * ```typescript
  * const schemaInput: SchemaInput = {
  *   columns: [
- *     { id: columnId("status"), name: "Status", type: "enum", values: ["Open", "Closed"] },
- *     { id: columnId("priority"), name: "Priority", type: "number" },
- *     { id: columnId("assignee"), name: "Assignee", type: "string" },
+ *     { id: "status", labelKey: "columns.status", values: ["Open", "Closed"] },
+ *     { id: "priority", labelKey: "columns.priority", type: "number" },
+ *     { id: "assignee", labelKey: "columns.assignee", type: "string" },
  *   ],
  *   defaultColumns: ["status", "assignee"], // Optional: shown first in suggestions
  * };
@@ -332,9 +186,9 @@ export interface Schema {
  * filter.setSchema(schemaInput);
  * ```
  */
-export interface SchemaInput {
+export interface SchemaInput<TTypes extends Record<string, any> = Record<string, never>> {
   /** The column definitions */
-  columns: AnyColumnDefinition[];
+  columns: ColumnDefinition<TTypes>[];
 
   /**
    * Column IDs to show by default when query is empty.
@@ -352,11 +206,11 @@ export interface SchemaInput {
  */
 export interface OperatorMapping {
   /** Get allowed operators for a data type */
-  getOperatorsForType(type: DataType): Operator[];
+  getOperatorsForType(type: DataType): OperatorKey[];
   /** Check if an operator is valid for a type */
-  isValidOperator(type: DataType, operator: Operator): boolean;
+  isValidOperator(type: DataType, operator: OperatorKey): boolean;
   /** Get the default operator for a type */
-  getDefaultOperator(type: DataType): Operator;
+  getDefaultOperator(type: DataType): OperatorKey;
 }
 
 // ============================================================================

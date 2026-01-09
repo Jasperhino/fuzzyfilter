@@ -64,6 +64,7 @@
       "pages": [
         "guides/basic-usage",
         "guides/schema-definition",
+        "guides/custom-operators",
         "guides/i18n"
       ]
     },

@@ -11,10 +11,6 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
-    "./i18n/locales": {
-      "import": "./dist/i18n/locales/index.js",
-      "types": "./dist/i18n/locales/index.d.ts"
-    },
     "./i18n/adapters": {
       "import": "./dist/i18n/adapters/index.js",
       "types": "./dist/i18n/adapters/index.d.ts"

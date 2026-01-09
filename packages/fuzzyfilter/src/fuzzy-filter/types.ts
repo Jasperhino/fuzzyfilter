@@ -10,8 +10,6 @@ import type {
   Schema,
   Token,
   ParsedInput,
-  CompiledFilter,
-  FilterSuggestion,
 } from "../types/index.ts";
 import type { I18nProvider } from "../types/i18n.ts";
 import { DataType } from "../types/index.ts";
@@ -42,7 +40,7 @@ export interface FuzzyFilterState {
   schema: Schema | null;
   columnTrie: Trie<AnyColumnDefinition>;
   operatorTrie: Trie<OperatorAliasEntry>;
-  valueTrie: Trie<{ value: string; columnId: ColumnId; rowCount: number }>;
+  valueTrie: Trie<{ value: string; columnId: ColumnId | string; rowCount: number }>;
   data: Array<Record<string, unknown>>;
   /** Version counter incremented when data changes, used for cache invalidation */
   dataVersion: number;
@@ -150,11 +148,11 @@ export interface PositionedValueMatch {
 }
 
 /**
- * Result of detecting a spread pattern in tokens
+ * Result of detecting a template pattern in tokens
  */
-export interface SpreadPatternMatch {
-  /** The operator that this spread pattern represents */
-  operator: Operator;
+export interface TemplatePatternMatch {
+  /** The operator that this template pattern represents */
+  operator: string;
   /** Tokens between the start and separator keywords (first argument) */
   arg1Tokens: Token[];
   /** Tokens after the separator keyword (second argument) */
@@ -168,6 +166,7 @@ export interface SpreadPatternMatch {
   /** Index of the separator keyword token */
   separatorIndex: number;
 }
+
 
 /**
  * Context for suggestion generation

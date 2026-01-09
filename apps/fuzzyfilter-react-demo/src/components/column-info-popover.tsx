@@ -17,7 +17,7 @@ import { DataTypeIcon, DataTypeBadge } from "./data-type-icon";
 import {
   getOperatorsForType,
   DataType,
-  type OperatorInfo,
+  type OperatorDefinition,
   type AnyColumnDefinition,
 } from "@jasperhino/fuzzyfilter";
 
@@ -34,17 +34,24 @@ interface ColumnInfoPopoverProps {
 /**
  * Get the number of arguments for an operator (matching API reference)
  */
-function getArgCount(operator: OperatorInfo): number {
-  if (!operator.requiresArgument) return 0;
-  if (operator.id === "between") return 2;
-  if (operator.isVariadic) return -1; // Unlimited (in, nin)
+function getArgCount(operator: OperatorDefinition): number {
+  // Derive from patterns
+  const hasArgs = operator.patterns.some(p => /\{[^}]*\}/.test(p));
+  if (!hasArgs) return 0;
+  
+  // Check if variadic (has patterns with 2+ args)
+  const isVariadic = operator.patterns.some(p => (p.match(/\{[^}]*\}/g) || []).length >= 2);
+  if (isVariadic) {
+    if (operator.id === "between") return 2;
+    return -1; // Unlimited (in, nin)
+  }
   return 1;
 }
 
 /**
  * Operator badge component - displays operator as text label
  */
-function OperatorBadgeLabel({ operator }: { operator: OperatorInfo }) {
+function OperatorBadgeLabel({ operator }: { operator: OperatorDefinition }) {
   return (
     <span className="shrink-0 text-[10px] h-4 px-1 rounded inline-flex items-center font-medium bg-muted text-muted-foreground">
       {operator.symbol || operator.id}
@@ -66,7 +73,7 @@ function ArgPlaceholder({ label }: { label: string }) {
 /**
  * Argument display component based on operator type (matching API reference)
  */
-function OperatorArgs({ operator }: { operator: OperatorInfo }) {
+function OperatorArgs({ operator }: { operator: OperatorDefinition }) {
   const argCount = getArgCount(operator);
 
   if (argCount === 0) {
@@ -193,7 +200,7 @@ export function ColumnInfoPopover({ column, children }: ColumnInfoPopoverProps) 
  */
 interface OperatorRowProps {
   /** The operator info */
-  operator: OperatorInfo;
+  operator: OperatorDefinition;
 }
 
 /**
@@ -207,7 +214,7 @@ function OperatorRow({ operator }: OperatorRowProps) {
       <div className="flex items-center gap-1.5 flex-1 min-w-0">
         <OperatorBadgeLabel operator={operator} />
         <span className="text-muted-foreground truncate">
-          {operator.label}
+          {operator.id}
         </span>
       </div>
 

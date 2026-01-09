@@ -2,106 +2,78 @@
  * Operator Registry
  * 
  * Defines all supported operators with their metadata,
- * aliases for fuzzy matching, and type compatibility.
+ * pattern-based aliases for fuzzy matching, type compatibility, and predicate logic.
  * 
  * The Operator type is derived from this registry's keys.
  */
 
-import type { OperatorInfoBase } from "./types/index.ts";
+import type { OperatorDefinition } from "./types/index.ts";
 import { DataType, OperatorCategory } from "./types/index.ts";
 import type { I18nProvider } from "./types/i18n.ts";
 
 // ============================================================================
-// WORD SETS FOR ALIAS GENERATION
+// OPERATORS REGISTRY (NEW PATTERN-BASED FORMAT)
 // ============================================================================
 
 /**
- * Word sets for generating operator aliases.
- * 
- * Each key maps to an array of synonymous words that can be used
- * interchangeably when constructing operator aliases.
- * 
- * These are combined via AliasPattern to generate all valid permutations.
- */
-export const WORD_SETS = {
-  // Comparison words
-  less: ["less", "smaller", "lower", "under"],
-  greater: ["greater", "bigger", "larger", "more", "over", "above"],
-  than: ["than"],
-  
-  // Equality/Combination words
-  equal: ["equal", "equals", "eq"],
-  or: ["or"],
-  not: ["not"],
-  
-  // Range/Spread keywords
-  from: ["from"],
-  to: ["to", "till", "until"],
-  between: ["between"],
-  and: ["and"],
-  
-  // Pattern matching words
-  contains: ["contains", "has", "includes"],
-  starts: ["starts", "begins"],
-  ends: ["ends"],
-  with: ["with"],
-  
-  // Existence words
-  is: ["is"],
-  empty: ["empty", "blank", "null", "missing"],
-} as const;
-
-/**
- * Type for word set keys
- */
-export type WordSetKey = keyof typeof WORD_SETS;
-
-/**
- * Complete registry of all operators.
+ * Complete registry of all operators using the pattern-based syntax.
  * This is the single source of truth - the Operator type is derived from its keys.
+ * 
+ * Pattern syntax:
+ * - `{}` or `{name}` - Argument placeholder
+ * - `@keyword` - Local alias reference (resolved from `aliases` field)
+ * - `t(key)` - i18n translation key (resolved via i18nProvider.translate(), can return array)
+ * - `literal` - Matches text literally
  */
-export const OPERATORS = {
+export const OPERATORS: Record<string, OperatorDefinition> = {
   // ---------------------------------------------------------------------------
   // Equality Operators
   // ---------------------------------------------------------------------------
   eq: {
     id: "eq",
     category: OperatorCategory.EQUALITY,
-    label: "equals",
-    aliases: ["equal", "equals", "is", "=", "==", "==="],
-    typeSpecificAliases: {
-      [DataType.DATE]: ["at", "on"],
+    patterns: ["@eq {}"],
+    aliases: {
+      "@eq": ["=", "==", "===", "is", "equal", "equals", "t(operators.eq)"],
+    },
+    typeSpecificPatterns: {
+      [DataType.DATE]: ["at {}", "on {}"],
     },
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM],
-    requiresArgument: true,
+    predicate: (cell, [arg]) => cell === arg,
   },
+  
   neq: {
     id: "neq",
     category: OperatorCategory.EQUALITY,
-    label: "not equals",
-    aliases: ["!=", "!==", "<>", "≠"],
-    aliasPatterns: [
-      { parts: ["not", "equal"] },
-      { parts: ["is?", "not", "equal"] },
-    ],
+    patterns: ["@neq {}"],
+    aliases: {
+      "@neq": ["!=", "!==", "<>", "≠", "not_equals", "not_equal", "is_not", "isnt", "t(operators.neq)"],
+    },
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM],
-    requiresArgument: true,
+    predicate: (cell, [arg]) => cell !== arg,
   },
+  
   eqIgnoreCase: {
     id: "eqIgnoreCase",
     category: OperatorCategory.EQUALITY,
-    label: "equals (ignore case)",
-    aliases: ["equalsIgnoreCase", "eqic", "equals ignore case", "~=", "≈"],
+    patterns: ["@eqic {}"],
+    aliases: {
+      "@eqic": ["~=", "≈", "eqic", "equals_ignore_case", "t(operators.eqIgnoreCase)"],
+    },
     supportedTypes: [DataType.STRING],
-    requiresArgument: true,
+    predicate: (cell, [arg]) => String(cell).toLowerCase() === String(arg).toLowerCase(),
   },
+  
   neqIgnoreCase: {
     id: "neqIgnoreCase",
     category: OperatorCategory.EQUALITY,
-    label: "not equals (ignore case)",
-    aliases: ["notEqualsIgnoreCase", "neqic", "not equals ignore case", "≉"],
+    patterns: ["@neqic {}"],
+    aliases: {
+      "@neqic": ["≉", "neqic", "not_equals_ignore_case", "t(operators.neqIgnoreCase)"],
+    },
     supportedTypes: [DataType.STRING],
-    requiresArgument: true,
+    predicate: (cell, [arg]) => String(cell).toLowerCase() !== String(arg).toLowerCase(),
   },
 
   // ---------------------------------------------------------------------------
@@ -110,46 +82,45 @@ export const OPERATORS = {
   lt: {
     id: "lt",
     category: OperatorCategory.COMPARISON,
-    label: "less than",
-    aliases: ["<", "before", "under"],
-    aliasPatterns: [
-      { parts: ["less", "than?"] },
-    ],
+    patterns: ["@lt {}"],
+    aliases: {
+      "@lt": ["<", "less", "smaller", "lower", "under", "before", "less_than", "t(operators.lt)"],
+    },
     supportedTypes: [DataType.NUMBER, DataType.DATE],
-    requiresArgument: true,
+    predicate: (cell, [arg]) => (cell as number) < (arg as number),
   },
+  
   lte: {
     id: "lte",
     category: OperatorCategory.COMPARISON,
-    label: "less than or equal",
-    aliases: ["<=", "max", "at most", "≤"],
-    aliasPatterns: [
-      { parts: ["less", "than?", "or?", "equal"] },
-    ],
+    patterns: ["@lte {}"],
+    aliases: {
+      "@lte": ["<=", "≤", "at_most", "max", "less_or_equal", "t(operators.lte)"],
+    },
     supportedTypes: [DataType.NUMBER, DataType.DATE],
-    requiresArgument: true,
+    predicate: (cell, [arg]) => (cell as number) <= (arg as number),
   },
+  
   gt: {
     id: "gt",
     category: OperatorCategory.COMPARISON,
-    label: "greater than",
-    aliases: [">", "after"],
-    aliasPatterns: [
-      { parts: ["greater", "than?"] },
-    ],
+    patterns: ["@gt {}"],
+    aliases: {
+      "@gt": [">", "greater", "bigger", "larger", "more", "over", "above", "after", "greater_than", "t(operators.gt)"],
+    },
     supportedTypes: [DataType.NUMBER, DataType.DATE],
-    requiresArgument: true,
+    predicate: (cell, [arg]) => (cell as number) > (arg as number),
   },
+  
   gte: {
     id: "gte",
     category: OperatorCategory.COMPARISON,
-    label: "greater than or equal",
-    aliases: [">=", "min", "at least", "≥"],
-    aliasPatterns: [
-      { parts: ["greater", "than?", "or?", "equal"] },
-    ],
+    patterns: ["@gte {}"],
+    aliases: {
+      "@gte": [">=", "≥", "at_least", "min", "greater_or_equal", "t(operators.gte)"],
+    },
     supportedTypes: [DataType.NUMBER, DataType.DATE],
-    requiresArgument: true,
+    predicate: (cell, [arg]) => (cell as number) >= (arg as number),
   },
 
   // ---------------------------------------------------------------------------
@@ -158,22 +129,23 @@ export const OPERATORS = {
   in: {
     id: "in",
     category: OperatorCategory.SET_MEMBERSHIP,
-    label: "in",
-    aliases: ["oneOf", "one of", "any of", "anyOf", "includes", "∈"],
+    patterns: ["@in {...}"],
+    aliases: {
+      "@in": ["in", "∈", "one_of", "any_of", "includes", "t(operators.in)"],
+    },
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.ENUM],
-    requiresArgument: true,
-    isVariadic: true,
-    minArguments: 1,
+    predicate: (cell, args) => args.includes(cell),
   },
+  
   nin: {
     id: "nin",
     category: OperatorCategory.SET_MEMBERSHIP,
-    label: "not in",
-    aliases: ["notIn", "not one of", "none of", "noneOf", "excludes", "∉"],
+    patterns: ["@nin {...}"],
+    aliases: {
+      "@nin": ["nin", "∉", "not_in", "none_of", "excludes", "t(operators.nin)"],
+    },
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.ENUM],
-    requiresArgument: true,
-    isVariadic: true,
-    minArguments: 1,
+    predicate: (cell, args) => !args.includes(cell),
   },
 
   // ---------------------------------------------------------------------------
@@ -182,40 +154,55 @@ export const OPERATORS = {
   contains: {
     id: "contains",
     category: OperatorCategory.PATTERN_MATCHING,
-    label: "contains",
-    aliases: ["has", "includes", "like", "~", "⊃"],
+    patterns: ["@contains {}"],
+    aliases: {
+      "@contains": ["~", "⊃", "contains", "has", "includes", "like", "t(operators.contains)"],
+    },
     supportedTypes: [DataType.STRING, DataType.ARRAY],
-    requiresArgument: true,
+    predicate: (cell, [arg]) => {
+      if (Array.isArray(cell)) {
+        return cell.includes(arg);
+      }
+      return String(cell).includes(String(arg));
+    },
   },
+  
   notContains: {
     id: "notContains",
     category: OperatorCategory.PATTERN_MATCHING,
-    label: "does not contain",
-    aliases: ["doesNotContain", "notIncludes", "excludes", "!~", "⊅"],
+    patterns: ["@notContains {}"],
+    aliases: {
+      "@notContains": ["!~", "⊅", "not_contains", "excludes", "t(operators.notContains)"],
+    },
     supportedTypes: [DataType.STRING, DataType.ARRAY],
-    requiresArgument: true,
+    predicate: (cell, [arg]) => {
+      if (Array.isArray(cell)) {
+        return !cell.includes(arg);
+      }
+      return !String(cell).includes(String(arg));
+    },
   },
+  
   startsWith: {
     id: "startsWith",
     category: OperatorCategory.PATTERN_MATCHING,
-    label: "starts with",
-    aliases: ["prefix", "^", "^…"],
-    aliasPatterns: [
-      { parts: ["starts", "with?"] },
-    ],
+    patterns: ["@startsWith {}"],
+    aliases: {
+      "@startsWith": ["^", "prefix", "starts_with", "begins_with", "t(operators.startsWith)"],
+    },
     supportedTypes: [DataType.STRING],
-    requiresArgument: true,
+    predicate: (cell, [arg]) => String(cell).startsWith(String(arg)),
   },
+  
   endsWith: {
     id: "endsWith",
     category: OperatorCategory.PATTERN_MATCHING,
-    label: "ends with",
-    aliases: ["suffix", "$", "…$"],
-    aliasPatterns: [
-      { parts: ["ends", "with?"] },
-    ],
+    patterns: ["@endsWith {}"],
+    aliases: {
+      "@endsWith": ["$", "suffix", "ends_with", "t(operators.endsWith)"],
+    },
     supportedTypes: [DataType.STRING],
-    requiresArgument: true,
+    predicate: (cell, [arg]) => String(cell).endsWith(String(arg)),
   },
 
   // ---------------------------------------------------------------------------
@@ -224,24 +211,17 @@ export const OPERATORS = {
   isEmpty: {
     id: "isEmpty",
     category: OperatorCategory.NULLABILITY,
-    label: "is empty",
-    aliases: ["isNull", "null", "∅", "hasValue"],
-    aliasPatterns: [
-      { parts: ["is?", "empty"] },
-    ],
+    patterns: ["empty", "null", "blank", "missing", "is_empty", "t(operators.isEmpty)"],
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM, DataType.ARRAY],
-    requiresArgument: false,
+    predicate: (cell) => cell == null || cell === "" || (Array.isArray(cell) && cell.length === 0),
   },
+  
   isNotEmpty: {
     id: "isNotEmpty",
     category: OperatorCategory.NULLABILITY,
-    label: "is not empty",
-    aliases: ["isNotNull", "notNull", "exists", "present", "≠∅"],
-    aliasPatterns: [
-      { parts: ["is?", "not", "empty"] },
-    ],
+    patterns: ["not_empty", "is_not_empty", "exists", "present", "t(operators.isNotEmpty)"],
     supportedTypes: [DataType.STRING, DataType.NUMBER, DataType.BOOLEAN, DataType.DATE, DataType.ENUM, DataType.ARRAY],
-    requiresArgument: false,
+    predicate: (cell) => cell != null && cell !== "" && !(Array.isArray(cell) && cell.length === 0),
   },
 
   // ---------------------------------------------------------------------------
@@ -250,18 +230,17 @@ export const OPERATORS = {
   isTrue: {
     id: "isTrue",
     category: OperatorCategory.BOOLEAN,
-    label: "is true",
-    aliases: ["true", "yes", "on", "enabled", "active", "✓"],
+    patterns: ["true", "yes", "on", "enabled", "active", "✓", "t(operators.isTrue)"],
     supportedTypes: [DataType.BOOLEAN],
-    requiresArgument: false,
+    predicate: (cell) => cell === true,
   },
+  
   isFalse: {
     id: "isFalse",
     category: OperatorCategory.BOOLEAN,
-    label: "is false",
-    aliases: ["false", "no", "off", "disabled", "inactive", "✗"],
+    patterns: ["false", "no", "off", "disabled", "inactive", "✗", "t(operators.isFalse)"],
     supportedTypes: [DataType.BOOLEAN],
-    requiresArgument: false,
+    predicate: (cell) => cell === false,
   },
 
   // ---------------------------------------------------------------------------
@@ -270,102 +249,108 @@ export const OPERATORS = {
   before: {
     id: "before",
     category: OperatorCategory.DATE,
-    label: "before",
-    aliases: ["earlier", "prior to", "priorTo", "earlier than", "preceding", "until", "up to", "←"],
+    patterns: ["@before {}"],
+    aliases: {
+      "@before": ["←", "before", "earlier", "prior_to", "until", "up_to", "t(operators.before)"],
+    },
     supportedTypes: [DataType.DATE],
-    requiresArgument: true,
+    predicate: (cell, [arg]) => {
+      const cellDate = cell instanceof Date ? cell : new Date(cell as string);
+      const argDate = arg instanceof Date ? arg : new Date(arg as string);
+      return cellDate.getTime() < argDate.getTime();
+    },
   },
+  
   after: {
     id: "after",
     category: OperatorCategory.DATE,
-    label: "after",
-    aliases: ["later", "since", "later than", "following", "from", "starting", "→"],
+    patterns: ["@after {}"],
+    aliases: {
+      "@after": ["→", "after", "later", "since", "from", "starting", "t(operators.after)"],
+    },
     supportedTypes: [DataType.DATE],
-    requiresArgument: true,
+    predicate: (cell, [arg]) => {
+      const cellDate = cell instanceof Date ? cell : new Date(cell as string);
+      const argDate = arg instanceof Date ? arg : new Date(arg as string);
+      return cellDate.getTime() > argDate.getTime();
+    },
   },
+  
   between: {
     id: "between",
-    category: OperatorCategory.DATE,
-    label: "between",
-    aliases: ["range", "within", "↔"],
-    spreadPatterns: [
-      { keywords: ["from", "to"], keywordSets: ["from", "to"] },
-      { keywords: ["between", "and"], keywordSets: ["between", "and"] },
+    category: OperatorCategory.COMPARISON,
+    patterns: [
+      "t(between) {} @and {}",
+      "t(from) {} @to {}",
+      "range {} - {}",
     ],
+    aliases: {
+      "@and": ["and", "&", "t(and)"],
+      "@to": ["to", "till", "until", "t(to)"],
+    },
     supportedTypes: [DataType.NUMBER, DataType.DATE],
-    requiresArgument: true,
-    isVariadic: true,
-    minArguments: 2,
+    predicate: (cell, args) => {
+      if (args.length < 2) return false;
+      const [min, max] = args;
+      // Handle both numbers and dates
+      if (cell instanceof Date || min instanceof Date) {
+        const cellTime = (cell instanceof Date ? cell : new Date(cell as string)).getTime();
+        const minTime = (min instanceof Date ? min : new Date(min as string)).getTime();
+        const maxTime = (max instanceof Date ? max : new Date(max as string)).getTime();
+        return cellTime >= minTime && cellTime <= maxTime;
+      }
+      const numCell = cell as number;
+      return numCell >= (min as number) && numCell <= (max as number);
+    },
   },
-} as const satisfies Record<string, OperatorInfoBase & { id: string; category: OperatorCategory }>;
+};
+
+/**
+ * Array of all built-in operators for spreading into config.
+ * 
+ * @example
+ * ```typescript
+ * // Extend built-in operators with custom ones
+ * operators: [...OPERATORS_ARRAY, myCustomOperator]
+ * ```
+ */
+export const OPERATORS_ARRAY: OperatorDefinition[] = Object.values(OPERATORS);
 
 /**
  * All supported filter operators.
  * Derived from OPERATORS keys - single source of truth.
  */
-export type Operator = keyof typeof OPERATORS;
+export type OperatorKey = keyof typeof OPERATORS;
 
-/**
- * Full operator info including the id field.
- * The id matches the registry key.
- */
-export interface OperatorInfo extends OperatorInfoBase {
-  /** The operator identifier (matches the registry key) */
-  readonly id: Operator;
-}
 
 /**
  * Get all operators
  * 
- * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
- * @returns Array of all operators with translations applied if provider is given
+ * @returns Array of all operators
  */
-export function getAllOperators(i18nProvider?: I18nProvider): OperatorInfo[] {
-  const operators = Object.values(OPERATORS) as OperatorInfo[];
-  
-  if (!i18nProvider) {
-    return operators;
-  }
-  
-  // Apply translations to each operator
-  return operators.map(op => ({
-    ...op,
-    label: i18nProvider.getOperatorLabel(op.id),
-    aliases: i18nProvider.getOperatorAliases(op.id),
-  }));
+export function getAllOperators(): OperatorDefinition[] {
+  return Object.values(OPERATORS);
 }
 
 /**
- * Get operator by ID
+ * Get operator by ID (registry key)
  * 
- * @param id - The operator ID
- * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
- * @returns Operator info with translations applied if provider is given
+ * @param id - The operator ID (registry key, e.g., "eq", "lt", "between")
+ * @returns Operator definition
  */
-export function getOperator(id: Operator, i18nProvider?: I18nProvider): OperatorInfo {
-  const op = OPERATORS[id] as OperatorInfo;
-  
-  if (!i18nProvider) {
-    return op;
-  }
-  
-  // Return a new object with translated label and aliases
-  // Note: This doesn't modify the original OPERATORS registry
-  return {
-    ...op,
-    label: i18nProvider.getOperatorLabel(id),
-    aliases: i18nProvider.getOperatorAliases(id),
-  };
+export function getOperator(id: OperatorKey | string): OperatorDefinition | undefined {
+  return OPERATORS[id];
 }
 
 /**
  * Get operators valid for a data type
  * 
  * @param type - The data type
- * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
  */
-export function getOperatorsForType(type: DataType, i18nProvider?: I18nProvider): OperatorInfo[] {
-  return getAllOperators(i18nProvider).filter(op => op.supportedTypes.includes(type));
+export function getOperatorsForType(type: DataType): OperatorDefinition[] {
+  return getAllOperators().filter(op => 
+    (op.supportedTypes as readonly string[]).includes(type)
+  );
 }
 
 /**
@@ -373,8 +358,8 @@ export function getOperatorsForType(type: DataType, i18nProvider?: I18nProvider)
  * Returns an object with category names as keys and arrays of operators as values.
  * Categories are returned in their natural definition order.
  */
-export function getOperatorsByCategory(): Record<OperatorCategory, OperatorInfo[]> {
-  const groups: Record<OperatorCategory, OperatorInfo[]> = {
+export function getOperatorsByCategory(): Record<OperatorCategory, OperatorDefinition[]> {
+  const groups: Record<OperatorCategory, OperatorDefinition[]> = {
     [OperatorCategory.EQUALITY]: [],
     [OperatorCategory.COMPARISON]: [],
     [OperatorCategory.SET_MEMBERSHIP]: [],
@@ -401,15 +386,15 @@ export function getAllCategories(): OperatorCategory[] {
 /**
  * Check if operator is valid for type
  */
-export function isValidOperatorForType(operator: Operator, type: DataType): boolean {
+export function isValidOperatorForType(operator: OperatorKey | string, type: DataType): boolean {
   const info = getOperator(operator);
-  return info?.supportedTypes.includes(type) ?? false;
+  return info ? (info.supportedTypes as readonly string[]).includes(type) : false;
 }
 
 /**
  * Get default operator for a type
  */
-export function getDefaultOperatorForType(type: DataType): Operator {
+export function getDefaultOperatorForType(type: DataType): OperatorKey {
   switch (type) {
     case DataType.STRING:
       return "contains";
@@ -432,78 +417,50 @@ export function getDefaultOperatorForType(type: DataType): Operator {
  * Get all searchable terms for an operator (for fuzzy matching)
  * 
  * @param operator - The operator to get search terms for
- * @param forType - Optional: include type-specific aliases for this data type
- * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
  */
-export function getOperatorSearchTerms(operator: Operator, forType?: DataType, i18nProvider?: I18nProvider): string[] {
-  const info = getOperator(operator, i18nProvider);
+export function getOperatorSearchTerms(operator: OperatorKey | string): string[] {
+  const info = getOperator(operator);
+  if (!info) return [];
   
-  const terms: string[] = [
-    info.id,
-    info.label,
-    ...info.aliases,
-  ];
-
-  // Add type-specific aliases if a type is specified
-  // Note: Type-specific aliases are not translated via I18nProvider (they're in the operator definition)
-  if (forType && info.typeSpecificAliases?.[forType]) {
-    terms.push(...info.typeSpecificAliases[forType]!);
+  const terms: string[] = [info.id];
+  
+  // Add all literal patterns (no placeholders, no refs)
+  for (const pattern of info.patterns) {
+    const cleaned = pattern.replace(/\{[^}]*\}/g, "").replace(/@\w+/g, "").replace(/t\([^)]+\)/g, "").trim();
+    if (cleaned) terms.push(cleaned);
+  }
+  
+  // Add all alias values (flatten the alias map)
+  if (info.aliases) {
+    for (const values of Object.values(info.aliases)) {
+      for (const val of values) {
+        // Skip i18n refs (t(key))
+        if (!val.startsWith("t(")) {
+          // Convert underscores to spaces for display
+          terms.push(val.replace(/_/g, " "));
+        }
+      }
+    }
   }
 
   return terms;
 }
 
-/**
- * Get all aliases for an operator, optionally filtered by type
- * 
- * @param operator - The operator to get aliases for
- * @param forType - Optional: include type-specific aliases for this data type
- * @param i18nProvider - Optional i18n provider for translations. If not provided, uses default English.
- */
-export function getOperatorAliases(operator: Operator, forType?: DataType, i18nProvider?: I18nProvider): string[] {
-  const info = getOperator(operator, i18nProvider);
-  
-  const aliases = [...info.aliases];
-
-  // Add type-specific aliases if a type is specified
-  // Note: Type-specific aliases are not translated via I18nProvider (they're in the operator definition)
-  if (forType && info.typeSpecificAliases?.[forType]) {
-    aliases.push(...info.typeSpecificAliases[forType]!);
-  }
-
-  return aliases;
-}
 
 /**
  * Check if a given alias matches an operator for a specific type
- * Returns true if the alias is a general alias OR a type-specific alias for the given type
+ * Returns true if the alias is found in the operator's patterns or aliases
  */
-export function isAliasForOperator(alias: string, operator: Operator, forType?: DataType): boolean {
-  const info = getOperator(operator);
-  
-  const normalizedAlias = alias.toLowerCase();
-  
-  // Check general aliases
-  if (info.aliases.some(a => a.toLowerCase() === normalizedAlias)) {
-    return true;
-  }
-  
-  // Check type-specific aliases
-  if (forType && info.typeSpecificAliases?.[forType]) {
-    if (info.typeSpecificAliases[forType]!.some(a => a.toLowerCase() === normalizedAlias)) {
-      return true;
-    }
-  }
-  
-  return false;
+export function isAliasForOperator(alias: string, operator: OperatorKey | string): boolean {
+  const terms = getOperatorSearchTerms(operator);
+  const normalizedAlias = alias.toLowerCase().replace(/_/g, " ");
+  return terms.some(t => t.toLowerCase().replace(/_/g, " ") === normalizedAlias);
 }
 
 /**
  * Type guard to check if a string is a valid operator
  */
-export function isOperator(value: string): value is Operator {
+export function isOperator(value: string): value is OperatorKey {
   return value in OPERATORS;
 }
-
-
 

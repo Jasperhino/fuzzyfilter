@@ -7,70 +7,74 @@ description: "Learn the fundamentals of FuzzyFilter"
 
 This guide covers the fundamental concepts and patterns for using FuzzyFilter.
 
-## Creating a Filter Instance
+## Creating a Filter Instance (V2 API)
 
-The `createFuzzyFilter` factory function creates a new filter instance:
-
-```typescript
-import { createFuzzyFilter } from "@jasperhino/fuzzyfilter";
-
-const filter = createFuzzyFilter();
-```
-
-You can pass configuration options:
+The `createFuzzyFilter` factory function creates a new filter instance. In V2, `columns` and `i18n` are required:
 
 ```typescript
+import { createFuzzyFilter, createDefaultEnglishProvider } from "fuzzyfilter";
+
+// Native TypeScript enums work automatically!
+enum Status {
+  OPEN = "Open",
+  CLOSED = "Closed",
+  IN_PROGRESS = "In Progress",
+  PENDING = "Pending",
+}
+
 const filter = createFuzzyFilter({
-  maxSuggestions: 15,      // Maximum suggestions to return
-  debounceMs: 200,         // Debounce delay for suggestions
-  benchmark: true,         // Enable performance telemetry
-});
-```
-
-## Defining a Schema
-
-The schema describes your data structure. FuzzyFilter uses this to generate intelligent suggestions.
-
-```typescript
-import { columnId } from "@jasperhino/fuzzyfilter";
-
-filter.setSchema({
   columns: [
-    // Enum column - finite set of values
+    // Native enum column - just provide values!
     {
-      id: columnId("status"),
-      name: "Status",
-      type: "enum",
-      values: ["Open", "Closed", "In Progress", "Pending"],
+      id: "status",
+      labelKey: "columns.status", // i18n key (required)
+      values: Object.values(Status), // Automatic enum handling!
+      valuesI18nPrefix: "status", // Maps to "status.Open", etc.
     },
 
     // Number column
     {
-      id: columnId("priority"),
-      name: "Priority",
+      id: "priority",
+      labelKey: "columns.priority",
       type: "number",
     },
 
     // String column
     {
-      id: columnId("title"),
-      name: "Title",
+      id: "title",
+      labelKey: "columns.title",
       type: "string",
     },
 
     // Date column
     {
-      id: columnId("createdAt"),
-      name: "Created At",
+      id: "createdAt",
+      labelKey: "columns.createdAt",
       type: "date",
     },
 
     // Boolean column
     {
-      id: columnId("isActive"),
-      name: "Active",
+      id: "isActive",
+      labelKey: "columns.isActive",
       type: "boolean",
     },
+  ],
+  i18n: createDefaultEnglishProvider(), // Required in V2
+  maxSuggestions: 15,      // Optional: Maximum suggestions to return
+  debounceMs: 200,         // Optional: Debounce delay for suggestions
+  benchmark: true,         // Optional: Enable performance telemetry
+});
+```
+
+## Defining a Schema (Optional)
+
+In V2, columns are defined in the config. You can still update the schema later:
+
+```typescript
+filter.setSchema({
+  columns: [
+    // Updated columns
   ],
 });
 ```
