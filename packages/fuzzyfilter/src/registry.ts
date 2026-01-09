@@ -1,11 +1,12 @@
 /**
  * Instance Registry
  * 
- * Manages operator and type definitions per FuzzyFilter instance.
- * When operators or types are provided in config, they replace the defaults entirely.
- * Users can spread defaultFuzzyFilterOperators or DATA_TYPES to extend rather than replace.
+ * Manages operator definitions per FuzzyFilter instance.
+ * When operators are provided in config, they replace the defaults entirely.
+ * Users can spread defaultFuzzyFilterOperators to extend rather than replace.
  * 
  * Compiles operator patterns with i18n resolution for efficient matching.
+ * Patterns are compiled at runtime because i18n translations are resolved dynamically.
  * 
  * @module fuzzyfilter/registry
  */
@@ -17,16 +18,15 @@ import { compileOperatorDefinition, type CompiledOperator } from "./pattern-comp
 import { defaultFuzzyFilterOperators } from "./operators.ts";
 
 /**
- * Instance registry for operators and types.
+ * Instance registry for operators.
  * 
  * Each FuzzyFilter instance has its own registry, allowing different
- * instances to have different sets of operators and types.
+ * instances to have different sets of operators.
  * 
  * The registry compiles operator patterns when created and can recompile
- * when the language changes.
+ * when the language changes (via i18n provider onChange callbacks).
  */
 export class InstanceRegistry {
-  private types: Map<string, TypeDefinition>;
   private operators: Map<string, OperatorDefinition>;
   private compiledOperators: Map<string, CompiledOperator>;
   private i18nProvider?: I18nProvider;
@@ -34,15 +34,14 @@ export class InstanceRegistry {
   /**
    * Creates a new instance registry.
    * 
-   * @param config - FuzzyFilter configuration with optional operators and types
+   * @param config - FuzzyFilter configuration with optional operators
    * @param i18nProvider - Optional i18n provider for pattern compilation
-   * @throws Error if duplicate operator or type IDs are provided
+   * @throws Error if duplicate operator IDs are provided
    * @throws Error if an operator is missing a predicate
    */
   constructor(config: Partial<FuzzyFilterConfig>, i18nProvider?: I18nProvider) {
     // Use provided or fall back to defaults
     const ops = config.operators ?? defaultFuzzyFilterOperators;
-    const types = config.types ?? DATA_TYPES;
 
     // Validate operators
     const opIds = new Set<string>();
@@ -56,17 +55,7 @@ export class InstanceRegistry {
       opIds.add(op.id);
     }
 
-    // Validate types
-    const typeIds = new Set<string>();
-    for (const type of types) {
-      if (typeIds.has(type.id)) {
-        throw new Error(`Duplicate type ID: "${type.id}"`);
-      }
-      typeIds.add(type.id);
-    }
-
     this.operators = new Map(ops.map(op => [op.id, op]));
-    this.types = new Map(types.map(t => [t.id, t]));
     this.compiledOperators = new Map();
     this.i18nProvider = i18nProvider;
 
@@ -165,25 +154,6 @@ export class InstanceRegistry {
   }
 
   /**
-   * Get a type by ID.
-   * 
-   * @param id - The type ID
-   * @returns The type definition, or undefined if not found
-   */
-  getType(id: string): TypeDefinition | undefined {
-    return this.types.get(id);
-  }
-
-  /**
-   * Get all registered types.
-   * 
-   * @returns Array of all type definitions
-   */
-  getAllTypes(): TypeDefinition[] {
-    return Array.from(this.types.values());
-  }
-
-  /**
    * Check if an operator ID exists in the registry.
    * 
    * @param id - The operator ID to check
@@ -194,27 +164,10 @@ export class InstanceRegistry {
   }
 
   /**
-   * Check if a type ID exists in the registry.
-   * 
-   * @param id - The type ID to check
-   * @returns true if the type exists
-   */
-  hasType(id: string): boolean {
-    return this.types.has(id);
-  }
-
-  /**
    * Get the number of registered operators.
    */
   get operatorCount(): number {
     return this.operators.size;
-  }
-
-  /**
-   * Get the number of registered types.
-   */
-  get typeCount(): number {
-    return this.types.size;
   }
 
   /**

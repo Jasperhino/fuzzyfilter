@@ -115,8 +115,6 @@ export type {
   FuzzyFilterEventEmitter,
 } from "./api.ts";
 
-export { DEFAULT_CONFIG } from "./api.ts";
-
 // Telemetry types (Wide Events)
 export type {
   EventOutcome,

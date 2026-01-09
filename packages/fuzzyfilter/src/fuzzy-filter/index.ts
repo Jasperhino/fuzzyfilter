@@ -25,7 +25,6 @@ import type {
   CompiledFilter,
   FilterResult,
 } from "../types/index.ts";
-import { DEFAULT_CONFIG } from "../types/index.ts";
 import type { FuzzyFilterable, FuzzyFilterableStatic, TypeHandler } from "../types/index.ts";
 import { DataType } from "../types/index.ts";
 import {
@@ -86,23 +85,22 @@ export class FuzzyFilterImpl<TCustom extends Record<string, FuzzyFilterable<any>
   constructor(userConfig: FuzzyFilterConfig<TCustom>) {
     // Merge config with defaults, ensuring required internal fields are always defined
     this._config = {
-      maxSuggestions: userConfig.maxSuggestions ?? DEFAULT_CONFIG.maxSuggestions ?? 10,
-      minScore: userConfig.minScore ?? DEFAULT_CONFIG.minScore ?? 0.1,
+      maxSuggestions: userConfig.maxSuggestions ?? 10,
+      minScore: userConfig.minScore ?? 0.1,
       scoringWeights: {
-        column: userConfig.scoringWeights?.column ?? DEFAULT_CONFIG.scoringWeights?.column ?? 0.4,
-        operator: userConfig.scoringWeights?.operator ?? DEFAULT_CONFIG.scoringWeights?.operator ?? 0.35,
-        arguments: userConfig.scoringWeights?.arguments ?? DEFAULT_CONFIG.scoringWeights?.arguments ?? 0.4,
+        column: userConfig.scoringWeights?.column ?? 0.4,
+        operator: userConfig.scoringWeights?.operator ?? 0.35,
+        arguments: userConfig.scoringWeights?.arguments ?? 0.4,
       },
-      enableCache: userConfig.enableCache ?? DEFAULT_CONFIG.enableCache ?? true,
-      maxCacheSize: userConfig.maxCacheSize ?? DEFAULT_CONFIG.maxCacheSize ?? 1000,
-      debounceMs: userConfig.debounceMs ?? DEFAULT_CONFIG.debounceMs ?? 150,
-      debug: userConfig.debug ?? DEFAULT_CONFIG.debug ?? false,
-      benchmark: userConfig.benchmark ?? DEFAULT_CONFIG.benchmark ?? false,
+      enableCache: userConfig.enableCache ?? true,
+      maxCacheSize: userConfig.maxCacheSize ?? 1000,
+      debounceMs: userConfig.debounceMs ?? 150,
+      debug: userConfig.debug ?? false,
+      benchmark: userConfig.benchmark ?? false,
       telemetryOptions: userConfig.telemetryOptions,
       columns: userConfig.columns,
       operators: userConfig.operators,
       i18n: userConfig.i18n,
-      types: userConfig.types,
     } as FuzzyFilterConfig<TCustom>;
 
     // Validate required fields

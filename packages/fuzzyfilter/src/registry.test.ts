@@ -5,20 +5,13 @@
 import { describe, it, expect } from "bun:test";
 import { InstanceRegistry } from "./registry.ts";
 import { defaultFuzzyFilterOperators } from "./operators.ts";
-import { DATA_TYPES } from "./types/core.ts";
-import type { OperatorDefinition, TypeDefinition } from "./types/core.ts";
-import { DataType } from "./types/core.ts";
+import type { OperatorDefinition } from "./types/core.ts";
 
 describe("InstanceRegistry", () => {
   describe("constructor", () => {
     it("should use default operators when none provided", () => {
       const registry = new InstanceRegistry({});
       expect(registry.operatorCount).toBe(defaultFuzzyFilterOperators.length);
-    });
-
-    it("should use default types when none provided", () => {
-      const registry = new InstanceRegistry({});
-      expect(registry.typeCount).toBe(DATA_TYPES.length);
     });
 
     it("should use custom operators when provided", () => {
@@ -35,22 +28,6 @@ describe("InstanceRegistry", () => {
       expect(registry.operatorCount).toBe(1);
       expect(registry.hasOperator("customEq")).toBe(true);
       expect(registry.hasOperator("eq")).toBe(false);
-    });
-
-    it("should use custom types when provided", () => {
-      const customType: TypeDefinition = {
-        id: "amount",
-        label: "Amount",
-        compatibilityType: DataType.NUMBER,
-      };
-
-      const registry = new InstanceRegistry({
-        types: [customType],
-      });
-
-      expect(registry.typeCount).toBe(1);
-      expect(registry.hasType("amount")).toBe(true);
-      expect(registry.hasType("string")).toBe(false);
     });
 
     it("should allow extending default operators via spread", () => {
@@ -88,17 +65,6 @@ describe("InstanceRegistry", () => {
       );
     });
 
-    it("should throw on duplicate type ID", () => {
-      const types: TypeDefinition[] = [
-        { id: "custom", label: "Custom", compatibilityType: DataType.STRING },
-        { id: "custom", label: "Custom 2", compatibilityType: DataType.STRING }, // Duplicate!
-      ];
-
-      expect(() => new InstanceRegistry({ types })).toThrow(
-        'Duplicate type ID: "custom"'
-      );
-    });
-
     it("should throw on missing predicate", () => {
       const op = {
         id: "broken",
@@ -133,20 +99,6 @@ describe("InstanceRegistry", () => {
       
       expect(all.length).toBe(defaultFuzzyFilterOperators.length);
       expect(all.some(op => op.id === "eq")).toBe(true);
-    });
-  });
-
-  describe("getType", () => {
-    it("should return type by ID", () => {
-      const registry = new InstanceRegistry({});
-      const stringType = registry.getType("string");
-      expect(stringType).toBeDefined();
-      expect(stringType?.id).toBe("string");
-    });
-
-    it("should return undefined for unknown type", () => {
-      const registry = new InstanceRegistry({});
-      expect(registry.getType("unknown")).toBeUndefined();
     });
   });
 
