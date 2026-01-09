@@ -246,7 +246,7 @@ describe("FuzzyFilter", () => {
       const filter = createFuzzyFilter({
         columns: [
           { 
-            id: "tags"), 
+            id: "tags", 
             labelKey: "columns.tags",
             type: "string" 
           },
@@ -323,7 +323,7 @@ describe("FuzzyFilter", () => {
     test("compile creates a filter", () => {
       const compiled = filter.compile("Status eq Open");
       expect(compiled).not.toBeNull();
-      expect(compiled?.columnId).toBe("status"));
+      expect(compiled?.columnId).toBe("status");
       expect(compiled?.operator).toBe("eq");
     });
 
@@ -415,7 +415,7 @@ describe("FuzzyFilter", () => {
       // Create a controlled dataset
       const testFilter = createFuzzyFilter({
         columns: [
-          { id: "status"), labelKey: "columns.status", values: ["Open", "Closed", "In Progress"] },
+          { id: "status", labelKey: "columns.status", values: ["Open", "Closed", "In Progress"] },
         ],
         i18n: createDefaultEnglishProvider(),
       });
@@ -443,7 +443,7 @@ describe("Tokenizer", () => {
   test("handles quoted strings", async () => {
     const filter = createFuzzyFilter({
       columns: [
-        { id: "name"), labelKey: "columns.name", type: "string" },
+        { id: "name", labelKey: "columns.name", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -458,7 +458,7 @@ describe("Tokenizer", () => {
   test("handles operator symbols", async () => {
     const filter = createFuzzyFilter({
       columns: [
-        { id: "age"), labelKey: "columns.age", type: "number" },
+        { id: "age", labelKey: "columns.age", type: "number" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -477,7 +477,7 @@ describe("N-gram Matching", () => {
   test("matches values with spaces (e.g., 'Eve Foster')", async () => {
     const filter = createFuzzyFilter({
       columns: [
-        { id: "name"), labelKey: "columns.name", type: "string" },
+        { id: "name", labelKey: "columns.name", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -503,7 +503,7 @@ describe("N-gram Matching", () => {
   test("matches operators with spaces (e.g., 'not equals')", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "status"), labelKey: "columns.status", type: "string" },
+        { id: "status", labelKey: "columns.status", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -525,7 +525,7 @@ describe("N-gram Matching", () => {
     // Regression test: "not equals" should match neq operator, not boost random value matches with eq
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "comments"), labelKey: "columns.comments", type: "string" },
+        { id: "comments", labelKey: "columns.comments", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -558,7 +558,7 @@ describe("N-gram Matching", () => {
     // The "not equal" bigram should be preferred over "equal" single token
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "status"), labelKey: "columns.status", type: "string" },
+        { id: "status", labelKey: "columns.status", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -584,7 +584,7 @@ describe("N-gram Matching", () => {
     const filter = createFuzzyFilter({ 
       columns: [
         { 
-          id: "assignee"), 
+          id: "assignee", 
           labelKey: "columns.assignee", 
           type: "string",
           aliases: ["assigned to", "owner"],
@@ -608,7 +608,7 @@ describe("N-gram Matching", () => {
   test("matches 'is not empty' as a single operator phrase", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "notes"), labelKey: "columns.notes", type: "string" },
+        { id: "notes", labelKey: "columns.notes", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -621,7 +621,7 @@ describe("N-gram Matching", () => {
   test("matches 'less than or equal' operator", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "price"), labelKey: "columns.price", type: "number" },
+        { id: "price", labelKey: "columns.price", type: "number" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -634,8 +634,8 @@ describe("N-gram Matching", () => {
   test("ranks exact value match 'in progress' higher than 'in' operator", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "status"), labelKey: "columns.status", values: ["Open", "In Progress", "Done"] },
-        { id: "name"), labelKey: "columns.name", type: "string" },
+        { id: "status", labelKey: "columns.status", values: ["Open", "In Progress", "Done"] },
+        { id: "name", labelKey: "columns.name", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -672,8 +672,8 @@ describe("N-gram Matching", () => {
   test("ranks partial operator match lower than complete value match", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "priority"), labelKey: "columns.priority", values: ["Low", "Medium", "High", "Equal Priority"] },
-        { id: "amount"), labelKey: "columns.amount", type: "number" },
+        { id: "priority", labelKey: "columns.priority", values: ["Low", "Medium", "High", "Equal Priority"] },
+        { id: "amount", labelKey: "columns.amount", type: "number" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -705,8 +705,8 @@ describe("Type-Specific Aliases", () => {
   test("'at' alias only suggests 'eq' for date columns, not string columns", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "name"), labelKey: "columns.name", type: "string" },
-        { id: "createdAt"), labelKey: "columns.createdAt", type: "date" },
+        { id: "name", labelKey: "columns.name", type: "string" },
+        { id: "createdAt", labelKey: "columns.createdAt", type: "date" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -735,8 +735,8 @@ describe("Type-Specific Aliases", () => {
   test("'on' alias prioritizes date columns for eq suggestions", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "amount"), labelKey: "columns.amount", type: "number" },
-        { id: "scheduledAt"), labelKey: "columns.scheduledAt", type: "date" },
+        { id: "amount", labelKey: "columns.amount", type: "number" },
+        { id: "scheduledAt", labelKey: "columns.scheduledAt", type: "date" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -788,7 +788,7 @@ describe("Type-Specific Aliases", () => {
   test("matchedAlias is undefined when operator id/label is matched directly", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "name"), labelKey: "columns.name", type: "string" },
+        { id: "name", labelKey: "columns.name", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -811,9 +811,9 @@ describe("Type-Specific Aliases", () => {
   test("general aliases like 'equals' work for all supported types", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "name"), labelKey: "columns.name", type: "string" },
-        { id: "count"), labelKey: "columns.count", type: "number" },
-        { id: "createdAt"), labelKey: "columns.createdAt", type: "date" },
+        { id: "name", labelKey: "columns.name", type: "string" },
+        { id: "count", labelKey: "columns.count", type: "number" },
+        { id: "createdAt", labelKey: "columns.createdAt", type: "date" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -982,9 +982,9 @@ describe("Date Column Suggestions", () => {
   test("typing 'two weeks ago' suggests date filters for date columns", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "createdAt"), labelKey: "columns.createdAt", type: "date" },
-        { id: "updatedAt"), labelKey: "columns.updatedAt", type: "date" },
-        { id: "status"), labelKey: "columns.status", type: "string" },
+        { id: "createdAt", labelKey: "columns.createdAt", type: "date" },
+        { id: "updatedAt", labelKey: "columns.updatedAt", type: "date" },
+        { id: "status", labelKey: "columns.status", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -1016,7 +1016,7 @@ describe("Filter Context Stacking", () => {
     const filter = createFuzzyFilter({ 
       columns: [
         { id: "status"), labelKey: "columns.status", values: ["Open", "Closed", "In Progress"] },
-        { id: "assignee"), labelKey: "columns.assignee", type: "string" },
+        { id: "assignee", labelKey: "columns.assignee", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -1068,8 +1068,8 @@ describe("Filter Context Stacking", () => {
     const filter = createFuzzyFilter({ 
       columns: [
         { id: "status"), labelKey: "columns.status", values: ["Open", "Closed"] },
-        { id: "priority"), labelKey: "columns.priority", type: "number" },
-        { id: "assignee"), labelKey: "columns.assignee", type: "string" },
+        { id: "priority", labelKey: "columns.priority", type: "number" },
+        { id: "assignee", labelKey: "columns.assignee", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -1108,7 +1108,7 @@ describe("Filter Context Stacking", () => {
     const filter = createFuzzyFilter({ 
       columns: [
         { id: "status"), labelKey: "columns.status", values: ["Open", "Closed"] },
-        { id: "assignee"), labelKey: "columns.assignee", type: "string" },
+        { id: "assignee", labelKey: "columns.assignee", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -1132,7 +1132,7 @@ describe("Filter Context Stacking", () => {
     const filter = createFuzzyFilter({ 
       columns: [
         { id: "status"), labelKey: "columns.status", values: ["Open", "Closed"] },
-        { id: "priority"), labelKey: "columns.priority", type: "number" },
+        { id: "priority", labelKey: "columns.priority", type: "number" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -1169,8 +1169,8 @@ describe("Filter Context Stacking", () => {
   test("fuzzy string value search is constrained to filtered context", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "department"), labelKey: "columns.department", values: ["Engineering", "Marketing", "Sales"] },
-        { id: "name"), labelKey: "columns.name", type: "string" },
+        { id: "department", labelKey: "columns.department", values: ["Engineering", "Marketing", "Sales"] },
+        { id: "name", labelKey: "columns.name", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -1297,7 +1297,7 @@ describe("Date Filter Bug - 'created today' ranking and count", () => {
   test("date filter with Date object works correctly", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "createdAt"), labelKey: "columns.createdAt", type: "date" },
+        { id: "createdAt", labelKey: "columns.createdAt", type: "date" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -1333,7 +1333,7 @@ describe("Date Filter Compilation", () => {
   test("compiles date filter with natural language date", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "createdAt"), labelKey: "columns.createdAt", type: "date" },
+        { id: "createdAt", labelKey: "columns.createdAt", type: "date" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -1363,7 +1363,7 @@ describe("Date Filter Compilation", () => {
   test("date equality compares by day", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "createdAt"), labelKey: "columns.createdAt", type: "date" },
+        { id: "createdAt", labelKey: "columns.createdAt", type: "date" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -1395,7 +1395,7 @@ describe("Date Filter Compilation", () => {
   test("before operator works with date column", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "createdAt"), labelKey: "columns.createdAt", type: "date" },
+        { id: "createdAt", labelKey: "columns.createdAt", type: "date" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -1424,7 +1424,7 @@ describe("Date Filter Compilation", () => {
   test("between operator works with date array for date ranges", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "createdAt"), labelKey: "columns.createdAt", type: "date" },
+        { id: "createdAt", labelKey: "columns.createdAt", type: "date" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -1530,7 +1530,7 @@ describe("Argument-Aware Scoring", () => {
   test("typing 'prio 3 4' should suggest between with higher score than eq", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "priority"), labelKey: "columns.priority", type: "number" },
+        { id: "priority", labelKey: "columns.priority", type: "number" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -1573,7 +1573,7 @@ describe("Argument-Aware Scoring", () => {
   test("typing 'prio 3' with single number should suggest eq with that value", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "priority"), labelKey: "columns.priority", type: "number" },
+        { id: "priority", labelKey: "columns.priority", type: "number" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -1602,8 +1602,8 @@ describe("Argument-Aware Scoring", () => {
     const filter = createFuzzyFilter({ maxSuggestions: 15 });
     filter.setSchema({
       columns: [
-        { id: "priority"), name: "Priority", type: "number" },
-        { id: "status"), name: "Status", type: "string" },
+        { id: "priority", name: "Priority", type: "number" },
+        { id: "status", name: "Status", type: "string" },
       ],
     });
     filter.indexData([
@@ -1655,8 +1655,8 @@ describe("Argument-Aware Scoring", () => {
     const filter = createFuzzyFilter({ maxSuggestions: 15 });
     filter.setSchema({
       columns: [
-        { id: "priority"), name: "Priority", type: "number" },
-        { id: "status"), name: "Status", type: "string" },
+        { id: "priority", name: "Priority", type: "number" },
+        { id: "status", name: "Status", type: "string" },
       ],
     });
     filter.indexData([
@@ -1707,8 +1707,8 @@ describe("Argument-Aware Scoring", () => {
     const filter = createFuzzyFilter({ maxSuggestions: 15 });
     filter.setSchema({
       columns: [
-        { id: "priority"), name: "Priority", type: "number" },
-        { id: "status"), name: "Status", type: "string" },
+        { id: "priority", name: "Priority", type: "number" },
+        { id: "status", name: "Status", type: "string" },
       ],
     });
     filter.indexData([
@@ -1918,7 +1918,7 @@ describe("QueryMatch Highlighting", () => {
     const dateFilter = createFuzzyFilter({ maxSuggestions: 10 });
     dateFilter.setSchema({
       columns: [
-        { id: "created"), name: "Created", type: "date" },
+        { id: "created", name: "Created", type: "date" },
       ],
     });
     
@@ -2126,8 +2126,8 @@ describe("Spread Pattern Detection", () => {
     filter = createFuzzyFilter({ maxSuggestions: 20 });
     filter.setSchema({
       columns: [
-        { id: "createdAt"), name: "Created At", type: "date", aliases: ["created"] },
-        { id: "amount"), name: "Amount", type: "number" },
+        { id: "createdAt", name: "Created At", type: "date", aliases: ["created"] },
+        { id: "amount", name: "Amount", type: "number" },
       ],
     });
     
@@ -2209,7 +2209,7 @@ describe("Multi-value string aggregation", () => {
     const filter = createFuzzyFilter({ 
       columns: [
         { id: "status"), labelKey: "columns.status", values: ["Open", "Closed", "In Progress"] },
-        { id: "priority"), labelKey: "columns.priority", type: "number" },
+        { id: "priority", labelKey: "columns.priority", type: "number" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -2331,7 +2331,7 @@ describe("Multi-value string aggregation", () => {
     const filter = createFuzzyFilter({ 
       columns: [
         { id: "status"), labelKey: "columns.status", values: ["Open", "Closed", "In Progress"] },
-        { id: "priority"), labelKey: "columns.priority", type: "number" },
+        { id: "priority", labelKey: "columns.priority", type: "number" },
       ],
       i18n: createDefaultEnglishProvider(),
     });
@@ -2433,7 +2433,7 @@ describe("Non-overlapping ngram value aggregation", () => {
     filter.setSchema({
       columns: [
         {
-          id: "comments"),
+          id: "comments",
           name: "Comments",
           type: "string",
         },
@@ -2476,7 +2476,7 @@ describe("Non-overlapping ngram value aggregation", () => {
     filter.setSchema({
       columns: [
         {
-          id: "title"),
+          id: "title",
           name: "Title",
           type: "string",
         },
@@ -2526,7 +2526,7 @@ describe("Non-overlapping ngram value aggregation", () => {
     filter.setSchema({
       columns: [
         {
-          id: "status"),
+          id: "status",
           name: "Status",
           type: "enum",
           values: ["Open", "Closed", "In Progress", "StatusLike"],
@@ -2616,7 +2616,7 @@ describe("i18n Column Translation", () => {
     
     // Create a column with labelKey
     const column = {
-      id: "status"),
+      id: "status",
       labelKey: "columns.status",
       values: ["Open", "Closed"],
     };
@@ -2640,7 +2640,7 @@ describe("i18n Column Translation", () => {
     
     // Create a column with labelKey but no translation
     const column = {
-      id: "status"),
+      id: "status",
       labelKey: "columns.status",
       values: ["Open", "Closed"],
     };
@@ -2661,7 +2661,7 @@ describe("i18n Column Translation", () => {
     
     // Create a column with labelKey but no i18n provider
     const column = {
-      id: "status"),
+      id: "status",
       labelKey: "columns.status",
       values: ["Open", "Closed"],
     };
@@ -2677,7 +2677,7 @@ describe("i18n Column Translation", () => {
     
     // Create an enum column with valuesI18nPrefix
     const column = {
-      id: "status"),
+      id: "status",
       labelKey: "columns.status",
       values: ["Open", "Closed"],
       valuesI18nPrefix: "status", // Maps to "status.Open", "status.Closed"
@@ -2702,7 +2702,7 @@ describe("i18n Column Translation", () => {
     
     // Create an enum column with values but no i18n provider
     const column = {
-      id: "status"),
+      id: "status",
       labelKey: "columns.status",
       values: ["Open", "Closed"],
     };
@@ -2717,7 +2717,7 @@ describe("i18n Column Translation", () => {
     
     // Create an enum column with values but no i18n provider
     const column = {
-      id: "status"),
+      id: "status",
       labelKey: "columns.status",
       values: ["Open", "Closed"],
     };
@@ -2733,7 +2733,7 @@ describe("i18n Column Translation", () => {
     
     // Create a boolean column
     const column = {
-      id: "isBlocked"),
+      id: "isBlocked",
       labelKey: "columns.isBlocked",
       type: "boolean" as const,
     };
@@ -2757,7 +2757,7 @@ describe("i18n Column Translation", () => {
     
     // Create a boolean column without i18n provider
     const column = {
-      id: "isBlocked"),
+      id: "isBlocked",
       labelKey: "columns.isBlocked",
       type: "boolean" as const,
     };
@@ -2773,7 +2773,7 @@ describe("Data Mutation - Index Updates", () => {
     // Create a filter with a simple schema
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "name"), labelKey: "columns.name", type: "string" },
+        { id: "name", labelKey: "columns.name", type: "string" },
         { id: "status"), labelKey: "columns.status", values: ["Active", "Inactive"] },
       ],
       i18n: createDefaultEnglishProvider(),
@@ -2814,7 +2814,7 @@ describe("Data Mutation - Index Updates", () => {
   test("addRow works with high-cardinality columns (100+ unique values)", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "assignee"), labelKey: "columns.assignee", type: "string" },
+        { id: "assignee", labelKey: "columns.assignee", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
       maxSuggestions: 20 
@@ -2854,7 +2854,7 @@ describe("Data Mutation - Index Updates", () => {
   test("removeRow updates index correctly", async () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "name"), labelKey: "columns.name", type: "string" },
+        { id: "name", labelKey: "columns.name", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
       maxSuggestions: 20 
@@ -2886,7 +2886,7 @@ describe("Data Mutation - Index Updates", () => {
   test("index stats reflect all unique values", () => {
     const filter = createFuzzyFilter({ 
       columns: [
-        { id: "name"), labelKey: "columns.name", type: "string" },
+        { id: "name", labelKey: "columns.name", type: "string" },
       ],
       i18n: createDefaultEnglishProvider(),
     });

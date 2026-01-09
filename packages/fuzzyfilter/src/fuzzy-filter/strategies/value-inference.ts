@@ -128,7 +128,7 @@ export class ValueInferenceStrategy implements SuggestionStrategy {
     const { tokens, valueScores, contextAvailableValues, contextRowIndices } = context;
 
     // Detect all potential argument values from tokens
-    const locale = context.i18nProvider?.getLocale?.();
+    const locale = context.i18nProvider?.locale ?? "en";
     const allDetectedValues = detectValueTokens(tokens, new Set(), locale);
 
     // Collect ALL value matches per column with their ngram positions

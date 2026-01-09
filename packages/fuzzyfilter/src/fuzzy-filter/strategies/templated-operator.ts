@@ -281,21 +281,7 @@ export class TemplatedOperatorStrategy implements SuggestionStrategy {
   private expandRefs(part: string, op: OperatorDefinition, i18nProvider?: I18nProvider): string[] {
     const results: string[] = [];
     
-    // Check for @aliasRef
-    const aliasMatch = part.match(/@(\w+)/);
-    if (aliasMatch && op.aliases) {
-      const refKey = `@${aliasMatch[1]}`;
-      const aliases = op.aliases[refKey];
-      if (aliases) {
-        for (const alias of aliases) {
-          // Skip i18n refs (t(key) syntax)
-          if (!alias.startsWith("t(")) {
-            // Convert underscores to spaces
-            results.push(alias.replace(/_/g, " "));
-          }
-        }
-      }
-    }
+    // Note: @aliasRef syntax is deprecated - aliases now come from i18n via t(key) syntax
     
     // Check for t(key) i18nRef
     const i18nMatch = part.match(/t\(([^)]+)\)/);

@@ -42,12 +42,3 @@ export function getMinArguments(op: OperatorDefinition | undefined): number {
   const counts = op.patterns.map(p => (p.match(/\{[^}]+\}/g) || []).length);
   return Math.min(...counts);
 }
-
-/**
- * Get all aliases for an operator as a flat array.
- * Handles the Record<string, readonly string[]> structure.
- */
-export function getOperatorAliases(op: OperatorDefinition): string[] {
-  if (!op.aliases) return [];
-  return Object.values(op.aliases).flat();
-}

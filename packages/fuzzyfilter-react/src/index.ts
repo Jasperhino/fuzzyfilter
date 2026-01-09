@@ -48,14 +48,13 @@ export type {
   FilterSuggestion,
   CompiledFilter,
   OperatorDefinition,
-  TypeDefinition,
 } from "@jasperhino/fuzzyfilter";
 
 // Re-export default collections for extending
 export {
   OPERATORS,
   OPERATORS_ARRAY,
-  DATA_TYPES,
+  DataType,
   InstanceRegistry,
 } from "@jasperhino/fuzzyfilter";
 

@@ -125,8 +125,13 @@ export {
   isOperator,
   /** Array of all built-in operators for spreading into config */
   defaultFuzzyFilterOperators,
-
 } from "./operators.ts";
+
+/**
+ * @deprecated Use defaultFuzzyFilterOperators instead
+ * @alias defaultFuzzyFilterOperators
+ */
+export { defaultFuzzyFilterOperators as OPERATORS_ARRAY } from "./operators.ts";
 
 /**
  * Instance registry for custom operators and types.

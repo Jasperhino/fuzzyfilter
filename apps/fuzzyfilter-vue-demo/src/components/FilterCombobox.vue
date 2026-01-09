@@ -8,7 +8,7 @@
 import { ref, onMounted, computed, watch } from "vue"
 import { useVirtualizer } from "@tanstack/vue-virtual"
 import { useFuzzyFilter } from "fuzzyfilter-vue"
-import { createFuzzyFilter, createOperator, getOperator, DEFAULT_CONFIG, defaultFuzzyFilterOperators, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch, type OperatorDefinition, createVueI18nProvider } from "@jasperhino/fuzzyfilter"
+import { createFuzzyFilter, createOperator, getOperator, defaultFuzzyFilterOperators, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch, type OperatorDefinition, createVueI18nProvider } from "@jasperhino/fuzzyfilter"
 import { isOperatorVariadic, operatorRequiresArgument, getMinArguments } from "@/lib/operator-helpers"
 import { TASK_SCHEMA, COLUMN_IDS, LARGE_DATASET, generateSingleTaskAsync, Amount, type Task as TaskRow } from "@fuzzyfilter/sample-data"
 import { useI18n } from "vue-i18n"
@@ -69,7 +69,6 @@ const greaterAmountOp = createOperator<{ amount: Amount }>()({
 // Create filter instance with i18n
 // Set benchmark: true to enable telemetry spans (accessible via filter.getTelemetry())
 const filter = createFuzzyFilter({ 
-  ...DEFAULT_CONFIG,
   maxSuggestions: 12,
   columns: TASK_SCHEMA.columns,
   operators: [

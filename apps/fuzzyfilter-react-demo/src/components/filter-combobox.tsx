@@ -11,7 +11,6 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   createFuzzyFilter,
   getOperator,
-  DEFAULT_CONFIG,
   type FuzzyFilter,
   type FilterSuggestion,
   type CompiledFilter,
@@ -767,7 +766,6 @@ export function FilterCombobox() {
   const [filter] = React.useState<FuzzyFilter<{ amount: Amount }>>(() => {
     const i18n = createI18nextProvider(i18nInstance);
     const f = createFuzzyFilter<{ amount: Amount }>({ 
-      ...DEFAULT_CONFIG,
       maxSuggestions: 12,
       columns: TASK_SCHEMA.columns,
       i18n,
