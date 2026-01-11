@@ -4,6 +4,9 @@
  * Internal type utilities for pattern parsing, validation, and argument extraction.
  * Provides compile-time type safety for operator definitions with pattern-based argument extraction.
  *
+ * Supports union syntax in patterns: {value:string|amount} restricts the operator
+ * to only work with columns of those types, while maintaining full type safety.
+ *
  * @packageDocumentation
  * @module fuzzyfilter/types/pattern-types
  */
@@ -26,15 +29,36 @@ export type PatternError<
   readonly message: TMessage;
 } & TDetails;
 
+// =============================================================================
+// UNION TYPE PARSING - {value:type1|type2|type3}
+// =============================================================================
+
+/**
+ * Parse a union type string into a union of string literals.
+ * Example: "string|amount|number" → "string" | "amount" | "number"
+ * @internal
+ */
+export type ParseUnionTypes<T extends string> = 
+  T extends `${infer First}|${infer Rest}`
+    ? First | ParseUnionTypes<Rest>
+    : T;
+
+/**
+ * Check if a type string is a union (contains |).
+ * @internal
+ */
+export type IsUnionType<T extends string> = T extends `${string}|${string}` ? true : false;
+
 /**
  * 1. PARSE NAMED ARGS FROM PATTERN
  * Extracts {name:type} or {name} or {:type} or {...name:type} or {...name} or {...:type}
+ * Now supports union types: {name:type1|type2} or {:type1|type2}
  */
 export type ParseArgName<T extends string> = T extends `:${infer Type}`
-  ? { name: Type; type: Type } // {:type} shortcut - name IS the type
+  ? { name: ParseUnionTypes<Type> extends infer U ? (U extends string ? U : never) : never; type: Type } // {:type} or {:type1|type2} shortcut
   : T extends `${infer Name}:${infer Type}`
-    ? { name: Name; type: Type }
-    : { name: T; type: "default" };
+    ? { name: Name; type: Type } // {name:type} or {name:type1|type2}
+    : { name: T; type: "default" }; // {name} - no explicit type
 
 /**
  * Default type map for built-in primitives.
@@ -54,10 +78,26 @@ export type DefaultTypeMap = {
 };
 
 /**
- * Resolve type from string.
- * Priority: TTypeMap > TypeRegistry > DefaultTypeMap > TFallback
+ * Check if a type name is a valid registered type.
+ * @internal
  */
-export type TypeFromString<
+type IsValidTypeName<
+  T extends string,
+  TTypeMap extends Record<string, unknown> = {}
+> = T extends keyof TTypeMap
+  ? true
+  : T extends keyof TypeRegistry
+    ? true
+    : T extends keyof DefaultTypeMap
+      ? true
+      : false;
+
+/**
+ * Resolve type from a single type name string.
+ * Priority: TTypeMap > TypeRegistry > DefaultTypeMap > TFallback
+ * @internal
+ */
+type ResolveSingleType<
   T extends string,
   TFallback,
   TTypeMap extends Record<string, unknown> = {}
@@ -68,6 +108,23 @@ export type TypeFromString<
     : T extends keyof DefaultTypeMap
       ? DefaultTypeMap[T] // Then defaults (string, number, etc.)
       : TFallback; // Finally, fall back to operand type
+
+/**
+ * Resolve type from string, supporting union syntax.
+ * 
+ * For union types like "string|amount":
+ * - If used as a restriction (pattern availability), param inherits operand type
+ * - If used for explicit typing, resolves to union of types
+ * 
+ * Priority: TTypeMap > TypeRegistry > DefaultTypeMap > TFallback
+ */
+export type TypeFromString<
+  T extends string,
+  TFallback,
+  TTypeMap extends Record<string, unknown> = {}
+> = IsUnionType<T> extends true
+  ? TFallback // Union types mean "restrict to these types, param inherits operand"
+  : ResolveSingleType<T, TFallback, TTypeMap>;
 
 /**
  * 2. BUILD NAMED ARGS OBJECT
@@ -545,20 +602,28 @@ export type CombinedTypeKeys<TTypeMap extends Record<string, unknown>> =
   keyof TypeRegistry | keyof TTypeMap;
 
 /**
- * Extract the explicit type from an arg string.
+ * Extract the explicit type(s) from an arg string.
+ * Supports union syntax: {value:string|amount} extracts "string" | "amount"
+ * @internal
  */
 type ExtractArgRegistryType<
   T extends string,
   TTypeMap extends Record<string, unknown> = {}
 > = 
   T extends `:${infer Type}` 
-    ? Type extends CombinedTypeKeys<TTypeMap> ? Type : never
+    ? ParseUnionTypes<Type> extends infer U
+      ? U extends CombinedTypeKeys<TTypeMap> ? U : never
+      : never
     : T extends `${string}:${infer Type}` 
-      ? Type extends CombinedTypeKeys<TTypeMap> ? Type : never
+      ? ParseUnionTypes<Type> extends infer U
+        ? U extends CombinedTypeKeys<TTypeMap> ? U : never
+        : never
       : never;
 
 /**
  * Get all typed keys explicitly used in a single pattern.
+ * Supports union syntax: patterns with {value:string|amount} return "string" | "amount"
+ * @internal
  */
 type PatternRegistryTypes<
   T extends string,
@@ -580,6 +645,13 @@ export type AllPatternsRegistryTypes<
 
 /**
  * Check if a pattern matches predicate key K.
+ * 
+ * A pattern matches a predicate key if:
+ * 1. The pattern has no explicit types (generic pattern like {value}) - matches all
+ * 2. The pattern has explicit types and K is one of them (including union members)
+ * 
+ * For union syntax {value:string|amount}, both 'string' and 'amount' predicates match.
+ * @internal
  */
 type PatternMatchesKey<
   T extends string,
@@ -588,8 +660,8 @@ type PatternMatchesKey<
 > = 
   [PatternRegistryTypes<T, TTypeMap>] extends [never]
     ? true  // No explicit types = generic pattern, matches all
-    : [K] extends [PatternRegistryTypes<T, TTypeMap>]
-      ? true  // K is one of the pattern's explicit types
+    : K extends PatternRegistryTypes<T, TTypeMap>
+      ? true  // K is one of the pattern's explicit types (including union members)
       : false;
 
 /**

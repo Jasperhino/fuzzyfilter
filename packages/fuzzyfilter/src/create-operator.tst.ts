@@ -286,3 +286,146 @@ describe("Multi-Type Predicates", () => {
     ).type.toRaiseError();
   });
 });
+
+// ============================================================================
+// UNION TYPE SYNTAX TESTS - {value:type1|type2}
+// ============================================================================
+
+describe("Union Type Syntax", () => {
+  test("valid union syntax - {value:string|number}", () => {
+    expect(
+      createOperator({
+        id: "union_basic",
+        patterns: ["contains {value:string|number}"],
+        predicates: {
+          string: (operand, { value }) => operand.includes(String(value)),
+          number: (operand, { value }) => operand === value,
+        },
+      })
+    ).type.not.toRaiseError();
+  });
+
+  test("valid union syntax with custom type - {value:string|amount}", () => {
+    expect(
+      createOperator({
+        id: "union_custom",
+        patterns: ["compare {value:string|amount}"],
+        predicates: {
+          string: (operand, { value }) => operand === value,
+          amount: (operand, { value }) => operand.value === value.value,
+        },
+      })
+    ).type.not.toRaiseError();
+  });
+
+  test("union syntax with three types", () => {
+    expect(
+      createOperator({
+        id: "union_three",
+        patterns: ["match {value:string|number|amount}"],
+        predicates: {
+          string: (operand, { value }) => operand === value,
+          number: (operand, { value }) => operand === value,
+          amount: (operand, { value }) => operand.value === value.value,
+        },
+      })
+    ).type.not.toRaiseError();
+  });
+
+  test("missing predicate for union type produces error", () => {
+    expect(
+      createOperator({
+        id: "union_missing",
+        patterns: ["match {value:string|amount}"],
+        predicates: {
+          // Missing 'amount' predicate - should error
+          string: (operand, { value }) => operand === value,
+        },
+      })
+    ).type.toRaiseError();
+  });
+
+  test("union shorthand syntax - {:string|amount}", () => {
+    expect(
+      createOperator({
+        id: "union_shorthand",
+        patterns: ["op {:string|amount}"],
+        predicates: {
+          string: (operand, { string }) => operand.length > 0,
+          amount: (operand, { amount }) => operand.value > amount.value,
+        },
+      })
+    ).type.not.toRaiseError();
+  });
+});
+
+describe("Union Type Inference", () => {
+  test("union param inherits operand type for string predicate", () => {
+    createOperator({
+      id: "union_infer_string",
+      patterns: ["match {value:string|number}"],
+      predicates: {
+        string: (operand, { value }) => {
+          // value should be string (inherits from operand)
+          expect(value).type.toBe<string>();
+          return operand === value;
+        },
+        number: (operand, { value }) => operand === value,
+      },
+    });
+  });
+
+  test("union param inherits operand type for number predicate", () => {
+    createOperator({
+      id: "union_infer_number",
+      patterns: ["match {value:string|number}"],
+      predicates: {
+        string: (operand, { value }) => operand === value,
+        number: (operand, { value }) => {
+          // value should be number (inherits from operand)
+          expect(value).type.toBe<number>();
+          return operand === value;
+        },
+      },
+    });
+  });
+
+  test("union param inherits operand type for custom type predicate", () => {
+    createOperator({
+      id: "union_infer_custom",
+      patterns: ["match {value:string|amount}"],
+      predicates: {
+        string: (operand, { value }) => {
+          expect(value).type.toBe<string>();
+          return operand === value;
+        },
+        amount: (operand, { value }) => {
+          // value should be Amount (inherits from operand)
+          expect(value).type.toBe<Amount>();
+          return operand.value === value.value;
+        },
+      },
+    });
+  });
+
+  test("mixed union and explicit types in same pattern", () => {
+    createOperator({
+      id: "union_mixed",
+      patterns: ["between {min:string|number} and {max:number}"],
+      predicates: {
+        string: (operand, { min, max }) => {
+          // min inherits from operand (string), max is explicit number
+          expect(min).type.toBe<string>();
+          expect(max).type.toBe<number>();
+          return operand.length >= max;
+        },
+        number: (operand, { min, max }) => {
+          // min inherits from operand (number), max is explicit number
+          expect(min).type.toBe<number>();
+          expect(max).type.toBe<number>();
+          return operand >= min && operand <= max;
+        },
+      },
+    });
+  });
+});
