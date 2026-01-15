@@ -4,7 +4,24 @@
  */
 
 import fuzzysort from "fuzzysort";
-import type { Trie } from "./types/index.ts";
+
+/**
+ * Trie interface for prefix and fuzzy searching.
+ */
+export interface Trie<T> {
+  insert(key: string, value: T): void;
+  lookup(key: string): T | undefined;
+  prefixSearch(prefix: string): Array<{ key: string; value: T }>;
+  search(query: string, limit?: number): Array<{ item: T; score: number; indexes?: readonly number[] }>;
+  fuzzySearch(
+    query: string,
+    limit?: number,
+    scoreFn?: (result: { score: number; indexes: readonly number[]; target: string; obj: { key: string; value: T } }) => number
+  ): Array<{ key: string; value: T; score: number; indexes?: readonly number[] }>;
+  entries(): Array<{ key: string; value: T }>;
+  clear(): void;
+  readonly size: number;
+}
 
 interface TrieNode<T> {
   children: Map<string, TrieNode<T>>;
@@ -153,10 +170,23 @@ export function createTrie<T>(): Trie<T> {
     _size = 0;
   }
 
+  function search(
+    query: string,
+    limit = 10
+  ): Array<{ item: T; score: number; indexes?: readonly number[] }> {
+    const results = fuzzySearch(query, limit);
+    return results.map(r => ({
+      item: r.value,
+      score: r.score,
+      indexes: r.indexes,
+    }));
+  }
+
   return {
     insert,
     lookup,
     prefixSearch,
+    search,
     fuzzySearch,
     entries,
     clear,

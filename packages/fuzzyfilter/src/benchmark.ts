@@ -9,7 +9,7 @@
 
 import { run, bench, group } from "mitata";
 import { heapStats } from "bun:jsc";
-import { createFuzzyFilter } from "./fuzzy-filter/index.ts";
+import { createFuzzyFilter } from "./lib/index.ts";
 import { TASK_SCHEMA, generateLargeDataset } from "@fuzzyfilter/sample-data";
 
 // ============================================================================

@@ -35,5 +35,5 @@
       "@fuzzyfilter/axiom-exporter": ["./packages/axiom-exporter/src/index.ts"]
     }
   },
-  "include": ["packages/**/*.ts", "packages/**/*.tsx"]
+  "include": ["packages/**/*.ts", "packages/**/*.tsx", "playground/**/*.ts"]
 }

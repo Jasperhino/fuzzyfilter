@@ -16,7 +16,7 @@
  * @module fuzzyfilter/benchmark-otel
  */
 
-import { createFuzzyFilter } from "./fuzzy-filter/index.ts";
+import { createFuzzyFilter } from "./lib/index.ts";
 import { createAxiomExporter } from "@fuzzyfilter/axiom-exporter";
 import { TASK_SCHEMA, generateLargeDataset } from "@fuzzyfilter/sample-data";
 import type { TelemetryCollector, WideEvent } from "./telemetry/index.ts";
@@ -160,29 +160,29 @@ async function runIndexingScenarios(
   scenarios: IndexingScenario[]
 ): Promise<void> {
   console.log("\n📊 Running Indexing Scenarios...");
-  
+
   for (const { name, rows } of scenarios) {
     console.log(`  → ${name}: ${rows.toLocaleString()} rows`);
-    
+
     // Create a fresh filter for each scenario
     const filter = createFuzzyFilter({ benchmark: true });
     filter.setSchema(TASK_SCHEMA);
-    
+
     // Generate data and index
     const data = generateLargeDataset(rows, Date.now());
     filter.indexData(data);
-    
+
     // Get telemetry for this run
     const summary = filter.getTelemetry()?.getSummary();
     const indexPhases = summary?.avgPhasesByOperation?.indexData;
-    
+
     if (indexPhases) {
       console.log(`    ├─ counting: ${indexPhases.value_counting_ms}ms`);
       console.log(`    ├─ sorting:  ${indexPhases.value_sorting_ms}ms`);
       console.log(`    ├─ trie:     ${indexPhases.trie_building_ms}ms`);
       console.log(`    └─ i18n:     ${indexPhases.translation_insert_ms}ms`);
     }
-    
+
     filter.destroy();
   }
 }
@@ -194,17 +194,17 @@ async function runMutationScenarios(
   scenarios: MutationScenario[]
 ): Promise<void> {
   console.log("\n🔄 Running Mutation Scenarios...");
-  
+
   // Create a filter with initial data
   const filter = createFuzzyFilter({ benchmark: true });
   filter.setSchema(TASK_SCHEMA);
   filter.indexData(generateLargeDataset(1_000, 42));
-  
+
   for (const { name, action, count } of scenarios) {
     console.log(`  → ${name}: ${action} x${count}`);
-    
+
     filter.getTelemetry()?.clear(); // Clear previous events
-    
+
     if (action === "addRow") {
       const newRows = generateLargeDataset(count, Date.now());
       for (const row of newRows) {
@@ -224,7 +224,7 @@ async function runMutationScenarios(
         return false;
       });
     }
-    
+
     // Get mutation events
     const events = filter.getTelemetry()?.getEventsByOperation(action);
     if (events && events.length > 0) {
@@ -234,11 +234,11 @@ async function runMutationScenarios(
       }, 0) / events.length;
       console.log(`    └─ avg reindex: ${avgReindex.toFixed(2)}ms`);
     }
-    
+
     // Re-add data for next scenario
     filter.indexData(generateLargeDataset(1_000, 42));
   }
-  
+
   filter.destroy();
 }
 
@@ -249,32 +249,32 @@ async function runQueryScenarios(
   scenarios: QueryScenario[]
 ): Promise<void> {
   console.log("\n🔍 Running Query Scenarios...");
-  
+
   // Create filter with medium dataset
   const filter = createFuzzyFilter({ benchmark: true });
   filter.setSchema(TASK_SCHEMA);
   filter.indexData(generateLargeDataset(10_000, 42));
-  
+
   // Create a filter context for scenarios that need it
   const contextFilter = filter.compileFilter("status", "eq", "Open");
   const filterContext = contextFilter ? [contextFilter] : [];
-  
+
   for (const { name, query, iterations, filterContext: useContext } of scenarios) {
     console.log(`  → ${name}: "${query}" x${iterations}`);
-    
+
     filter.getTelemetry()?.clear(); // Clear previous events
-    
+
     const context = useContext ? filterContext : undefined;
-    
+
     for (let i = 0; i < iterations; i++) {
       filter.suggestSync(query, undefined, context);
     }
-    
+
     // Get summary
     const summary = filter.getTelemetry()?.getSummary();
     const suggestPercentiles = summary?.percentilesByOperation?.suggest;
     const suggestPhases = summary?.avgPhasesByOperation?.suggest;
-    
+
     if (suggestPercentiles) {
       console.log(`    ├─ p50: ${suggestPercentiles.p50}ms, p95: ${suggestPercentiles.p95}ms, p99: ${suggestPercentiles.p99}ms`);
     }
@@ -289,7 +289,7 @@ async function runQueryScenarios(
       console.log(`    └─ phases: ${phases}`);
     }
   }
-  
+
   filter.destroy();
 }
 
@@ -300,19 +300,19 @@ async function runCacheScenarios(
   scenarios: CacheScenario[]
 ): Promise<void> {
   console.log("\n💾 Running Cache Scenarios...");
-  
+
   const filter = createFuzzyFilter({ benchmark: true });
   filter.setSchema(TASK_SCHEMA);
   filter.indexData(generateLargeDataset(10_000, 42));
-  
+
   const contextFilter = filter.compileFilter("status", "eq", "Open");
   const filterContext = contextFilter ? [contextFilter] : [];
-  
+
   for (const { name, warmup, triggerInvalidation } of scenarios) {
     console.log(`  → ${name}`);
-    
+
     filter.getTelemetry()?.clear();
-    
+
     if (warmup) {
       // Warm up the cache
       for (let i = 0; i < 10; i++) {
@@ -320,30 +320,30 @@ async function runCacheScenarios(
       }
       filter.getTelemetry()?.clear(); // Clear warmup events
     }
-    
+
     if (triggerInvalidation) {
       // Add a row to invalidate cache
       filter.addRow({ status: "Test", priority: 1, comments: "test", created: new Date() });
     }
-    
+
     // Run the actual queries
     for (let i = 0; i < 50; i++) {
       filter.suggestSync("priority", undefined, filterContext);
     }
-    
+
     // Count cache hits
     const events = filter.getTelemetry()?.getEventsByOperation("suggest");
     const cacheHits = events?.filter((e) => {
       const evt = e as { cache?: { context_cache_hit: boolean } };
       return evt.cache?.context_cache_hit === true;
     }).length ?? 0;
-    
+
     const total = events?.length ?? 0;
     const hitRate = total > 0 ? (cacheHits / total * 100).toFixed(1) : 0;
-    
+
     console.log(`    └─ cache hit rate: ${hitRate}% (${cacheHits}/${total})`);
   }
-  
+
   filter.destroy();
 }
 
@@ -355,7 +355,7 @@ async function main(): Promise<void> {
   const sessionId = `bench_${Date.now()}`;
   const gitCommit = getGitCommit();
   const machineInfo = getMachineInfo();
-  
+
   console.log("╔════════════════════════════════════════════╗");
   console.log("║     FuzzyFilter OTel Benchmark Suite      ║");
   console.log("╚════════════════════════════════════════════╝");
@@ -363,12 +363,12 @@ async function main(): Promise<void> {
   console.log(`Git Commit: ${gitCommit ?? "unknown"}`);
   console.log(`Machine: ${machineInfo.os} (${machineInfo.cpus} CPUs, ${machineInfo.memory_gb}GB RAM)`);
   console.log(`Bun: v${machineInfo.bun_version}`);
-  
+
   // Check for Axiom token
   const axiomToken = process.env.AXIOM_TOKEN;
   const axiomDataset = process.env.AXIOM_DATASET ?? "fuzzyfilter-bench";
   const benchmarkEnv = process.env.BENCHMARK_ENV ?? "local";
-  
+
   if (!axiomToken) {
     console.log("\n⚠️  AXIOM_TOKEN not set - results will only be printed locally");
     console.log("   Set AXIOM_TOKEN=xxx to export results to Axiom\n");
@@ -376,11 +376,11 @@ async function main(): Promise<void> {
     console.log(`\n📤 Exporting to Axiom dataset: ${axiomDataset}`);
     console.log(`   Environment: ${benchmarkEnv}\n`);
   }
-  
+
   // Create master filter for session-level telemetry
   const masterFilter = createFuzzyFilter({ benchmark: true });
   const telemetry = masterFilter.getTelemetry()!;
-  
+
   // Attach Axiom exporter if token is available
   let exporter: ReturnType<typeof createAxiomExporter> | null = null;
   if (axiomToken) {
@@ -392,30 +392,30 @@ async function main(): Promise<void> {
     });
     exporter.attach(telemetry);
   }
-  
+
   // Emit session start
   const session: BenchmarkSession = {
     session_id: sessionId,
     git_commit: gitCommit,
     machine_info: machineInfo,
     started_at: new Date().toISOString(),
-    scenario_count: INDEXING_SCENARIOS.length + MUTATION_SCENARIOS.length + 
-                    QUERY_SCENARIOS.length + CACHE_SCENARIOS.length,
+    scenario_count: INDEXING_SCENARIOS.length + MUTATION_SCENARIOS.length +
+      QUERY_SCENARIOS.length + CACHE_SCENARIOS.length,
   };
   emitSessionEvent(telemetry, "session_start", session);
-  
+
   // Run all scenarios
   await runIndexingScenarios(INDEXING_SCENARIOS);
   await runMutationScenarios(MUTATION_SCENARIOS);
   await runQueryScenarios(QUERY_SCENARIOS);
   await runCacheScenarios(CACHE_SCENARIOS);
-  
+
   // Emit session end
   emitSessionEvent(telemetry, "session_end", {
     session_id: sessionId,
     completed_at: new Date().toISOString(),
   });
-  
+
   // Print summary
   const summary = telemetry.getSummary();
   console.log("\n════════════════════════════════════════════");
@@ -428,14 +428,14 @@ async function main(): Promise<void> {
   for (const [op, avg] of Object.entries(summary.avgDurationByOperation)) {
     console.log(`  ${op}: ${avg.toFixed(2)}ms`);
   }
-  
+
   if (Object.keys(summary.percentilesByOperation).length > 0) {
     console.log("\nPercentiles:");
     for (const [op, stats] of Object.entries(summary.percentilesByOperation)) {
       console.log(`  ${op}: p50=${stats.p50}ms, p95=${stats.p95}ms, p99=${stats.p99}ms (n=${stats.count})`);
     }
   }
-  
+
   // Flush to Axiom
   if (exporter) {
     console.log("\n📤 Flushing to Axiom...");
@@ -443,7 +443,7 @@ async function main(): Promise<void> {
     exporter.detach();
     console.log("✅ Done!");
   }
-  
+
   masterFilter.destroy();
   console.log("\n");
 }

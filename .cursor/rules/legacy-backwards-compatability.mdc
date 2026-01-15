@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+When making changes, DO NOT add backwards compability whatsoever. no legacy code. if you encounter legacy code that is no longer needed with the thing you are changing, REMOVE IT!

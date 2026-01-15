@@ -8,7 +8,7 @@ import type { OperatorKey } from "../operators.ts";
 import type { AnyColumnDefinition } from "./schema.ts";
 import type { HypothesisValueType } from "./hypothesis.ts";
 import type { RoaringBitmap } from "./index-layer.ts";
-import type { ScoreExplanation } from "../fuzzy-filter/engine/scorer.ts";
+import type { ScoreExplanation } from "../lib/engine/scorer.ts";
 
 // ============================================================================
 // QUERY MATCH (for highlighting)
@@ -55,8 +55,8 @@ export interface FilterSuggestion {
   /** Structured parts for rich display */
   parts: {
     column: { text: string; highlight?: boolean };
-    operator: { 
-      text: string; 
+    operator: {
+      text: string;
       /** The alias that was matched (e.g., "at" when user typed "at") */
       matchedAlias?: string;
       highlight?: boolean;
@@ -68,9 +68,9 @@ export interface FilterSuggestion {
      * - `displayMatchedIndexes`: Character indexes relative to displayText for highlighting (optional)
      * - `originalText`: Original input text that was parsed (e.g., "gestern" for a German date)
      */
-    arguments?: { 
+    arguments?: {
       /** Full value text */
-      text: string; 
+      text: string;
       /** Truncated display text with ellipsis (for long values) */
       displayText?: string;
       /** Character indexes relative to displayText for highlighting (when displayText is used) */
