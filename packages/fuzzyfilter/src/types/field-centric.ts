@@ -28,19 +28,30 @@ export type PredicateFn<TOperand, TArgs extends Record<string, unknown>> = (
  * A single overload of an operator for a specific field.
  * Each overload has its own argument schema, i18n key, and predicate.
  * 
+ * Supports two patterns:
+ * 1. NEW: Named arguments array with type references (recommended)
+ * 2. LEGACY: Zod schema object (for backwards compatibility)
+ * 
  * @example
  * ```typescript
+ * // New pattern with named arguments
  * const percentageOverload: OperatorOverload<MaterialContainer[], { percentage: number; materialTypes: string[] }> = {
  *   id: 'contents:gt:percentage+materialTypes[]',
  *   i18nKey: 'operators.contents.gt.percentage',
- *   argumentSchema: z.object({
- *     percentage: z.number().min(0).max(100),
- *     materialTypes: z.array(z.string()).min(1),
- *   }),
- *   predicate: (containers, { percentage, materialTypes }) => {
- *     // ... comparison logic
- *   },
+ *   arguments: [
+ *     { name: 'percentage', argumentSchemaKey: 'percentage' },
+ *     { name: 'materialTypes', argumentSchemaKey: 'materialType', isArray: true },
+ *   ],
+ *   predicate: (containers, { percentage, materialTypes }) => { ... },
  *   priority: 10,
+ * };
+ * 
+ * // Legacy pattern with Zod schema
+ * const legacyOverload: OperatorOverload<Date, { value: Date }> = {
+ *   id: 'date:eq:date',
+ *   i18nKey: 'operators.eq',
+ *   argumentSchema: z.object({ value: z.date() }),
+ *   predicate: (operand, { value }) => operand.getTime() === value.getTime(),
  * };
  * ```
  */
@@ -71,10 +82,20 @@ export interface OperatorOverload<
   i18nKey: string;
 
   /**
-   * Zod schema for parsing/validating arguments.
-   * The schema shape defines what the predicate receives.
+   * NEW: Named arguments with type references.
+   * Each argument references a type defined in config.arguments.
+   * 
+   * @optional - Use either `arguments` or `argumentSchema`, not both
    */
-  argumentSchema: ZodType<TArgs>;
+  arguments?: OperatorArgument[];
+
+  /**
+   * LEGACY: Zod schema for parsing/validating arguments.
+   * The schema shape defines what the predicate receives.
+   * 
+   * @optional - Use either `arguments` or `argumentSchema`, not both
+   */
+  argumentSchema?: ZodType<TArgs>;
 
   /**
    * The predicate function for this overload.
@@ -141,8 +162,9 @@ export interface FieldSchema<TOperand = unknown> {
   /**
    * Zod schema for the field's operand type.
    * Used for type inference and validation.
+   * @optional
    */
-  operandSchema: ZodType<TOperand>;
+  operandSchema?: ZodType<TOperand>;
 
   /**
    * All operators available for this field.
@@ -188,6 +210,55 @@ export interface FieldSchema<TOperand = unknown> {
    */
   unitDimension?: string;
 }
+
+/**
+ * Definition of an argument type with parsing and optional indexing.
+ * 
+ * @typeParam T - The type this argument produces
+ */
+export interface ArgumentTypeDefinition<T = unknown> {
+  /** Zod schema for validation and type inference */
+  schema: ZodType<T>;
+
+  /** Parser instance for extracting values from query */
+  parser: ArgumentParser<T>;
+
+  /** Indexing configuration for autocomplete/fuzzy matching */
+  indexing?: {
+    /**
+     * i18n key that resolves to an object where:
+     * - Keys are canonical values
+     * - Values are searchable aliases (string or string[])
+     * 
+     * @example "values.enums.materialType"
+     * Translation structure:
+     * {
+     *   water: ['water', 'H2O', 'aqua'],
+     *   biochar: ['biochar', 'char', 'carbon'],
+     * }
+     */
+    i18nKey: string;
+  };
+}
+
+/**
+ * Reference to an argument in an overload.
+ */
+export interface OperatorArgument {
+  /** Argument name (used in predicate args object) */
+  name: string;
+
+  /** Key referencing an argument type defined in config.arguments */
+  argumentSchemaKey: string;
+
+  /** Whether this argument accepts an array of values */
+  isArray?: boolean;
+}
+
+/**
+ * Registry of argument types keyed by name.
+ */
+export type ArgumentTypeRegistry = Record<string, ArgumentTypeDefinition<unknown>>;
 
 /**
  * Result from parsing an argument using an ArgumentParser.
@@ -265,11 +336,22 @@ export interface ResolvedOverload<TOperand = unknown, TArgs extends Record<strin
 
 /**
  * Translation structure for field-specific operator labels.
- * Supports nested paths for overload-specific translations.
+ * Supports nested paths for overload-specific translations and indexed argument values.
  * 
  * @example
  * ```typescript
  * const translations: FieldCentricTranslations = {
+ *   common: {
+ *     operators: {
+ *       eq: ['=', '=='],
+ *     },
+ *     values: {
+ *       materialType: {
+ *         water: ['water', 'H2O', 'aqua'],
+ *         biochar: ['biochar', 'char', 'carbon'],
+ *       },
+ *     },
+ *   },
  *   en: {
  *     columns: {
  *       contents: ['Content', 'Composition'],
@@ -283,18 +365,32 @@ export interface ResolvedOverload<TOperand = unknown, TArgs extends Record<strin
  *         },
  *       },
  *     },
+ *     values: {
+ *       materialType: {
+ *         water: ['Water'],
+ *         biochar: ['Biochar'],
+ *       },
+ *     },
  *   },
  * };
  * ```
  */
+type LocaleTranslation = {
+  columns?: Record<string, string[]>;
+  operators?: Record<string, string[] | Record<string, string[] | Record<string, string[]>>>;
+  values?: Record<string, Record<string, string | string[]>>;
+  units?: Record<string, Record<string, string | string[]>>;
+};
+
+type CommonTranslation = {
+  operators?: Record<string, string[]>;
+  values?: Record<string, Record<string, string | string[]>>;
+  units?: Record<string, Record<string, string | string[]>>;
+};
+
 export interface FieldCentricTranslations {
-  /** Locale-independent translations (symbols) */
-  common?: {
-    operators?: Record<string, string[]>;
-  };
+  /** Locale-independent translations (symbols, common values) */
+  common?: CommonTranslation;
   /** Locale-specific translations */
-  [locale: string]: {
-    columns?: Record<string, string[]>;
-    operators?: Record<string, string[] | Record<string, string[] | Record<string, string[]>>>;
-  } | undefined;
+  [locale: string]: LocaleTranslation | CommonTranslation | undefined;
 }

@@ -1,6 +1,7 @@
 //ts-worksheet
 
-import z from 'zod';
+import z, { util } from 'zod';
+import { inspect } from 'util'
 import { zocker } from 'zocker';
 import {
   FuzzyFilter,
@@ -18,7 +19,7 @@ import {
   type Timeframe,
   type MaterialContainer,
 } from "./config/domain-models";
-import { DateParser, TimeframeParser, AmountParser, CountParser, PercentageParser } from "./config/domain-parsers";
+import { DateParser, TimeframeParser, AmountParser, CountParser, PercentageParser, MaterialTypeParser, ProcessingTypeParser } from "./config/domain-parsers";
 
 
 const NUM_ROWS = 100000;
@@ -43,12 +44,38 @@ type PlaygroundData = z.infer<typeof PlaygroundDataSchema>;
 const sampleData = zocker(PlaygroundDataSchema.length(NUM_ROWS)).setSeed(42).generate();
 
 const ff = new FuzzyFilter({
-  parsers: {
-    date: new DateParser(),
-    timeframe: new TimeframeParser(),
-    amount: new AmountParser(),
-    count: new CountParser(),
-    percentage: new PercentageParser(),
+  arguments: {
+    date: {
+      schema: DateSchema,
+      parser: new DateParser(),
+    },
+    timeframe: {
+      schema: z.object({ start: DateSchema, end: DateSchema }),
+      parser: new TimeframeParser(),
+    },
+    amount: {
+      schema: AmountSchema,
+      parser: new AmountParser(),
+    },
+    count: {
+      schema: CountSchema,
+      parser: new CountParser(),
+    },
+    percentage: {
+      schema: PercentageSchema,
+      parser: new PercentageParser(),
+    },
+    processing_type: {
+      schema: ProcessingTypeSchema,
+      parser: new ProcessingTypeParser(),
+    },
+    materialType: {
+      schema: MaterialTypeSchema,
+      parser: new MaterialTypeParser(),
+      indexing: {
+        i18nKey: 'values.materialType',
+      },
+    },
   },
 
   // Unit definitions for the universal number parser
@@ -71,7 +98,7 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'processing_type:eq:processing_type',
             i18nKey: 'operators.eq',
-            argumentSchema: z.object({ value: ProcessingTypeSchema }),
+            arguments: [{ name: 'value', argumentSchemaKey: 'processing_type' }],
             predicate: (operand, { value }) => operand === value,
           }],
         },
@@ -86,7 +113,7 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'date:eq:date',
             i18nKey: 'operators.eq',
-            argumentSchema: z.object({ value: DateSchema }),
+            arguments: [{ name: 'value', argumentSchemaKey: 'date' }],
             predicate: (operand, { value }) => operand.getTime() === value.getTime(),
           }],
         },
@@ -95,7 +122,7 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'date:gt:date',
             i18nKey: 'operators.date.after',
-            argumentSchema: z.object({ value: DateSchema }),
+            arguments: [{ name: 'value', argumentSchemaKey: 'date' }],
             predicate: (operand, { value }) => operand.getTime() > value.getTime(),
           }],
         },
@@ -104,7 +131,7 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'date:lt:date',
             i18nKey: 'operators.date.before',
-            argumentSchema: z.object({ value: DateSchema }),
+            arguments: [{ name: 'value', argumentSchemaKey: 'date' }],
             predicate: (operand, { value }) => operand.getTime() < value.getTime(),
           }],
         },
@@ -119,7 +146,7 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'count:eq:count',
             i18nKey: 'operators.eq',
-            argumentSchema: z.object({ value: CountSchema }),
+            arguments: [{ name: 'value', argumentSchemaKey: 'count' }],
             predicate: (operand, { value }) => operand === value,
           }],
         },
@@ -128,7 +155,7 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'count:gt:count',
             i18nKey: 'operators.gt',
-            argumentSchema: z.object({ value: CountSchema }),
+            arguments: [{ name: 'value', argumentSchemaKey: 'count' }],
             predicate: (operand, { value }) => operand > value,
           }],
         },
@@ -137,7 +164,7 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'count:lt:count',
             i18nKey: 'operators.lt',
-            argumentSchema: z.object({ value: CountSchema }),
+            arguments: [{ name: 'value', argumentSchemaKey: 'count' }],
             predicate: (operand, { value }) => operand < value,
           }],
         },
@@ -152,7 +179,7 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'amount:eq:amount',
             i18nKey: 'operators.eq',
-            argumentSchema: z.object({ value: AmountSchema }),
+            arguments: [{ name: 'value', argumentSchemaKey: 'amount' }],
             predicate: (operand: Amount, { value }) =>
               operand.value === value.value && operand.unit === value.unit,
           }],
@@ -162,7 +189,7 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'amount:gt:amount',
             i18nKey: 'operators.amount.heavier',
-            argumentSchema: z.object({ value: AmountSchema }),
+            arguments: [{ name: 'value', argumentSchemaKey: 'amount' }],
             predicate: (operand: Amount, { value }) =>
               operand.value > value.value && operand.unit === value.unit,
           }],
@@ -172,7 +199,7 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'amount:lt:amount',
             i18nKey: 'operators.amount.lighter',
-            argumentSchema: z.object({ value: AmountSchema }),
+            arguments: [{ name: 'value', argumentSchemaKey: 'amount' }],
             predicate: (operand: Amount, { value }) =>
               operand.value < value.value && operand.unit === value.unit,
           }],
@@ -230,7 +257,7 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'contents:contains:materialTypes[]',
             i18nKey: 'operators.contains',
-            argumentSchema: z.object({ materialTypes: z.array(MaterialTypeSchema).min(1) }),
+            arguments: [{ name: 'materialTypes', argumentSchemaKey: 'materialType', isArray: true }],
             predicate: (containers: MaterialContainer[], { materialTypes }) =>
               materialTypes.every((mt: z.infer<typeof MaterialTypeSchema>) =>
                 containers.some(c => c.materialName === mt)
@@ -242,10 +269,10 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'contents:eq:amount+materialTypes[]',
             i18nKey: 'operators.contents.eq',
-            argumentSchema: z.object({
-              amount: AmountSchema,
-              materialTypes: z.array(MaterialTypeSchema).min(1),
-            }),
+            arguments: [
+              { name: 'amount', argumentSchemaKey: 'amount' },
+              { name: 'materialTypes', argumentSchemaKey: 'materialType', isArray: true },
+            ],
             predicate: (containers: MaterialContainer[], { amount, materialTypes }) => {
               const weight = containers
                 .filter(c => materialTypes.includes(c.materialName))
@@ -261,10 +288,10 @@ const ff = new FuzzyFilter({
             {
               id: 'contents:gt:percentage+materialTypes[]',
               i18nKey: 'operators.contents.gt.percentage',
-              argumentSchema: z.object({
-                percentage: PercentageSchema,
-                materialTypes: z.array(MaterialTypeSchema).min(1),
-              }),
+              arguments: [
+                { name: 'percentage', argumentSchemaKey: 'percentage' },
+                { name: 'materialTypes', argumentSchemaKey: 'materialType', isArray: true },
+              ],
               predicate: (containers: MaterialContainer[], { percentage, materialTypes }) => {
                 const totalWeight = containers.reduce((sum, c) => sum + c.weightInKg, 0);
                 if (totalWeight === 0) return false;
@@ -278,10 +305,10 @@ const ff = new FuzzyFilter({
             {
               id: 'contents:gt:amount+materialTypes[]',
               i18nKey: 'operators.contents.gt.amount',
-              argumentSchema: z.object({
-                amount: AmountSchema,
-                materialTypes: z.array(MaterialTypeSchema).min(1),
-              }),
+              arguments: [
+                { name: 'amount', argumentSchemaKey: 'amount' },
+                { name: 'materialTypes', argumentSchemaKey: 'materialType', isArray: true },
+              ],
               predicate: (containers: MaterialContainer[], { amount, materialTypes }) => {
                 const materialWeight = containers
                   .filter(c => materialTypes.includes(c.materialName))
@@ -299,10 +326,10 @@ const ff = new FuzzyFilter({
             {
               id: 'contents:lt:percentage+materialTypes[]',
               i18nKey: 'operators.contents.lt.percentage',
-              argumentSchema: z.object({
-                percentage: PercentageSchema,
-                materialTypes: z.array(MaterialTypeSchema).min(1),
-              }),
+              arguments: [
+                { name: 'percentage', argumentSchemaKey: 'percentage' },
+                { name: 'materialTypes', argumentSchemaKey: 'materialType', isArray: true },
+              ],
               predicate: (containers: MaterialContainer[], { percentage, materialTypes }) => {
                 const totalWeight = containers.reduce((sum, c) => sum + c.weightInKg, 0);
                 if (totalWeight === 0) return false;
@@ -316,10 +343,10 @@ const ff = new FuzzyFilter({
             {
               id: 'contents:lt:amount+materialTypes[]',
               i18nKey: 'operators.contents.lt.amount',
-              argumentSchema: z.object({
-                amount: AmountSchema,
-                materialTypes: z.array(MaterialTypeSchema).min(1),
-              }),
+              arguments: [
+                { name: 'amount', argumentSchemaKey: 'amount' },
+                { name: 'materialTypes', argumentSchemaKey: 'materialType', isArray: true },
+              ],
               predicate: (containers: MaterialContainer[], { amount, materialTypes }) => {
                 const materialWeight = containers
                   .filter(c => materialTypes.includes(c.materialName))
@@ -341,7 +368,6 @@ const ff = new FuzzyFilter({
         gt: ['>'],
         lt: ['<'],
         eq: ['=', '=='],
-        contains: ['∋'],
         overlaps: ['~='],
       },
       units: {
@@ -356,7 +382,13 @@ const ff = new FuzzyFilter({
         },
       },
       values: {
-        materialTypes: ['water', 'biochar', 'ash', 'compost', 'wood_chips'],
+        materialType: {
+          water: ['water', 'H2O', 'aqua'],
+          biochar: ['biochar', 'char', 'carbon'],
+          ash: ['ash'],
+          compost: ['compost', 'humus'],
+          wood_chips: ['wood_chips', 'chips'],
+        },
       },
     },
     en: {
@@ -367,6 +399,15 @@ const ff = new FuzzyFilter({
         amount: ['Amount', 'Weight'],
         timeframe: ['Timeframe', 'Period', 'Time Range'],
         contents: ['Content', 'Composition', 'Materials'],
+      },
+      values: {
+        materialType: {
+          water: ['Water'],
+          biochar: ['Biochar'],
+          ash: ['Ash'],
+          compost: ['Compost'],
+          wood_chips: ['Wood Chips'],
+        },
       },
       operators: {
         eq: ['equals', 'is', 'equal to'],
@@ -404,6 +445,15 @@ const ff = new FuzzyFilter({
         processing_type: ['Verarbeitungstyp', 'Typ'],
         contents: ['Inhalt', 'Zusammensetzung'],
       },
+      values: {
+        materialType: {
+          water: ['Wasser'],
+          biochar: ['Biokohle', 'Pflanzenkohle'],
+          ash: ['Asche'],
+          compost: ['Kompost'],
+          wood_chips: ['Holzschrot'],
+        },
+      },
       operators: {
         gt: ['größer als', 'mehr als', 'über'],
         lt: ['kleiner als', 'weniger als', 'unter'],
@@ -426,21 +476,25 @@ const ff = new FuzzyFilter({
 // Index the generated sample data
 //ff.indexData(sampleData);
 
-// Test multiple queries
-const queries = [
-  "20% wa",                    // percentage + partial value
-  "water > 50",                // value + operator + number
-  "biocharr",                  // just a value (typo)
-  "contents contains",         // field + operator
-  "100 kg bio",                // amount + partial value
-  // Timeframe queries
-  "last week - yesterday",     // timeframe range with natural language
-  "today - 5 minutes ago",     // short timeframe with relative times
-  "timeframe overlaps yesterday - today", // timeframe overlaps month
-  "period within last month - last friday",   // timeframe within range
-];
+// // Test multiple queries
+// const queries = [
+//   "20% wa",                    // percentage + partial value
+//   "water > 50",                // value + operator + number
+//   "biocharr",                  // just a value (typo)
+//   "contents contains",         // field + operator
+//   "100 kg bio",                // amount + partial value
+//   // Timeframe queries
+//   "last week - yesterday",     // timeframe range with natural language
+//   "today - 5 minutes ago",     // short timeframe with relative times
+//   "timeframe overlaps yesterday - today", // timeframe overlaps month
+//   "crated aftr last month - last friday",   // timeframe within range
+// ];
 
-for (const q of queries) {
-  const result = await ff.suggest(q);
-  console.log("\n" + formatResponse(result));
-}
+// for (const q of queries) {
+//   const result = await ff.suggest(q);
+//   console.log("\n" + formatResponse(result));
+// }
+
+const result = await ff.suggest("crated aftr last month - last friday");
+
+console.log(inspect(result, false, null, true /* enable colors */))

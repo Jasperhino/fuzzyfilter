@@ -19,6 +19,7 @@ import type {
   FilterResult,
   FieldSchema,
   OperatorOverload,
+  ArgumentTypeRegistry,
 } from "../types/index.ts";
 import type {
   TelemetryCollector,
@@ -65,8 +66,10 @@ export class FuzzyFilterImpl implements FuzzyFilter {
 
   // Candidate engine dependencies
   private fieldTrie: Trie<{ key: string; schema: FieldSchema<unknown> }>;
+  private argumentValueTrie: Trie<{ value: string; argumentType: string }>;
   private unitRegistry: UnitRegistry;
   private valueParsers: Map<string, ValueParser<unknown>>;
+  private argumentTypes: ArgumentTypeRegistry;
   private candidateEngine: CandidateEngine;
 
   constructor(userConfig: FuzzyFilterConfig) {
@@ -74,12 +77,15 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     if (!userConfig.fields || Object.keys(userConfig.fields).length === 0) {
       throw new Error("fields are required in FuzzyFilterConfig");
     }
-    if (!userConfig.parsers) {
-      throw new Error("parsers are required in FuzzyFilterConfig");
+    if (!userConfig.arguments && !userConfig.parsers) {
+      throw new Error("either 'arguments' or 'parsers' is required in FuzzyFilterConfig");
     }
     if (!userConfig.translations) {
       throw new Error("translations are required in FuzzyFilterConfig");
     }
+
+    // Use arguments if provided, otherwise create empty registry (parsers will be handled separately)
+    const argumentsConfig: ArgumentTypeRegistry = userConfig.arguments ?? {};
 
     // Merge config with defaults
     this._config = {
@@ -97,10 +103,13 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       benchmark: userConfig.benchmark ?? false,
       telemetryOptions: userConfig.telemetryOptions,
       fields: userConfig.fields,
-      parsers: userConfig.parsers,
+      arguments: argumentsConfig,
+      parsers: userConfig.parsers, // Keep for backwards compatibility
       translations: userConfig.translations,
       units: userConfig.units,
     };
+
+    this.argumentTypes = argumentsConfig;
 
     // Initialize telemetry
     this.telemetry = this._config.benchmark
@@ -110,10 +119,10 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       })
       : NULL_TELEMETRY_COLLECTOR;
 
-    // Initialize field registry
+    // Initialize field registry (use parsers for backwards compatibility)
     this.registry = createFieldRegistry(
       this._config.fields,
-      this._config.parsers,
+      this._config.parsers || {},
       this._config.translations
     );
 
@@ -127,6 +136,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
 
     // Initialize candidate engine dependencies
     this.fieldTrie = createTrie();
+    this.argumentValueTrie = createTrie();
     this.valueParsers = new Map();
     this.unitRegistry = this.createUnitRegistry();
 
@@ -135,6 +145,9 @@ export class FuzzyFilterImpl implements FuzzyFilter {
 
     // Create default value parsers
     this.createDefaultValueParsers();
+
+    // Build argument value trie from indexed argument types
+    this.buildArgumentValueTrie();
 
     // Create candidate engine
     this.candidateEngine = this.createCandidateEngine();
@@ -148,6 +161,8 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       fields: new Map(Object.entries(this._config.fields)),
       fieldTrie: this.fieldTrie,
       valueTrie: this.state.valueTrie,
+      argumentValueTrie: this.argumentValueTrie,
+      argumentTypes: this.argumentTypes,
       unitRegistry: this.unitRegistry,
       valueParsers: this.valueParsers,
       getFieldLabel: (fieldKey) => {
@@ -158,6 +173,27 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       getFieldAliases: (labelKey) => this.registry.getAliases(labelKey),
       getOperatorAliases: (i18nKey) => this.registry.getAliases(i18nKey),
     });
+  }
+
+  /**
+   * Changes the active locale and rebuilds all indexes with new translations.
+   * This updates field labels, operator labels, unit names, and indexed argument values.
+   */
+  public setLocale(locale: string): void {
+    // Update field registry locale
+    this.registry.setLocale(locale);
+
+    // Rebuild unit registry (recreate with new getAliases results)
+    this.unitRegistry = this.createUnitRegistry();
+
+    // Rebuild field trie with localized labels
+    this.rebuildFieldTrie();
+
+    // Rebuild argument value trie with localized values
+    this.buildArgumentValueTrie();
+
+    // Rebuild candidate engine with updated dependencies
+    this.candidateEngine = this.createCandidateEngine();
   }
 
   /**
@@ -231,20 +267,66 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     };
     this.valueParsers.set("string", stringParser);
 
-    // Adapt user-provided ArgumentParsers to ValueParser interface
-    if (this._config.parsers) {
-      for (const [parserType, argumentParser] of Object.entries(this._config.parsers)) {
+    // Adapt user-provided ArgumentParsers from arguments config to ValueParser interface
+    if (this._config.arguments) {
+      for (const [argTypeName, argType] of Object.entries(this._config.arguments)) {
         // Wrap ArgumentParser in ValueParser interface
         const wrappedParser: ValueParser<unknown> = {
-          type: parserType,
-          parse: (query: string, _unitRegistry, _context) => {
-            const results = argumentParser.parse(query);
+          type: argTypeName,
+          parse: (query: string, unitRegistry, context) => {
+            const results = argType.parser.parse(query);
             return results.map((r) =>
               createParsedValue(r.value, r.text, r.index, r.index + r.text.length, 0.9)
             );
           },
         };
-        this.valueParsers.set(parserType, wrappedParser);
+        this.valueParsers.set(argTypeName, wrappedParser);
+      }
+    }
+
+    // LEGACY: Adapt user-provided ArgumentParsers from parsers config (backwards compatibility)
+    if (this._config.parsers) {
+      for (const [parserType, argumentParser] of Object.entries(this._config.parsers)) {
+        // Only add if not already added from arguments config
+        if (!this.valueParsers.has(parserType)) {
+          const wrappedParser: ValueParser<unknown> = {
+            type: parserType,
+            parse: (query: string, _unitRegistry, _context) => {
+              const results = argumentParser.parse(query);
+              return results.map((r) =>
+                createParsedValue(r.value, r.text, r.index, r.index + r.text.length, 0.9)
+              );
+            },
+          };
+          this.valueParsers.set(parserType, wrappedParser);
+        }
+      }
+    }
+  }
+
+  /**
+   * Builds the argument value trie from indexed argument types.
+   * This trie is used for fuzzy matching of argument values (e.g., material types).
+   */
+  private buildArgumentValueTrie(): void {
+    this.argumentValueTrie = createTrie();
+
+    for (const [argTypeName, argType] of Object.entries(this.argumentTypes)) {
+      const typedArgType = argType as import("../types/field-centric.ts").ArgumentTypeDefinition<unknown>;
+      if (!typedArgType.indexing?.i18nKey) continue;
+
+      // Resolve i18nKey to get canonical values and their aliases
+      const valueAliases = this.registry.resolveValueAliases(typedArgType.indexing.i18nKey);
+
+      // valueAliases = { water: ['water', 'H2O', 'Wasser'], biochar: ['biochar', 'Biokohle'], ... }
+      for (const [canonicalValue, aliases] of Object.entries(valueAliases)) {
+        const aliasArray = Array.isArray(aliases) ? aliases : [aliases];
+        for (const alias of aliasArray) {
+          this.argumentValueTrie.insert(alias.toLowerCase(), {
+            value: canonicalValue,
+            argumentType: argTypeName,
+          });
+        }
       }
     }
   }
@@ -275,7 +357,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     if (options.fields || options.translations) {
       this.registry = createFieldRegistry(
         this._config.fields,
-        this._config.parsers,
+        this._config.parsers || {},
         this._config.translations
       );
       this.rebuildFieldTrie();
@@ -584,17 +666,27 @@ export class FuzzyFilterImpl implements FuzzyFilter {
 
     // Format filled arguments
     const argParts: string[] = [];
-    for (const [argName, argValue] of Object.entries(filling.filledArgs)) {
-      if (Array.isArray(argValue)) {
-        argParts.push(argValue.join(", "));
-      } else if (argValue instanceof Date) {
-        // Format dates nicely (e.g., "Jan 15, 2026")
-        argParts.push(argValue.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }));
-      } else if (typeof argValue === "object" && argValue !== null && "value" in argValue) {
-        const obj = argValue as { value: number; unit?: string };
-        argParts.push(`${obj.value}${obj.unit ?? ""}`);
-      } else {
-        argParts.push(String(argValue));
+    const filledArgs = filling.filledArgs;
+
+    // Special case: timeframe with start and end dates
+    if ('start' in filledArgs && 'end' in filledArgs &&
+      filledArgs.start instanceof Date && filledArgs.end instanceof Date) {
+      const startStr = filledArgs.start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      const endStr = filledArgs.end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      argParts.push(`${startStr} - ${endStr}`);
+    } else {
+      for (const [argName, argValue] of Object.entries(filledArgs)) {
+        if (Array.isArray(argValue)) {
+          argParts.push(argValue.join(", "));
+        } else if (argValue instanceof Date) {
+          // Format dates nicely (e.g., "Jan 15, 2026")
+          argParts.push(argValue.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }));
+        } else if (typeof argValue === "object" && argValue !== null && "value" in argValue) {
+          const obj = argValue as { value: number; unit?: string };
+          argParts.push(`${obj.value}${obj.unit ?? ""}`);
+        } else {
+          argParts.push(String(argValue));
+        }
       }
     }
 
@@ -689,7 +781,12 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     const field = this.registry.getField(fieldKey);
     if (!field) return null;
 
-    // Validate args against schema
+    // Validate args against schema (legacy pattern)
+    if (!overload.argumentSchema) {
+      // TODO: Support validation for new arguments array pattern
+      // For now, skip validation if using new pattern
+      return null;
+    }
     const parseResult = overload.argumentSchema.safeParse(args);
     if (!parseResult.success) return null;
 

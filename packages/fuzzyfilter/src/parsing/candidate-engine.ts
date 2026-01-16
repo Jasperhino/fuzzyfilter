@@ -12,7 +12,7 @@
  */
 
 import type { ZodObject, ZodType } from "zod";
-import type { FieldSchema, OperatorOverload } from "../types/field-centric";
+import type { FieldSchema, OperatorOverload, ArgumentTypeRegistry, OperatorArgument } from "../types/field-centric";
 import type { Trie } from "../trie";
 import type { UnitRegistry } from "../units/types";
 import type { Chunking, ParseMatch, ParsedValue, ScoreBreakdown } from "./types";
@@ -86,6 +86,14 @@ export interface CandidateSuggestion {
 }
 
 /**
+ * Entry in the argument value trie (indexed argument values).
+ */
+export interface ArgumentValueTrieEntry {
+  value: string;
+  argumentType: string;
+}
+
+/**
  * Dependencies for the candidate engine.
  */
 export interface CandidateEngineDependencies {
@@ -95,6 +103,10 @@ export interface CandidateEngineDependencies {
   fieldTrie: Trie<{ key: string; schema: FieldSchema<unknown> }>;
   /** Trie for fuzzy value matching (indexed data) */
   valueTrie: Trie<ValueTrieEntry>;
+  /** Trie for fuzzy argument value matching (indexed argument types) */
+  argumentValueTrie: Trie<ArgumentValueTrieEntry>;
+  /** Argument type definitions */
+  argumentTypes: ArgumentTypeRegistry;
   /** Unit registry for unit matching */
   unitRegistry: UnitRegistry;
   /** Value parsers keyed by type */
@@ -265,6 +277,57 @@ export function createCandidateEngine(
   }
 
   /**
+   * Calculate Levenshtein edit distance between two strings.
+   */
+  function editDistance(a: string, b: string): number {
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+
+    const matrix: number[][] = [];
+    for (let i = 0; i <= b.length; i++) {
+      matrix[i] = [i];
+    }
+    for (let j = 0; j <= a.length; j++) {
+      matrix[0]![j] = j;
+    }
+
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        if (b.charAt(i - 1) === a.charAt(j - 1)) {
+          matrix[i]![j] = matrix[i - 1]![j - 1]!;
+        } else {
+          matrix[i]![j] = Math.min(
+            matrix[i - 1]![j - 1]! + 1, // substitution
+            matrix[i]![j - 1]! + 1,     // insertion
+            matrix[i - 1]![j]! + 1      // deletion
+          );
+        }
+      }
+    }
+    return matrix[b.length]![a.length]!;
+  }
+
+  /**
+   * Calculate fuzzy match score based on edit distance.
+   * Returns 0-1 where 1 is exact match and lower values are worse matches.
+   */
+  function fuzzyMatchScore(chunk: string, label: string): number {
+    if (chunk === label) return 1.0;
+    if (chunk.length < 3) return 0;
+    
+    const distance = editDistance(chunk, label);
+    const maxLen = Math.max(chunk.length, label.length);
+    
+    // Allow 1 edit per 4 characters, minimum 1 edit allowed
+    const maxAllowedDistance = Math.max(1, Math.floor(maxLen / 4));
+    
+    if (distance > maxAllowedDistance) return 0;
+    
+    // Score based on similarity: 1 - (distance / maxLen)
+    return Math.max(0, 1 - (distance / maxLen)) * 0.8; // 0.8 max for fuzzy matches
+  }
+
+  /**
    * Match field and operator labels against query chunks.
    * Returns scores (0-1) and which chunks were used for matching.
    */
@@ -292,7 +355,7 @@ export function createCandidateEngine(
       const chunkLower = chunk.text.toLowerCase();
 
       // Check field match
-      if (!matchedChunks.has(i) && fieldMatchScore === 0) {
+      if (!matchedChunks.has(i) && fieldMatchScore < 0.5) {
         for (const label of fieldLabels) {
           // Exact match
           if (chunkLower === label) {
@@ -300,23 +363,35 @@ export function createCandidateEngine(
             matchedChunks.add(i);
             break;
           }
-          // Prefix match (fuzzy)
+          // Prefix match
           if (label.startsWith(chunkLower) && chunkLower.length >= 3) {
-            fieldMatchScore = Math.max(fieldMatchScore, chunkLower.length / label.length);
-            matchedChunks.add(i);
+            const score = chunkLower.length / label.length;
+            if (score > fieldMatchScore) {
+              fieldMatchScore = score;
+              matchedChunks.add(i);
+            }
             break;
           }
           // Contains match
           if (label.includes(chunkLower) && chunkLower.length >= 3) {
-            fieldMatchScore = Math.max(fieldMatchScore, 0.7 * chunkLower.length / label.length);
-            matchedChunks.add(i);
+            const score = 0.7 * chunkLower.length / label.length;
+            if (score > fieldMatchScore) {
+              fieldMatchScore = score;
+              matchedChunks.add(i);
+            }
             break;
+          }
+          // Fuzzy match (edit distance) for typos like "crated" → "created"
+          const fuzzyScore = fuzzyMatchScore(chunkLower, label);
+          if (fuzzyScore > fieldMatchScore) {
+            fieldMatchScore = fuzzyScore;
+            matchedChunks.add(i);
           }
         }
       }
 
       // Check operator match
-      if (!matchedChunks.has(i) && operatorMatchScore === 0) {
+      if (!matchedChunks.has(i) && operatorMatchScore < 0.5) {
         for (const label of operatorLabels) {
           // Exact match
           if (chunkLower === label) {
@@ -326,15 +401,27 @@ export function createCandidateEngine(
           }
           // Prefix match
           if (label.startsWith(chunkLower) && chunkLower.length >= 3) {
-            operatorMatchScore = Math.max(operatorMatchScore, chunkLower.length / label.length);
-            matchedChunks.add(i);
+            const score = chunkLower.length / label.length;
+            if (score > operatorMatchScore) {
+              operatorMatchScore = score;
+              matchedChunks.add(i);
+            }
             break;
           }
           // Contains match
           if (label.includes(chunkLower) && chunkLower.length >= 3) {
-            operatorMatchScore = Math.max(operatorMatchScore, 0.7 * chunkLower.length / label.length);
-            matchedChunks.add(i);
+            const score = 0.7 * chunkLower.length / label.length;
+            if (score > operatorMatchScore) {
+              operatorMatchScore = score;
+              matchedChunks.add(i);
+            }
             break;
+          }
+          // Fuzzy match (edit distance) for typos like "aftr" → "after"
+          const fuzzyScore = fuzzyMatchScore(chunkLower, label);
+          if (fuzzyScore > operatorMatchScore) {
+            operatorMatchScore = fuzzyScore;
+            matchedChunks.add(i);
           }
         }
       }
@@ -360,8 +447,24 @@ export function createCandidateEngine(
     // Start with reserved chunks already marked as used
     const usedChunkIndexes = new Set<number>(reservedChunks);
 
-    // Get expected argument names from the schema
+    // Check if using new arguments array or legacy argumentSchema
+    if (candidate.overload.arguments) {
+      return fillArgumentsFromTypes(candidate, chunking, reservedChunks, usedChunkIndexes);
+    }
+
+    // Legacy: Get expected argument names from the schema
     const schema = candidate.overload.argumentSchema;
+    if (!schema) {
+      return {
+        filledArgs,
+        missingArgs,
+        matches,
+        parsedValues,
+        unusedChunks: [],
+        coverage: 1,
+        matchQuality: 0.5,
+      };
+    }
     const argNames = getSchemaArgNames(schema);
 
     // Special case: timeframe arguments (start + end) need combined parsing
@@ -496,6 +599,209 @@ export function createCandidateEngine(
           matches,
           usedIndexes: usedIdxs,
         };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Fill arguments using the new arguments array pattern with type references.
+   */
+  function fillArgumentsFromTypes(
+    candidate: Candidate,
+    chunking: Chunking,
+    reservedChunks: Set<number>,
+    usedChunkIndexes: Set<number>
+  ): ArgumentFilling {
+    const filledArgs: Record<string, unknown> = {};
+    const missingArgs: string[] = [];
+    const matches: ParseMatch[] = [];
+    const parsedValues: ParsedValue<unknown>[] = [];
+
+    if (!candidate.overload.arguments) {
+      return {
+        filledArgs,
+        missingArgs,
+        matches,
+        parsedValues,
+        unusedChunks: [],
+        coverage: 1,
+        matchQuality: 0.5,
+      };
+    }
+
+    // Special case: timeframe arguments (start + end) need combined parsing
+    const timeframeArgs = candidate.overload.arguments.filter(
+      (arg) => arg.name === "start" || arg.name === "end"
+    );
+    if (timeframeArgs.length === 2) {
+      const timeframeResult = tryFillTimeframeArgs(chunking, usedChunkIndexes);
+      if (timeframeResult) {
+        filledArgs["start"] = timeframeResult.start;
+        filledArgs["end"] = timeframeResult.end;
+        matches.push(...timeframeResult.matches);
+        for (const idx of timeframeResult.usedIndexes) {
+          usedChunkIndexes.add(idx);
+        }
+      } else {
+        missingArgs.push("start", "end");
+      }
+    }
+
+    // Process remaining arguments
+    for (const arg of candidate.overload.arguments) {
+      if (arg.name === "start" || arg.name === "end") continue; // Already handled
+      if (filledArgs[arg.name] !== undefined) continue; // Already filled
+
+      const argType = deps.argumentTypes[arg.argumentSchemaKey];
+      if (!argType) {
+        missingArgs.push(arg.name);
+        continue;
+      }
+
+      // Strategy 1: Try argument value trie (for indexed values)
+      if (argType.indexing) {
+        const match = tryMatchFromArgumentTrie(arg, arg.argumentSchemaKey, chunking, usedChunkIndexes);
+        if (match) {
+          if (arg.isArray) {
+            filledArgs[arg.name] = Array.isArray(filledArgs[arg.name])
+              ? [...(filledArgs[arg.name] as string[]), match.value]
+              : [match.value];
+          } else {
+            filledArgs[arg.name] = match.value;
+          }
+          matches.push(...match.matches);
+          for (const idx of match.usedIndexes) {
+            usedChunkIndexes.add(idx);
+          }
+          continue;
+        }
+      }
+
+      // Strategy 2: Try parser
+      const parsed = tryParseArgumentType(arg, argType, chunking, usedChunkIndexes);
+      if (parsed) {
+        if (arg.isArray) {
+          filledArgs[arg.name] = Array.isArray(filledArgs[arg.name])
+            ? [...(filledArgs[arg.name] as unknown[]), parsed.value]
+            : [parsed.value];
+        } else {
+          filledArgs[arg.name] = parsed.value;
+        }
+        matches.push(...parsed.matches);
+        if (parsed.parsedValue) {
+          parsedValues.push(parsed.parsedValue);
+        }
+        for (const idx of parsed.usedIndexes) {
+          usedChunkIndexes.add(idx);
+        }
+      } else {
+        missingArgs.push(arg.name);
+      }
+    }
+
+    // Find unused chunks
+    const unusedChunks: string[] = [];
+    for (let i = 0; i < chunking.chunks.length; i++) {
+      if (!usedChunkIndexes.has(i) && !reservedChunks.has(i)) {
+        unusedChunks.push(chunking.chunks[i]!.text);
+      }
+    }
+
+    // Calculate scores
+    const totalArgs = candidate.overload.arguments.length;
+    const coverage = totalArgs > 0 ? (totalArgs - missingArgs.length) / totalArgs : 1;
+    const matchQuality = matches.length > 0
+      ? matches.reduce((sum, m) => sum + m.score, 0) / matches.length
+      : 0.5;
+
+    return {
+      filledArgs,
+      missingArgs,
+      matches,
+      parsedValues,
+      unusedChunks,
+      coverage,
+      matchQuality,
+    };
+  }
+
+  /**
+   * Try to match an argument value from the argument value trie.
+   */
+  function tryMatchFromArgumentTrie(
+    arg: OperatorArgument,
+    argumentSchemaKey: string,
+    chunking: Chunking,
+    usedIndexes: Set<number>
+  ): { value: string; matches: ParseMatch[]; usedIndexes: number[] } | null {
+    const matches: ParseMatch[] = [];
+    const usedIdxs: number[] = [];
+
+    for (let i = 0; i < chunking.chunks.length; i++) {
+      if (usedIndexes.has(i)) continue;
+
+      const chunk = chunking.chunks[i]!;
+      const trieMatches = deps.argumentValueTrie.fuzzySearch(chunk.text, 3);
+
+      // Filter to values for this argument schema key
+      const relevantMatches = trieMatches.filter(
+        (tm) => tm.value.argumentType === argumentSchemaKey
+      );
+
+      if (relevantMatches.length > 0) {
+        const best = relevantMatches[0]!;
+        matches.push({
+          text: chunk.text,
+          resolvedTo: best.value.value,
+          score: best.score,
+          indexes: best.indexes ? Array.from(best.indexes) : undefined,
+          role: "value",
+          start: chunk.start,
+          end: chunk.end,
+        });
+        usedIdxs.push(i);
+        return { value: best.value.value, matches, usedIndexes: usedIdxs };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Try to parse an argument using its parser.
+   */
+  function tryParseArgumentType(
+    arg: OperatorArgument,
+    argType: { parser: any },
+    chunking: Chunking,
+    usedIndexes: Set<number>
+  ): { value: unknown; matches: ParseMatch[]; parsedValue?: ParsedValue<unknown>; usedIndexes: number[] } | null {
+    const parser = deps.valueParsers.get(arg.argumentSchemaKey);
+    if (!parser) return null;
+
+    const matches: ParseMatch[] = [];
+    const usedIdxs: number[] = [];
+
+    for (let i = 0; i < chunking.chunks.length; i++) {
+      if (usedIndexes.has(i)) continue;
+
+      const chunk = chunking.chunks[i]!;
+      const parseResults = parser.parse(chunk.text, deps.unitRegistry, {});
+
+      if (parseResults.length > 0) {
+        const best = parseResults[0]!;
+        matches.push({
+          text: chunk.text,
+          resolvedTo: String(best.value),
+          score: best.score,
+          role: "value",
+          start: chunk.start,
+          end: chunk.end,
+        });
+        usedIdxs.push(i);
+        return { value: best.value, matches, parsedValue: best, usedIndexes: usedIdxs };
       }
     }
 

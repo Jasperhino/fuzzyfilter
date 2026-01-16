@@ -22,6 +22,7 @@ import type {
 import type {
   FieldSchema,
   ParserRegistry,
+  ArgumentTypeRegistry,
   FieldCentricTranslations,
   OperatorOverload,
 } from "./field-centric.ts";
@@ -57,8 +58,11 @@ export interface ScoringWeights {
  *       }],
  *     },
  *   },
- *   parsers: {
- *     date: new DateParser(),
+ *   arguments: {
+ *     date: {
+ *       schema: z.date(),
+ *       parser: new DateParser(),
+ *     },
  *   },
  *   translations: {
  *     en: { operators: { date: { after: ['after', 'later than'] } } },
@@ -78,12 +82,35 @@ export interface FuzzyFilterConfig {
   fields: Record<string, FieldSchema<any>>;
 
   /**
-   * Argument parsers for extracting typed values from user input.
+   * Argument type definitions with parsing and optional indexing.
+   * Each type includes schema, parser, and optional indexing config.
    * 
-   * Parsers are used to extract structured arguments (dates, amounts, etc.)
-   * from free-form user queries.
+   * @example
+   * ```typescript
+   * arguments: {
+   *   date: {
+   *     schema: z.date(),
+   *     parser: new DateParser(),
+   *   },
+   *   materialType: {
+   *     schema: MaterialTypeSchema,
+   *     parser: new MaterialTypeParser(),
+   *     indexing: {
+   *       i18nKey: 'values.materialType',
+   *     },
+   *   },
+   * }
+   * ```
    */
-  parsers: ParserRegistry;
+  arguments: ArgumentTypeRegistry;
+
+  /**
+   * LEGACY: Argument parsers (deprecated, use `arguments` instead).
+   * Kept for backwards compatibility during migration.
+   * 
+   * @deprecated Use `arguments` instead
+   */
+  parsers?: ParserRegistry;
 
   /**
    * Translations for fields and operators.
@@ -154,7 +181,7 @@ export interface FuzzyFilterConfig {
  *
  * const filter = new FuzzyFilter({
  *   fields: { ... },
- *   parsers: { ... },
+ *   arguments: { ... },
  *   translations: { ... },
  * });
  *
@@ -334,6 +361,14 @@ export interface FuzzyFilter {
    * Clears internal caches.
    */
   clearCache(): void;
+
+  /**
+   * Changes the active locale and rebuilds all indexes with new translations.
+   * This updates field labels, operator labels, unit names, and indexed argument values.
+   * 
+   * @param locale - The locale code (e.g., 'en', 'de', 'fr')
+   */
+  setLocale(locale: string): void;
 
   /**
    * Destroys the instance and frees resources.

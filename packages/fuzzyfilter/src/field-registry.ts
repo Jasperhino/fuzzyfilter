@@ -245,6 +245,43 @@ export class FieldRegistry {
   getOverloadSearchTerms(overload: OperatorOverload<any, any>): string[] {
     return this.getAliases(overload.i18nKey);
   }
+
+  /**
+   * Resolves value aliases from an i18n key.
+   * Returns an object where keys are canonical values and values are searchable aliases.
+   * 
+   * @example
+   * i18nKey: "values.materialType"
+   * Returns: {
+   *   water: ['water', 'H2O', 'aqua'],
+   *   biochar: ['biochar', 'char', 'carbon'],
+   * }
+   * 
+   * @param i18nKey - The i18n key path (e.g., "values.enums.materialType")
+   * @returns Object mapping canonical values to their aliases
+   */
+  resolveValueAliases(i18nKey: string): Record<string, string | string[]> {
+    // Try locale-specific first
+    const localeTranslations = this.translations[this.currentLocale];
+    const localeValues = localeTranslations
+      ? (this.resolveNestedKey(localeTranslations, i18nKey) as Record<string, string | string[]> | undefined)
+      : undefined;
+
+    // Try common translations
+    const commonValues = this.translations.common
+      ? (this.resolveNestedKey(this.translations.common, i18nKey) as Record<string, string | string[]> | undefined)
+      : undefined;
+
+    // Merge: locale overrides common
+    if (localeValues && typeof localeValues === 'object') {
+      return { ...commonValues, ...localeValues };
+    }
+    if (commonValues && typeof commonValues === 'object') {
+      return commonValues;
+    }
+
+    return {};
+  }
 }
 
 /**

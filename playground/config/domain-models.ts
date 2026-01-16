@@ -5,10 +5,20 @@ export const ProcessingType = {
   BIOMASS: 'biomass',
   PYROLYSIS: 'pyrolysis',
 } as const;
-
 export type ProcessingType = typeof ProcessingType[keyof typeof ProcessingType];
-
 export const ProcessingTypeSchema = z.enum(ProcessingType);
+
+export const MaterialTypeI18nKeys = {
+  BIOCHAR: 'materialTypes.biochar',
+  WATER: 'materialTypes.water',
+  ASH: 'materialTypes.ash',
+  COMPOST: 'materialTypes.compost',
+  WOOD_CHIPS: 'materialTypes.wood_chips',
+} as const;
+export type MaterialTypeI18nKey = typeof MaterialTypeI18nKeys[keyof typeof MaterialTypeI18nKeys];
+export const MaterialTypeSchema = z.enum(Object.keys(MaterialTypeI18nKeys));
+export type MaterialType = z.infer<typeof MaterialTypeSchema>;
+
 
 export const AmountSchema = z.object({
   value: z.number().int().positive().min(1).max(1000),
@@ -44,10 +54,6 @@ export const SampleDataSchema = z.array(
 );
 export type SampleData = z.infer<typeof SampleDataSchema>;
 
-
-// Material Container schemas for contents field
-export const MaterialTypeSchema = z.enum(['biochar', 'water', 'ash', 'compost', 'wood_chips']);
-export type MaterialType = z.infer<typeof MaterialTypeSchema>;
 
 export const MaterialContainerSchema = z.object({
   materialName: MaterialTypeSchema,

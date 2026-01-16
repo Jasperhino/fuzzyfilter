@@ -1,5 +1,5 @@
 import * as chrono from 'chrono-node';
-import type { Amount, Percentage, Timeframe } from "./domain-models";
+import type { Amount, MaterialType, Percentage, Timeframe, ProcessingType } from "./domain-models";
 
 // Local type definitions for argument parsing (not yet part of the core package)
 export interface ArgumentParseResult<T> {
@@ -40,12 +40,22 @@ export class TimeframeParser implements ArgumentParser<Timeframe> {
 
 export class CountParser implements ArgumentParser<number> {
   parse(query: string): ArgumentParseResult<number>[] {
-    return [{
-      type: 'count',
-      value: parseInt(query),
-      index: 0,
-      text: query,
-    }];
+    // Match integers in the query
+    const regex = /\b(\d+)\b/g;
+    const results: ArgumentParseResult<number>[] = [];
+    let match;
+    while ((match = regex.exec(query)) !== null) {
+      const value = parseInt(match[1]!, 10);
+      if (!isNaN(value)) {
+        results.push({
+          type: 'count',
+          value,
+          index: match.index,
+          text: match[0],
+        });
+      }
+    }
+    return results;
   }
 }
 
@@ -81,5 +91,21 @@ export class PercentageParser implements ArgumentParser<Percentage> {
       });
     }
     return results;
+  }
+}
+
+export class MaterialTypeParser implements ArgumentParser<MaterialType> {
+  // MaterialType values are primarily matched via the argument value trie (indexed from translations)
+  // This parser returns empty - let the trie handle fuzzy matching
+  parse(_query: string): ArgumentParseResult<MaterialType>[] {
+    return [];
+  }
+}
+
+export class ProcessingTypeParser implements ArgumentParser<ProcessingType> {
+  // ProcessingType values are primarily matched via the argument value trie (indexed from translations)
+  // This parser returns empty - let the trie handle fuzzy matching
+  parse(_query: string): ArgumentParseResult<ProcessingType>[] {
+    return [];
   }
 }
