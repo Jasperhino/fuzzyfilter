@@ -1,53 +1,46 @@
 //ts-worksheet
+
 import z from 'zod';
 import { zocker } from 'zocker';
-import { FuzzyFilter } from "@jasperhino/fuzzyfilter";
+import {
+  FuzzyFilter,
+  formatResponse,
+} from "@jasperhino/fuzzyfilter";
 import {
   ProcessingTypeSchema,
   DateSchema,
   CountSchema,
   AmountSchema,
   TimeframeSchema,
-  ContentsSchema,
   PercentageSchema,
   MaterialTypeSchema,
-  MaterialContainerSchema,
   type Amount,
   type Timeframe,
   type MaterialContainer,
 } from "./config/domain-models";
-import { DateParser, TimeframeParser, AmountParser, CountParser } from "./config/domain-parsers";
+import { DateParser, TimeframeParser, AmountParser, CountParser, PercentageParser } from "./config/domain-parsers";
 
-/**
- * Schema for sample data matching the FuzzyFilter field configuration
- * Uses constrained values for realistic data generation
- */
-const PlaygroundMaterialContainerSchema = z.object({
-  materialName: MaterialTypeSchema,
-  weightInKg: z.number().min(10).max(500).int(),
-});
 
-const PlaygroundDataSchema = z.object({
-  id: z.string().uuid(),
-  processing_type: ProcessingTypeSchema,
-  date: DateSchema,
-  count: z.number().int().min(1).max(100),
-  amount: z.object({
-    value: z.number().int().min(10).max(500),
-    unit: z.enum(['kg', 't']),
-  }),
-  timeframe: TimeframeSchema,
-  contents: z.array(PlaygroundMaterialContainerSchema).min(1).max(4),
-});
+const NUM_ROWS = 100000;
+
+const PlaygroundDataSchema = z.array(
+  z.object({
+    id: z.uuidv4(),
+    processing_type: ProcessingTypeSchema,
+    date: DateSchema,
+    count: CountSchema,
+    amount: AmountSchema,
+    timeframe: TimeframeSchema,
+    // Fixed: one water container and one biochar container
+    contents: z.tuple([
+      z.object({ materialName: z.literal('water'), weightInKg: z.number().int().positive().min(1).max(10000) }),
+      z.object({ materialName: z.literal('biochar'), weightInKg: z.number().int().positive().min(1).max(10000) }),
+    ])
+  }));
+
 type PlaygroundData = z.infer<typeof PlaygroundDataSchema>;
 
-/**
- * Generate sample data using zocker
- */
-const NUM_ROWS = 50;
-const sampleData = Array.from({ length: NUM_ROWS }, (_, i) =>
-  zocker(PlaygroundDataSchema).setSeed(42 + i).generate()
-);
+const sampleData = zocker(PlaygroundDataSchema.length(NUM_ROWS)).setSeed(42).generate();
 
 const ff = new FuzzyFilter({
   parsers: {
@@ -55,12 +48,23 @@ const ff = new FuzzyFilter({
     timeframe: new TimeframeParser(),
     amount: new AmountParser(),
     count: new CountParser(),
+    percentage: new PercentageParser(),
   },
+
+  // Unit definitions for the universal number parser
+  units: [
+    // Mass units
+    { id: 'kg', dimension: 'mass', toBase: 1, i18nKey: 'units.mass.kg' },
+    { id: 't', dimension: 'mass', toBase: 1000, i18nKey: 'units.mass.t' },
+    { id: 'g', dimension: 'mass', toBase: 0.001, i18nKey: 'units.mass.g' },
+    { id: 'lb', dimension: 'mass', toBase: 0.453592, i18nKey: 'units.mass.lb' },
+    // Percentage units
+    { id: '%', dimension: 'percentage', toBase: 1, i18nKey: 'units.percentage.percent' },
+  ],
 
   fields: {
     processing_type: {
       labelKey: 'columns.processing_type',
-      operandSchema: ProcessingTypeSchema,
       operators: [
         {
           operatorId: 'eq',
@@ -76,7 +80,6 @@ const ff = new FuzzyFilter({
 
     date: {
       labelKey: 'columns.date',
-      operandSchema: DateSchema,
       operators: [
         {
           operatorId: 'eq',
@@ -110,7 +113,6 @@ const ff = new FuzzyFilter({
 
     count: {
       labelKey: 'columns.count',
-      operandSchema: CountSchema,
       operators: [
         {
           operatorId: 'eq',
@@ -144,7 +146,6 @@ const ff = new FuzzyFilter({
 
     amount: {
       labelKey: 'columns.amount',
-      operandSchema: AmountSchema,
       operators: [
         {
           operatorId: 'eq',
@@ -181,7 +182,6 @@ const ff = new FuzzyFilter({
 
     timeframe: {
       labelKey: 'columns.timeframe',
-      operandSchema: TimeframeSchema,
       operators: [
         {
           operatorId: 'overlaps',
@@ -189,9 +189,34 @@ const ff = new FuzzyFilter({
             id: 'timeframe:overlaps:timeframe',
             i18nKey: 'operators.overlaps',
             argumentSchema: z.object({ start: DateSchema, end: DateSchema }),
+            // Two ranges [A, B] and [C, D] overlap if A <= D && C <= B
+            predicate: (operand: Timeframe, { start, end }) =>
+              operand.start.getTime() <= end.getTime() &&
+              start.getTime() <= operand.end.getTime(),
+          }],
+        },
+        {
+          operatorId: 'within',
+          overloads: [{
+            id: 'timeframe:within:timeframe',
+            i18nKey: 'operators.within',
+            argumentSchema: z.object({ start: DateSchema, end: DateSchema }),
+            // Operand is fully contained within the argument range
             predicate: (operand: Timeframe, { start, end }) =>
               operand.start.getTime() >= start.getTime() &&
               operand.end.getTime() <= end.getTime(),
+          }],
+        },
+        {
+          operatorId: 'contains',
+          overloads: [{
+            id: 'timeframe:contains:timeframe',
+            i18nKey: 'operators.timeframe.contains',
+            argumentSchema: z.object({ start: DateSchema, end: DateSchema }),
+            // Operand fully contains the argument range
+            predicate: (operand: Timeframe, { start, end }) =>
+              operand.start.getTime() <= start.getTime() &&
+              operand.end.getTime() >= end.getTime(),
           }],
         },
       ],
@@ -199,7 +224,6 @@ const ff = new FuzzyFilter({
 
     contents: {
       labelKey: 'columns.contents',
-      operandSchema: ContentsSchema,
       operators: [
         {
           operatorId: 'contains',
@@ -320,6 +344,20 @@ const ff = new FuzzyFilter({
         contains: ['∋'],
         overlaps: ['~='],
       },
+      units: {
+        mass: {
+          kg: ['kg', 'KG', 'kilogram', 'kilograms', 'kilo'],
+          t: ['t', 'T', 'ton', 'tons', 'tonne', 'tonnes'],
+          g: ['g', 'G', 'gram', 'grams'],
+          lb: ['lb', 'lbs', 'pound', 'pounds'],
+        },
+        percentage: {
+          percent: ['%', 'percent', 'pct', 'percentage'],
+        },
+      },
+      values: {
+        materialTypes: ['water', 'biochar', 'ash', 'compost', 'wood_chips'],
+      },
     },
     en: {
       columns: {
@@ -327,7 +365,7 @@ const ff = new FuzzyFilter({
         date: ['Date', 'Created'],
         count: ['Count', 'Quantity'],
         amount: ['Amount', 'Weight'],
-        timeframe: ['Timeframe', 'Period'],
+        timeframe: ['Timeframe', 'Period', 'Time Range'],
         contents: ['Content', 'Composition', 'Materials'],
       },
       operators: {
@@ -335,7 +373,11 @@ const ff = new FuzzyFilter({
         gt: ['greater than', 'more than', 'over', 'above'],
         lt: ['less than', 'under', 'below'],
         contains: ['contains', 'has', 'includes'],
-        overlaps: ['overlaps', 'between', 'in range'],
+        overlaps: ['overlaps', 'overlapping', 'intersects'],
+        within: ['within', 'inside', 'during'],
+        timeframe: {
+          contains: ['contains', 'spans', 'covers'],
+        },
         date: {
           after: ['after', 'later than', 'since'],
           before: ['before', 'earlier than', 'until'],
@@ -382,36 +424,23 @@ const ff = new FuzzyFilter({
 });
 
 // Index the generated sample data
-ff.indexData(sampleData);
+//ff.indexData(sampleData);
 
-// Show index stats
-console.log('\n📊 Index Stats:', ff.getIndexStats());
-
-// Show a few sample rows to understand the data
-console.log('\n📋 Sample Data (first 3 rows):');
-sampleData.slice(0, 3).forEach((row, i) => {
-  console.log(`  Row ${i + 1}:`, {
-    processing_type: row.processing_type,
-    count: row.count,
-    contents: row.contents.map(c => `${c.materialName}: ${c.weightInKg}kg`),
-  });
-});
-
-// Test various queries
+// Test multiple queries
 const queries = [
-  'biochar',
-  'processing',
-  'count > 100',
-  'biomass',
+  "20% wa",                    // percentage + partial value
+  "water > 50",                // value + operator + number
+  "biocharr",                  // just a value (typo)
+  "contents contains",         // field + operator
+  "100 kg bio",                // amount + partial value
+  // Timeframe queries
+  "last week - yesterday",     // timeframe range with natural language
+  "today - 5 minutes ago",     // short timeframe with relative times
+  "timeframe overlaps yesterday - today", // timeframe overlaps month
+  "period within last month - last friday",   // timeframe within range
 ];
 
-console.log('\n🔍 Testing Suggestions:\n');
-for (const query of queries) {
-  const result = await ff.suggest(query);
-  console.log(`Query: "${query}"`);
-  console.log(`  Suggestions (${result.suggestions.length}):`);
-  result.suggestions.slice(0, 5).forEach(s => {
-    console.log(`    - ${s.label} (score: ${s.score.toFixed(2)}, category: ${(s as any).category})`);
-  });
-  console.log();
+for (const q of queries) {
+  const result = await ff.suggest(q);
+  console.log("\n" + formatResponse(result));
 }

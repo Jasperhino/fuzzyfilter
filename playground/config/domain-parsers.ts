@@ -1,5 +1,5 @@
 import * as chrono from 'chrono-node';
-import type { Amount, Timeframe } from "./domain-models";
+import type { Amount, Percentage, Timeframe } from "./domain-models";
 
 // Local type definitions for argument parsing (not yet part of the core package)
 export interface ArgumentParseResult<T> {
@@ -58,6 +58,24 @@ export class AmountParser implements ArgumentParser<Amount> {
       results.push({
         type: 'amount',
         value: { value: parseInt(match[1]!), unit: match[2]!.toLowerCase() as 'kg' | 't' },
+        index: match.index,
+        text: match[0],
+      });
+    }
+    return results;
+  }
+}
+
+export class PercentageParser implements ArgumentParser<Percentage> {
+  parse(query: string): ArgumentParseResult<Percentage>[] {
+    // A percentage is a number between 0 and 100 with a % sign or the word "percent" or a number between 0 and 1
+    const regex = /(\d+)\s*(%|percent)/gi;
+    const results: ArgumentParseResult<Percentage>[] = [];
+    let match;
+    while ((match = regex.exec(query)) !== null) {
+      results.push({
+        type: 'percentage',
+        value: parseInt(match[1]!),
         index: match.index,
         text: match[0],
       });

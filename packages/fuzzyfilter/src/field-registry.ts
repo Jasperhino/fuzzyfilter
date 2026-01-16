@@ -169,10 +169,28 @@ export class FieldRegistry {
 
   /**
    * Gets the primary label for an i18n key.
+   * Prefers locale-specific human-readable labels over symbols.
    */
   getLabel(i18nKey: string): string | null {
-    const aliases = this.getAliases(i18nKey);
-    return aliases[0] ?? null;
+    // First try locale-specific translations (prefer human-readable labels)
+    const localeTranslations = this.translations[this.currentLocale];
+    if (localeTranslations) {
+      const localeValue = this.resolveNestedKey(localeTranslations, i18nKey);
+      if (Array.isArray(localeValue) && localeValue.length > 0) {
+        // Return first locale-specific label (should be human-readable)
+        return localeValue[0];
+      }
+    }
+
+    // Fall back to common translations
+    const commonValue = this.resolveNestedKey(this.translations.common, i18nKey);
+    if (Array.isArray(commonValue) && commonValue.length > 0) {
+      // For common, prefer longer strings (likely human-readable) over single characters (likely symbols)
+      const humanReadable = commonValue.find(alias => alias.length > 2);
+      return humanReadable ?? commonValue[0];
+    }
+
+    return null;
   }
 
   /**

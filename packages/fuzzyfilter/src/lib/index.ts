@@ -1,7 +1,7 @@
 /**
  * Main FuzzyFilter Class
- * 
- * Field-centric implementation of the FuzzyFilter interface.
+ *
+ * Field-centric implementation of the FuzzyFilter interface with beam search.
  */
 
 declare function requestIdleCallback(
@@ -25,6 +25,7 @@ import type {
   IndexDataAsyncOptions,
   IndexProgress,
 } from "../telemetry/index.ts";
+import type { ValueParser, ParsedValue, ValueTrieEntry } from "../parsing/index.ts";
 import {
   createTelemetryCollector,
   NULL_TELEMETRY_COLLECTOR,
@@ -32,31 +33,41 @@ import {
 import { FieldRegistry, createFieldRegistry } from "../field-registry.ts";
 import { createTrie } from "../trie.ts";
 import { tokenize } from "../tokenizer.ts";
+import {
+  createCandidateEngine,
+  createParsedValue,
+  extractNumbers,
+  createUniversalNumberParser,
+} from "../parsing/index.ts";
+import { createUnitRegistry } from "../units/index.ts";
 import type { Trie } from "../types/index.ts";
-
-interface ValueTrieEntry {
-  value: string;
-  fieldKey: string;
-  rowCount: number;
-}
+import type { UnitRegistry } from "../units/index.ts";
+import type {
+  CandidateEngine,
+  CandidateSuggestion,
+} from "../parsing/candidate-engine.ts";
 
 interface FuzzyFilterState {
   data: Array<Record<string, unknown>>;
   dataVersion: number;
-  fieldTrie: Trie<FieldSchema<any>>;
   valueTrie: Trie<ValueTrieEntry>;
-  operatorTrie: Trie<{ overloadId: string; fieldKey: string }>;
-  contextCache: Map<string, any>;
+  contextCache: Map<string, unknown>;
 }
 
 /**
- * FuzzyFilter class implementation with field-centric API.
+ * FuzzyFilter class implementation with field-centric API and beam search.
  */
 export class FuzzyFilterImpl implements FuzzyFilter {
   private state: FuzzyFilterState;
   private _config: FuzzyFilterConfig;
   private telemetry: TelemetryCollector;
   private registry: FieldRegistry;
+
+  // Candidate engine dependencies
+  private fieldTrie: Trie<{ key: string; schema: FieldSchema<unknown> }>;
+  private unitRegistry: UnitRegistry;
+  private valueParsers: Map<string, ValueParser<unknown>>;
+  private candidateEngine: CandidateEngine;
 
   constructor(userConfig: FuzzyFilterConfig) {
     // Validate required fields
@@ -88,11 +99,15 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       fields: userConfig.fields,
       parsers: userConfig.parsers,
       translations: userConfig.translations,
+      units: userConfig.units,
     };
 
     // Initialize telemetry
     this.telemetry = this._config.benchmark
-      ? createTelemetryCollector({ enabled: true, ...this._config.telemetryOptions })
+      ? createTelemetryCollector({
+        enabled: true,
+        ...this._config.telemetryOptions,
+      })
       : NULL_TELEMETRY_COLLECTOR;
 
     // Initialize field registry
@@ -106,15 +121,148 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     this.state = {
       data: [],
       dataVersion: 0,
-      fieldTrie: createTrie(),
       valueTrie: createTrie(),
-      operatorTrie: createTrie(),
       contextCache: new Map(),
     };
 
-    // Build tries
+    // Initialize candidate engine dependencies
+    this.fieldTrie = createTrie();
+    this.valueParsers = new Map();
+    this.unitRegistry = this.createUnitRegistry();
+
+    // Build field trie
     this.rebuildFieldTrie();
-    this.rebuildOperatorTrie();
+
+    // Create default value parsers
+    this.createDefaultValueParsers();
+
+    // Create candidate engine
+    this.candidateEngine = this.createCandidateEngine();
+  }
+
+  /**
+   * Creates the candidate engine with current state.
+   */
+  private createCandidateEngine(): CandidateEngine {
+    return createCandidateEngine({
+      fields: new Map(Object.entries(this._config.fields)),
+      fieldTrie: this.fieldTrie,
+      valueTrie: this.state.valueTrie,
+      unitRegistry: this.unitRegistry,
+      valueParsers: this.valueParsers,
+      getFieldLabel: (fieldKey) => {
+        const field = this.registry.getField(fieldKey);
+        return field ? this.registry.getLabel(field.labelKey) ?? fieldKey : fieldKey;
+      },
+      getOperatorLabel: (i18nKey) => this.registry.getLabel(i18nKey) ?? i18nKey,
+      getFieldAliases: (labelKey) => this.registry.getAliases(labelKey),
+      getOperatorAliases: (i18nKey) => this.registry.getAliases(i18nKey),
+    });
+  }
+
+  /**
+   * Creates the unit registry from config.
+   */
+  private createUnitRegistry(): UnitRegistry {
+    const units = this._config.units ?? [];
+    return createUnitRegistry({
+      units,
+      getAliases: (key) => this.registry.getAliases(key),
+    });
+  }
+
+  /**
+   * Creates default value parsers for common types.
+   */
+  private createDefaultValueParsers(): void {
+    // Universal number parser - handles all numeric values with units
+    const universalNumberParser = createUniversalNumberParser();
+    this.valueParsers.set(universalNumberParser.type, universalNumberParser);
+
+    // Number parser (legacy, for compatibility)
+    const numberParser: ValueParser<number> = {
+      type: "number",
+      parse: (query, unitRegistry, context) => {
+        const results: ParsedValue<number>[] = [];
+        const numbers = extractNumbers(query);
+
+        for (const n of numbers) {
+          // Check for unit after number
+          const afterNumber = query.slice(n.end).trim();
+          const unitMatch = afterNumber.match(/^([a-zA-Z]+)/);
+
+          if (unitMatch && unitMatch[1] && context?.field?.unitDimension) {
+            // Search for unit
+            const unitMatches = unitRegistry.search(
+              unitMatch[1],
+              context.field.unitDimension
+            );
+            for (const um of unitMatches) {
+              results.push(
+                createParsedValue(
+                  n.value,
+                  n.text + unitMatch[0],
+                  n.start,
+                  n.end + unitMatch[0].length,
+                  um.score,
+                  um
+                )
+              );
+            }
+          }
+
+          // Also add number without unit
+          results.push(createParsedValue(n.value, n.text, n.start, n.end, 0.9));
+        }
+
+        return results;
+      },
+    };
+    this.valueParsers.set("number", numberParser);
+
+    // String parser (matches remaining text as value)
+    const stringParser: ValueParser<string> = {
+      type: "string",
+      parse: (query) => {
+        const trimmed = query.trim();
+        if (!trimmed) return [];
+        return [createParsedValue(trimmed, trimmed, 0, query.length, 0.8)];
+      },
+    };
+    this.valueParsers.set("string", stringParser);
+
+    // Adapt user-provided ArgumentParsers to ValueParser interface
+    if (this._config.parsers) {
+      for (const [parserType, argumentParser] of Object.entries(this._config.parsers)) {
+        // Wrap ArgumentParser in ValueParser interface
+        const wrappedParser: ValueParser<unknown> = {
+          type: parserType,
+          parse: (query: string, _unitRegistry, _context) => {
+            const results = argumentParser.parse(query);
+            return results.map((r) =>
+              createParsedValue(r.value, r.text, r.index, r.index + r.text.length, 0.9)
+            );
+          },
+        };
+        this.valueParsers.set(parserType, wrappedParser);
+      }
+    }
+  }
+
+  /**
+   * Rebuilds the field trie for fuzzy matching.
+   */
+  private rebuildFieldTrie(): void {
+    this.fieldTrie = createTrie();
+    for (const [fieldKey, fieldSchema] of this.registry.getFields()) {
+      const terms = this.registry.getFieldSearchTerms(fieldKey);
+      for (const term of terms) {
+        this.fieldTrie.insert(term.toLowerCase(), {
+          key: fieldKey,
+          schema: fieldSchema as FieldSchema<unknown>,
+        });
+      }
+    }
   }
 
   get config(): Readonly<FuzzyFilterConfig> {
@@ -131,41 +279,26 @@ export class FuzzyFilterImpl implements FuzzyFilter {
         this._config.translations
       );
       this.rebuildFieldTrie();
-      this.rebuildOperatorTrie();
     }
+
+    if (options.units) {
+      this.unitRegistry = this.createUnitRegistry();
+    }
+
+    // Recreate candidate engine with updated dependencies
+    this.candidateEngine = this.createCandidateEngine();
 
     this.state.contextCache.clear();
   }
 
-  getField(fieldKey: string): FieldSchema<any> | null {
+  getField(fieldKey: string): FieldSchema<unknown> | null {
     return this.registry.getField(fieldKey);
   }
 
-  getOverloadsForField(fieldKey: string): OperatorOverload<any, any>[] {
+  getOverloadsForField(
+    fieldKey: string
+  ): OperatorOverload<unknown, Record<string, unknown>>[] {
     return this.registry.getOverloadsForField(fieldKey);
-  }
-
-  private rebuildFieldTrie(): void {
-    this.state.fieldTrie = createTrie();
-    for (const [fieldKey, fieldSchema] of this.registry.getFields()) {
-      const searchTerms = this.registry.getFieldSearchTerms(fieldKey);
-      for (const term of searchTerms) {
-        this.state.fieldTrie.insert(term.toLowerCase(), fieldSchema);
-      }
-    }
-  }
-
-  private rebuildOperatorTrie(): void {
-    this.state.operatorTrie = createTrie();
-    for (const { fieldKey, overload } of this.registry.getAllOverloads()) {
-      const searchTerms = this.registry.getOverloadSearchTerms(overload);
-      for (const term of searchTerms) {
-        this.state.operatorTrie.insert(term.toLowerCase(), {
-          overloadId: overload.id,
-          fieldKey,
-        });
-      }
-    }
   }
 
   indexData(data: Array<Record<string, unknown>>): void {
@@ -184,9 +317,14 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       for (const fieldKey of this.registry.getFieldKeys()) {
         const value = row[fieldKey];
         if (value == null) continue;
-        const strValue = String(value);
+
+        // Extract searchable string values from the value
+        const searchableValues = this.extractSearchableValues(value);
         const counts = valueCounts.get(fieldKey)!;
-        counts.set(strValue, (counts.get(strValue) ?? 0) + 1);
+
+        for (const strValue of searchableValues) {
+          counts.set(strValue, (counts.get(strValue) ?? 0) + 1);
+        }
       }
     }
 
@@ -201,6 +339,53 @@ export class FuzzyFilterImpl implements FuzzyFilter {
         });
       }
     }
+
+    // Rebuild beam engine with updated value trie
+    this.rebuildCandidateEngine();
+  }
+
+  /**
+   * Extracts searchable string values from a value.
+   * Handles primitives, arrays, and objects.
+   */
+  private extractSearchableValues(value: unknown): string[] {
+    const results: string[] = [];
+
+    if (value == null) {
+      return results;
+    }
+
+    if (typeof value === "string") {
+      results.push(value);
+    } else if (typeof value === "number" || typeof value === "boolean") {
+      results.push(String(value));
+    } else if (value instanceof Date) {
+      results.push(value.toISOString());
+    } else if (Array.isArray(value)) {
+      // Recursively extract from array items
+      for (const item of value) {
+        results.push(...this.extractSearchableValues(item));
+      }
+    } else if (typeof value === "object") {
+      // Extract string values from object properties
+      for (const propValue of Object.values(value)) {
+        if (typeof propValue === "string") {
+          results.push(propValue);
+        } else if (typeof propValue === "number" || typeof propValue === "boolean") {
+          results.push(String(propValue));
+        }
+        // Don't recurse into nested objects to avoid too much noise
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Rebuilds the candidate engine with current state.
+   */
+  private rebuildCandidateEngine(): void {
+    this.candidateEngine = this.createCandidateEngine();
   }
 
   async indexDataAsync(
@@ -264,9 +449,14 @@ export class FuzzyFilterImpl implements FuzzyFilter {
         });
       }
     }
+
+    // Rebuild beam engine with updated value trie
+    this.rebuildCandidateEngine();
   }
 
-  upsertRows(rows: Array<{ rowId: number; data: Record<string, unknown> }>): void {
+  upsertRows(
+    rows: Array<{ rowId: number; data: Record<string, unknown> }>
+  ): void {
     for (const { rowId, data } of rows) {
       if (rowId >= 0 && rowId < this.state.data.length) {
         this.state.data[rowId] = data;
@@ -305,7 +495,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
 
   removeRows(predicate: (row: Record<string, unknown>) => boolean): void {
     const originalLength = this.state.data.length;
-    this.state.data = this.state.data.filter(row => !predicate(row));
+    this.state.data = this.state.data.filter((row) => !predicate(row));
     if (this.state.data.length !== originalLength) {
       this.state.dataVersion++;
       this.indexData(this.state.data);
@@ -340,97 +530,97 @@ export class FuzzyFilterImpl implements FuzzyFilter {
   async suggest(
     query: string,
     cursorPosition?: number,
-    filterContext?: CompiledFilter[]
+    _filterContext?: CompiledFilter[]
   ): Promise<SuggestionResponse> {
-    return this.suggestSync(query, cursorPosition, filterContext);
+    return this.suggestSync(query, cursorPosition, _filterContext);
   }
 
+  /**
+   * Generates filter suggestions using beam search.
+   */
   suggestSync(
     query: string,
     cursorPosition?: number,
-    filterContext?: CompiledFilter[]
+    _filterContext?: CompiledFilter[]
   ): SuggestionResponse {
-    const suggestions: FilterSuggestion[] = [];
-    const tokens = tokenize(query);
-    const lowerQuery = query.toLowerCase();
+    const startTime = performance.now();
 
-    // Parse arguments from query
-    const parsedArgs = this.registry.parseArguments(query);
-
-    // Strategy 1: Match fields
-    const fieldMatches = this.state.fieldTrie.search(lowerQuery, 10);
-    for (const match of fieldMatches) {
-      const fieldKey = this.findFieldKeyForSchema(match.item);
-      if (!fieldKey) continue;
-
-      const label = this.registry.getLabel(match.item.labelKey) ?? fieldKey;
-      suggestions.push({
-        label,
-        displayLabel: label,
-        filterExpression: fieldKey,
-        score: match.score,
-        isComplete: false,
-        category: "field",
-      });
+    if (!query.trim()) {
+      return {
+        suggestions: [],
+        query,
+        cursorPosition: cursorPosition ?? 0,
+        responseTimeMs: performance.now() - startTime,
+      };
     }
 
-    // Strategy 2: Match operators
-    const operatorMatches = this.state.operatorTrie.search(lowerQuery, 10);
-    for (const match of operatorMatches) {
-      const { overloadId, fieldKey } = match.item;
-      const result = this.registry.getOverloadById(overloadId);
-      if (!result) continue;
+    // Run candidate engine
+    const candidateSuggestions = this.candidateEngine.suggest(query);
 
-      const fieldLabel = this.registry.getLabel(
-        this.registry.getField(fieldKey)?.labelKey ?? ''
-      ) ?? fieldKey;
-      const opLabel = this.registry.getLabel(result.overload.i18nKey) ?? result.overload.id;
-
-      suggestions.push({
-        label: `${fieldLabel} ${opLabel}`,
-        displayLabel: `${fieldLabel} ${opLabel}`,
-        filterExpression: overloadId,
-        score: match.score,
-        isComplete: false,
-        category: "operator",
-        metadata: { overloadId, fieldKey },
-      });
-    }
-
-    // Strategy 3: Match values
-    const valueMatches = this.state.valueTrie.search(lowerQuery, 10);
-    for (const match of valueMatches) {
-      const { value, fieldKey, rowCount } = match.item;
-      const fieldLabel = this.registry.getLabel(
-        this.registry.getField(fieldKey)?.labelKey ?? ''
-      ) ?? fieldKey;
-
-      suggestions.push({
-        label: `${fieldLabel} = ${value}`,
-        displayLabel: `${fieldLabel} = ${value}`,
-        filterExpression: `${fieldKey}:eq:${value}`,
-        score: match.score,
-        isComplete: true,
-        resultCount: rowCount,
-        category: "value",
-      });
-    }
-
-    // Sort by score
-    suggestions.sort((a, b) => b.score - a.score);
+    // Convert candidate suggestions to filter suggestions
+    const suggestions: FilterSuggestion[] = candidateSuggestions.map((cs) =>
+      this.candidateSuggestionToFilterSuggestion(cs)
+    );
 
     return {
-      suggestions: suggestions.slice(0, this._config.maxSuggestions ?? 10),
+      suggestions,
       query,
       cursorPosition: cursorPosition ?? query.length,
+      responseTimeMs: performance.now() - startTime,
     };
   }
 
-  private findFieldKeyForSchema(schema: FieldSchema<any>): string | null {
-    for (const [key, s] of this.registry.getFields()) {
-      if (s === schema) return key;
+  /**
+   * Converts a CandidateSuggestion to a FilterSuggestion.
+   */
+  private candidateSuggestionToFilterSuggestion(
+    cs: CandidateSuggestion
+  ): FilterSuggestion {
+    const { candidate, filling, score, scoreBreakdown, chunking, isComplete } = cs;
+
+    // Build label: Field + Operator + Arguments
+    const fieldLabel = this.registry.getLabel(candidate.fieldSchema.labelKey) ?? candidate.fieldKey;
+    const opLabel = this.registry.getLabel(candidate.overload.i18nKey) ?? candidate.operatorId;
+
+    // Format filled arguments
+    const argParts: string[] = [];
+    for (const [argName, argValue] of Object.entries(filling.filledArgs)) {
+      if (Array.isArray(argValue)) {
+        argParts.push(argValue.join(", "));
+      } else if (argValue instanceof Date) {
+        // Format dates nicely (e.g., "Jan 15, 2026")
+        argParts.push(argValue.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }));
+      } else if (typeof argValue === "object" && argValue !== null && "value" in argValue) {
+        const obj = argValue as { value: number; unit?: string };
+        argParts.push(`${obj.value}${obj.unit ?? ""}`);
+      } else {
+        argParts.push(String(argValue));
+      }
     }
-    return null;
+
+    const label = [fieldLabel, opLabel, ...argParts].filter(Boolean).join(" ");
+
+    // Determine category
+    let category: "field" | "operator" | "value" = "operator";
+    if (filling.filledArgs && Object.keys(filling.filledArgs).length > 0) {
+      category = "value";
+    }
+
+    return {
+      label: label || `${fieldLabel} ${opLabel}`,
+      displayLabel: label || `${fieldLabel} ${opLabel}`,
+      score,
+      isComplete,
+      category,
+      fieldKey: candidate.fieldKey,
+      operatorId: candidate.operatorId,
+      overloadIds: [candidate.overload.id],
+      chunking,
+      matches: filling.matches,
+      parsedValues: filling.parsedValues,
+      scoreBreakdown,
+      remaining: filling.unusedChunks.join(" ") || undefined,
+    };
   }
 
   parse(input: string): ParsedInput {
@@ -438,9 +628,10 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     return {
       raw: input,
       tokens: tokens.tokens,
-      column: null,
-      operator: null,
-      value: null,
+      classifications: [],
+      column: undefined,
+      operator: undefined,
+      value: undefined,
     };
   }
 
@@ -459,12 +650,12 @@ export class FuzzyFilterImpl implements FuzzyFilter {
 
   compile(input: string): CompiledFilter | null {
     // Simple implementation - parse overload ID
-    const parts = input.split(':');
+    const parts = input.split(":");
     if (parts.length < 2) return null;
-    
+
     const fieldKey = parts[0]!;
     const operatorId = parts[1]!;
-    const value = parts.slice(2).join(':');
+    const value = parts.slice(2).join(":");
 
     const field = this.registry.getField(fieldKey);
     if (!field) return null;
@@ -549,10 +740,10 @@ export class FuzzyFilterImpl implements FuzzyFilter {
 
   destroy(): void {
     this.state.data = [];
-    this.state.fieldTrie = createTrie();
     this.state.valueTrie = createTrie();
-    this.state.operatorTrie = createTrie();
+    this.fieldTrie = createTrie();
     this.state.contextCache.clear();
+    this.candidateEngine.invalidateCache();
   }
 
   getTelemetry(): TelemetryCollector | null {

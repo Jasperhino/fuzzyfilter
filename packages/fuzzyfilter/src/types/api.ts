@@ -25,6 +25,7 @@ import type {
   FieldCentricTranslations,
   OperatorOverload,
 } from "./field-centric.ts";
+import type { UnitDefinition } from "../units/types.ts";
 
 /**
  * Scoring weights for ranking suggestions.
@@ -124,6 +125,20 @@ export interface FuzzyFilterConfig {
    * Only used when benchmark is true.
    */
   telemetryOptions?: Partial<TelemetryConfig>;
+
+  /**
+   * Unit definitions for value parsing.
+   * Units enable fuzzy matching of unit names/symbols and conversion.
+   *
+   * @example
+   * ```typescript
+   * units: [
+   *   { id: 'kg', dimension: 'mass', toBase: 1, i18nKey: 'units.mass.kg' },
+   *   { id: 'g', dimension: 'mass', toBase: 0.001, i18nKey: 'units.mass.g' },
+   * ]
+   * ```
+   */
+  units?: UnitDefinition[];
 }
 
 /**

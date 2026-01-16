@@ -46,12 +46,12 @@ export type SampleData = z.infer<typeof SampleDataSchema>;
 
 
 // Material Container schemas for contents field
-export const MaterialTypeSchema = z.enum(['biochar', 'water', 'ite', 'ite2']);
+export const MaterialTypeSchema = z.enum(['biochar', 'water', 'ash', 'compost', 'wood_chips']);
 export type MaterialType = z.infer<typeof MaterialTypeSchema>;
 
 export const MaterialContainerSchema = z.object({
   materialName: MaterialTypeSchema,
-  weightInKg: z.number(),
+  weightInKg: z.number().int().positive().min(1).max(10000),
 });
 export type MaterialContainer = z.infer<typeof MaterialContainerSchema>;
 

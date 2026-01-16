@@ -55,6 +55,7 @@
   },
   "dependencies": {
     "chrono-node": "^2.9.0",
+    "mathjs": "^15.1.0",
     "mint": "^4.2.258",
     "zocker": "^3.0.0",
     "zod": "^4.3.5"

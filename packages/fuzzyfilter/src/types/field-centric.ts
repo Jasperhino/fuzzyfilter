@@ -179,6 +179,14 @@ export interface FieldSchema<TOperand = unknown> {
    * @optional
    */
   descriptionKey?: string;
+
+  /**
+   * Expected unit dimension for this field's values.
+   * Used for filtering valid unit suggestions.
+   * @example 'mass', 'currency', 'length', 'time'
+   * @optional
+   */
+  unitDimension?: string;
 }
 
 /**

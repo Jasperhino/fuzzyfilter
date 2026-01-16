@@ -61,3 +61,44 @@ export {
   createTelemetryCollector,
   NULL_TELEMETRY_COLLECTOR,
 } from "./telemetry/index.ts";
+
+// Units
+export { createUnitRegistry } from "./units/index.ts";
+export type { UnitDefinition, UnitRegistry, UnitRegistryConfig } from "./units/index.ts";
+
+// Parsing (beam search)
+export {
+  generateChunkings,
+  chunkInput,
+  createValueParserRegistry,
+  createParsedValue,
+  extractNumbers,
+  multiplyScores,
+  createBeamSearchEngine,
+} from "./parsing/index.ts";
+export type {
+  Chunk,
+  Chunking,
+  ParsedValue,
+  ValueSuggestion,
+  ParseMatch,
+  ParseBeam,
+  BeamSearchConfig,
+  ValueParser,
+  BeamSuggestion,
+  BeamSearchDependencies,
+  BeamSearchEngine,
+  TrigramBag,
+  PreparedCandidate,
+} from "./parsing/index.ts";
+
+// Trigrams
+export {
+  padText,
+  buildTrigramBag,
+  trigramSimilarity,
+  trigramSimilarityString,
+  createTrigramScorer,
+  prepareCandidate,
+  batchMatch,
+} from "./parsing/index.ts";

@@ -29,6 +29,9 @@ export type {
   FilterResult,
 } from "./results.ts";
 
+// Result formatting utilities
+export { formatSuggestion, formatResponse } from "./results.ts";
+
 // API types
 export type {
   FuzzyFilterConfig,
@@ -69,3 +72,22 @@ export type {
 } from "../telemetry/index.ts";
 
 export { DEFAULT_TELEMETRY_CONFIG } from "../telemetry/index.ts";
+
+// Unit types
+export type {
+  UnitDefinition,
+  UnitRegistry,
+  UnitRegistryConfig,
+} from "../units/types.ts";
+
+// Beam search / parsing types (re-exported for convenience)
+export type {
+  Chunking,
+  Chunk,
+  ChunkType,
+  ChunkingStrategy,
+  ParseMatch,
+  MatchRole,
+  ParsedValue,
+  ScoreBreakdown,
+} from "../parsing/types.ts";
