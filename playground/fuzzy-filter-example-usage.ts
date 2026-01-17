@@ -1,8 +1,7 @@
 //ts-worksheet
 
-import z, { util } from 'zod';
+import z from 'zod';
 import { inspect } from 'util'
-import { zocker } from 'zocker';
 import {
   FuzzyFilter,
   formatResponse,
@@ -20,30 +19,12 @@ import {
   type MaterialContainer,
 } from "./config/domain-models";
 import { DateParser, TimeframeParser, AmountParser, CountParser, PercentageParser, MaterialTypeParser, ProcessingTypeParser } from "./config/domain-parsers";
+import { loadSampleData } from "./config/load-sample-data";
 
-
-const NUM_ROWS = 100000;
-
-const PlaygroundDataSchema = z.array(
-  z.object({
-    id: z.uuidv4(),
-    processing_type: ProcessingTypeSchema,
-    date: DateSchema,
-    count: CountSchema,
-    amount: AmountSchema,
-    timeframe: TimeframeSchema,
-    // Fixed: one water container and one biochar container
-    contents: z.tuple([
-      z.object({ materialName: z.literal('water'), weightInKg: z.number().int().positive().min(1).max(10000) }),
-      z.object({ materialName: z.literal('biochar'), weightInKg: z.number().int().positive().min(1).max(10000) }),
-    ])
-  }));
-
-type PlaygroundData = z.infer<typeof PlaygroundDataSchema>;
-
-const sampleData = zocker(PlaygroundDataSchema.length(NUM_ROWS)).setSeed(42).generate();
+const sampleData = loadSampleData();
 
 const ff = new FuzzyFilter({
+  enableAutocomplete: true,
   arguments: {
     date: {
       schema: DateSchema,
@@ -397,7 +378,7 @@ const ff = new FuzzyFilter({
         date: ['Date', 'Created'],
         count: ['Count', 'Quantity'],
         amount: ['Amount', 'Weight'],
-        timeframe: ['Timeframe', 'Period', 'Time Range'],
+        timeframe: ['Timeframe', 'Period', 'Time Range', 'Created'],
         contents: ['Content', 'Composition', 'Materials'],
       },
       values: {
@@ -495,6 +476,10 @@ const ff = new FuzzyFilter({
 //   console.log("\n" + formatResponse(result));
 // }
 
-const result = await ff.suggest("crated aftr last month - last friday");
-
-console.log(inspect(result, false, null, true /* enable colors */))
+// Test different tab completions
+const queries = ["contents contains w"];
+for (const q of queries) {
+  const result = await ff.suggest(q);
+  console.log(`\nQuery: "${q}"`);
+  console.log(inspect(result, false, null, true /* enable colors */))
+}

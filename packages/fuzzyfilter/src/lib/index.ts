@@ -20,13 +20,14 @@ import type {
   FieldSchema,
   OperatorOverload,
   ArgumentTypeRegistry,
+  TabCompletion,
 } from "../types/index.ts";
 import type {
   TelemetryCollector,
   IndexDataAsyncOptions,
   IndexProgress,
 } from "../telemetry/index.ts";
-import type { ValueParser, ParsedValue, ValueTrieEntry } from "../parsing/index.ts";
+import type { ValueParser, ParsedValue, ValueTrieEntry, Chunking, ParseMatch } from "../parsing/index.ts";
 import {
   createTelemetryCollector,
   NULL_TELEMETRY_COLLECTOR,
@@ -46,6 +47,8 @@ import type { UnitRegistry } from "../units/index.ts";
 import type {
   CandidateEngine,
   CandidateSuggestion,
+  Candidate,
+  ArgumentFilling,
 } from "../parsing/candidate-engine.ts";
 
 interface FuzzyFilterState {
@@ -100,6 +103,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       maxCacheSize: userConfig.maxCacheSize ?? 1000,
       debounceMs: userConfig.debounceMs ?? 150,
       debug: userConfig.debug ?? false,
+      enableAutocomplete: userConfig.enableAutocomplete ?? false,
       benchmark: userConfig.benchmark ?? false,
       telemetryOptions: userConfig.telemetryOptions,
       fields: userConfig.fields,
@@ -626,12 +630,13 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     _filterContext?: CompiledFilter[]
   ): SuggestionResponse {
     const startTime = performance.now();
+    const cursor = cursorPosition ?? query.length;
 
     if (!query.trim()) {
       return {
         suggestions: [],
         query,
-        cursorPosition: cursorPosition ?? 0,
+        cursorPosition: cursor,
         responseTimeMs: performance.now() - startTime,
       };
     }
@@ -639,15 +644,15 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     // Run candidate engine
     const candidateSuggestions = this.candidateEngine.suggest(query);
 
-    // Convert candidate suggestions to filter suggestions
+    // Convert candidate suggestions to filter suggestions (with per-suggestion tab completion)
     const suggestions: FilterSuggestion[] = candidateSuggestions.map((cs) =>
-      this.candidateSuggestionToFilterSuggestion(cs)
+      this.candidateSuggestionToFilterSuggestion(cs, query, cursor)
     );
 
     return {
       suggestions,
       query,
-      cursorPosition: cursorPosition ?? query.length,
+      cursorPosition: cursor,
       responseTimeMs: performance.now() - startTime,
     };
   }
@@ -656,7 +661,9 @@ export class FuzzyFilterImpl implements FuzzyFilter {
    * Converts a CandidateSuggestion to a FilterSuggestion.
    */
   private candidateSuggestionToFilterSuggestion(
-    cs: CandidateSuggestion
+    cs: CandidateSuggestion,
+    query: string,
+    cursorPosition: number
   ): FilterSuggestion {
     const { candidate, filling, score, scoreBreakdown, chunking, isComplete } = cs;
 
@@ -664,7 +671,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     const fieldLabel = this.registry.getLabel(candidate.fieldSchema.labelKey) ?? candidate.fieldKey;
     const opLabel = this.registry.getLabel(candidate.overload.i18nKey) ?? candidate.operatorId;
 
-    // Format filled arguments
+    // Format filled arguments for display
     const argParts: string[] = [];
     const filledArgs = filling.filledArgs;
 
@@ -698,6 +705,12 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       category = "value";
     }
 
+    // Build per-suggestion tab completion if enabled
+    let tabCompletion: TabCompletion | undefined;
+    if (this._config.enableAutocomplete && chunking && filling.matches) {
+      tabCompletion = this.buildSuggestionTabCompletion(chunking, filling.matches, cursorPosition);
+    }
+
     return {
       label: label || `${fieldLabel} ${opLabel}`,
       displayLabel: label || `${fieldLabel} ${opLabel}`,
@@ -712,6 +725,70 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       parsedValues: filling.parsedValues,
       scoreBreakdown,
       remaining: filling.unusedChunks.join(" ") || undefined,
+      tabCompletion,
+    };
+  }
+
+  /**
+   * Builds tab completion for a specific suggestion based on its matches.
+   * 
+   * Finds the chunk at the cursor position and uses the match's resolvedTo
+   * as the completion. This way, each suggestion offers its own completion
+   * based on how it interpreted the query.
+   */
+  private buildSuggestionTabCompletion(
+    chunking: Chunking,
+    matches: ParseMatch[],
+    cursorPosition: number
+  ): TabCompletion | undefined {
+    // Find the chunk that contains the cursor
+    const chunkAtCursor = chunking.chunks.find(
+      (c) => cursorPosition >= c.start && cursorPosition <= c.end
+    );
+
+    if (!chunkAtCursor || chunkAtCursor.text.length < 1) {
+      return undefined;
+    }
+
+    // Find a match that overlaps with the cursor chunk
+    const matchAtCursor = matches.find(
+      (m) => m.start <= chunkAtCursor.start && m.end >= chunkAtCursor.end
+    ) ?? matches.find(
+      // Also try to find match that starts at same position
+      (m) => m.start === chunkAtCursor.start
+    ) ?? matches.find(
+      // Last resort: find any match that contains the cursor position
+      (m) => m.start <= cursorPosition && m.end >= cursorPosition
+    );
+
+    if (!matchAtCursor) {
+      return undefined;
+    }
+
+    const original = matchAtCursor.text;
+    const completion = matchAtCursor.resolvedTo;
+    const role = matchAtCursor.role;
+
+    // Only complete if the completion is different (and ideally longer)
+    if (completion === original) {
+      return undefined;
+    }
+
+    // Map role to matchType
+    const matchType: TabCompletion["matchType"] =
+      role === "field" ? "field" :
+        role === "operator" ? "operator" :
+          role === "unit" ? "unit" : "value";
+
+    return {
+      original,
+      completion,
+      range: {
+        start: matchAtCursor.start,
+        end: matchAtCursor.end,
+      },
+      score: matchAtCursor.score,
+      matchType,
     };
   }
 

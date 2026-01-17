@@ -7,6 +7,64 @@ import type { RowId } from "./core.ts";
 import type { Chunking, ParseMatch, ParsedValue, ScoreBreakdown } from "../parsing/types.ts";
 
 // ============================================================================
+// TAB COMPLETION
+// ============================================================================
+
+/**
+ * Tab completion for the token at the cursor position.
+ * 
+ * This provides a simple text edit to complete the current word,
+ * similar to shell tab completion. Apply by pressing Tab.
+ * 
+ * @example
+ * User types: "wat|" (cursor at end)
+ * TabCompletion: { original: "wat", completion: "water", range: { start: 0, end: 3 } }
+ * Result after Tab: "water|"
+ */
+export interface TabCompletion {
+  /**
+   * The original text that was matched.
+   */
+  original: string;
+
+  /**
+   * The completed text to insert.
+   */
+  completion: string;
+
+  /**
+   * The range in the query to replace.
+   */
+  range: {
+    /** Start position (inclusive) */
+    start: number;
+    /** End position (exclusive) */
+    end: number;
+  };
+
+  /**
+   * Match score (0-1, higher is better).
+   */
+  score: number;
+
+  /**
+   * What type of thing was matched.
+   */
+  matchType: "field" | "operator" | "value" | "unit";
+
+  /**
+   * Additional context about the match.
+   */
+  context?: {
+    /** For value matches, which field it belongs to */
+    fieldKey?: string;
+    /** For operator matches, the operator ID */
+    operatorId?: string;
+  };
+}
+
+
+// ============================================================================
 // SUGGESTION RESULT
 // ============================================================================
 
@@ -72,6 +130,17 @@ export interface FilterSuggestion {
 
   /** Unparsed remaining text */
   remaining?: string;
+
+  /**
+   * Tab completion for this suggestion.
+   * 
+   * Shows what text edit would happen if the user presses Tab
+   * while this suggestion is highlighted. Based on what this
+   * suggestion matched in the query.
+   * 
+   * Only present when `enableAutocomplete` is true in config.
+   */
+  tabCompletion?: TabCompletion;
 
   /** Additional metadata */
   metadata?: Record<string, unknown>;

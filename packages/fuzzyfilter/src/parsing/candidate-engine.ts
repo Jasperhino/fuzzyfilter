@@ -230,13 +230,16 @@ export function createCandidateEngine(
     chunking: Chunking
   ): CandidateSuggestion {
     // Check if query matches field/operator labels
-    const { fieldMatchScore, operatorMatchScore, matchedChunks } = matchFieldAndOperator(
+    const { fieldMatchScore, operatorMatchScore, matchedChunks, fieldOperatorMatches } = matchFieldAndOperator(
       candidate,
       chunking
     );
 
     // Fill arguments from chunks (excluding already-matched field/operator chunks)
     const filling = fillArguments(candidate, query, chunking, matchedChunks);
+    
+    // Prepend field/operator matches to the matches array
+    filling.matches = [...fieldOperatorMatches, ...filling.matches];
 
     // Calculate scores
     const coverage = filling.coverage;
@@ -329,25 +332,35 @@ export function createCandidateEngine(
 
   /**
    * Match field and operator labels against query chunks.
-   * Returns scores (0-1) and which chunks were used for matching.
+   * Returns scores (0-1), which chunks were used, and the actual matches for display.
    */
   function matchFieldAndOperator(
     candidate: Candidate,
     chunking: Chunking
-  ): { fieldMatchScore: number; operatorMatchScore: number; matchedChunks: Set<number> } {
+  ): { 
+    fieldMatchScore: number; 
+    operatorMatchScore: number; 
+    matchedChunks: Set<number>;
+    fieldOperatorMatches: ParseMatch[];
+  } {
     const matchedChunks = new Set<number>();
+    const fieldOperatorMatches: ParseMatch[] = [];
     let fieldMatchScore = 0;
     let operatorMatchScore = 0;
+    let fieldMatchChunk: { idx: number; text: string; start: number; end: number; resolvedTo: string } | null = null;
+    let operatorMatchChunk: { idx: number; text: string; start: number; end: number; resolvedTo: string } | null = null;
 
     // Get field label and aliases
     const fieldLabel = deps.getFieldLabel(candidate.fieldKey);
     const fieldAliases = deps.getFieldAliases?.(candidate.fieldSchema.labelKey) ?? [];
     const fieldLabels = [fieldLabel, ...fieldAliases].map(l => l.toLowerCase());
+    const primaryFieldLabel = fieldLabel; // Keep original case for display
 
     // Get operator label and aliases
     const operatorLabel = deps.getOperatorLabel(candidate.overload.i18nKey);
     const operatorAliases = deps.getOperatorAliases?.(candidate.overload.i18nKey) ?? [];
     const operatorLabels = [operatorLabel, ...operatorAliases].map(l => l.toLowerCase());
+    const primaryOperatorLabel = operatorLabel;
 
     // Try to match field label against chunks
     for (let i = 0; i < chunking.chunks.length; i++) {
@@ -357,35 +370,34 @@ export function createCandidateEngine(
       // Check field match
       if (!matchedChunks.has(i) && fieldMatchScore < 0.5) {
         for (const label of fieldLabels) {
+          let score = 0;
           // Exact match
           if (chunkLower === label) {
-            fieldMatchScore = 1.0;
-            matchedChunks.add(i);
-            break;
+            score = 1.0;
           }
           // Prefix match
-          if (label.startsWith(chunkLower) && chunkLower.length >= 3) {
-            const score = chunkLower.length / label.length;
-            if (score > fieldMatchScore) {
-              fieldMatchScore = score;
-              matchedChunks.add(i);
-            }
-            break;
+          else if (label.startsWith(chunkLower) && chunkLower.length >= 3) {
+            score = chunkLower.length / label.length;
           }
           // Contains match
-          if (label.includes(chunkLower) && chunkLower.length >= 3) {
-            const score = 0.7 * chunkLower.length / label.length;
-            if (score > fieldMatchScore) {
-              fieldMatchScore = score;
-              matchedChunks.add(i);
-            }
-            break;
+          else if (label.includes(chunkLower) && chunkLower.length >= 3) {
+            score = 0.7 * chunkLower.length / label.length;
           }
           // Fuzzy match (edit distance) for typos like "crated" → "created"
-          const fuzzyScore = fuzzyMatchScore(chunkLower, label);
-          if (fuzzyScore > fieldMatchScore) {
-            fieldMatchScore = fuzzyScore;
+          else {
+            score = fuzzyMatchScore(chunkLower, label);
+          }
+
+          if (score > fieldMatchScore) {
+            fieldMatchScore = score;
             matchedChunks.add(i);
+            fieldMatchChunk = {
+              idx: i,
+              text: chunk.text,
+              start: chunk.start,
+              end: chunk.end,
+              resolvedTo: primaryFieldLabel,
+            };
           }
         }
       }
@@ -393,41 +405,64 @@ export function createCandidateEngine(
       // Check operator match
       if (!matchedChunks.has(i) && operatorMatchScore < 0.5) {
         for (const label of operatorLabels) {
+          let score = 0;
           // Exact match
           if (chunkLower === label) {
-            operatorMatchScore = 1.0;
-            matchedChunks.add(i);
-            break;
+            score = 1.0;
           }
           // Prefix match
-          if (label.startsWith(chunkLower) && chunkLower.length >= 3) {
-            const score = chunkLower.length / label.length;
-            if (score > operatorMatchScore) {
-              operatorMatchScore = score;
-              matchedChunks.add(i);
-            }
-            break;
+          else if (label.startsWith(chunkLower) && chunkLower.length >= 3) {
+            score = chunkLower.length / label.length;
           }
           // Contains match
-          if (label.includes(chunkLower) && chunkLower.length >= 3) {
-            const score = 0.7 * chunkLower.length / label.length;
-            if (score > operatorMatchScore) {
-              operatorMatchScore = score;
-              matchedChunks.add(i);
-            }
-            break;
+          else if (label.includes(chunkLower) && chunkLower.length >= 3) {
+            score = 0.7 * chunkLower.length / label.length;
           }
           // Fuzzy match (edit distance) for typos like "aftr" → "after"
-          const fuzzyScore = fuzzyMatchScore(chunkLower, label);
-          if (fuzzyScore > operatorMatchScore) {
-            operatorMatchScore = fuzzyScore;
+          else {
+            score = fuzzyMatchScore(chunkLower, label);
+          }
+
+          if (score > operatorMatchScore) {
+            operatorMatchScore = score;
             matchedChunks.add(i);
+            operatorMatchChunk = {
+              idx: i,
+              text: chunk.text,
+              start: chunk.start,
+              end: chunk.end,
+              resolvedTo: primaryOperatorLabel,
+            };
           }
         }
       }
     }
 
-    return { fieldMatchScore, operatorMatchScore, matchedChunks };
+    // Add field match to matches array if found
+    if (fieldMatchChunk && fieldMatchScore > 0) {
+      fieldOperatorMatches.push({
+        text: fieldMatchChunk.text,
+        resolvedTo: fieldMatchChunk.resolvedTo,
+        score: fieldMatchScore,
+        role: "field",
+        start: fieldMatchChunk.start,
+        end: fieldMatchChunk.end,
+      });
+    }
+
+    // Add operator match to matches array if found
+    if (operatorMatchChunk && operatorMatchScore > 0) {
+      fieldOperatorMatches.push({
+        text: operatorMatchChunk.text,
+        resolvedTo: operatorMatchChunk.resolvedTo,
+        score: operatorMatchScore,
+        role: "operator",
+        start: operatorMatchChunk.start,
+        end: operatorMatchChunk.end,
+      });
+    }
+
+    return { fieldMatchScore, operatorMatchScore, matchedChunks, fieldOperatorMatches };
   }
 
   /**
@@ -771,6 +806,7 @@ export function createCandidateEngine(
 
   /**
    * Try to parse an argument using its parser.
+   * For date-like parsers, tries combining consecutive unused chunks.
    */
   function tryParseArgumentType(
     arg: OperatorArgument,
@@ -784,6 +820,63 @@ export function createCandidateEngine(
     const matches: ParseMatch[] = [];
     const usedIdxs: number[] = [];
 
+    // For date-like arguments, try multi-chunk combinations first
+    const isDateLike = arg.argumentSchemaKey === "date" || arg.argumentSchemaKey === "timeframe";
+    
+    if (isDateLike) {
+      // Try combining consecutive unused chunks (e.g., "last friday" from ["last", "friday"])
+      const unusedChunkInfos: Array<{ idx: number; text: string; start: number; end: number }> = [];
+      for (let i = 0; i < chunking.chunks.length; i++) {
+        if (!usedIndexes.has(i)) {
+          const chunk = chunking.chunks[i]!;
+          unusedChunkInfos.push({ idx: i, text: chunk.text, start: chunk.start, end: chunk.end });
+        }
+      }
+
+      // Try different window sizes starting from larger combinations
+      for (let windowSize = Math.min(4, unusedChunkInfos.length); windowSize >= 2; windowSize--) {
+        for (let start = 0; start <= unusedChunkInfos.length - windowSize; start++) {
+          const windowChunks = unusedChunkInfos.slice(start, start + windowSize);
+          const combinedText = windowChunks.map(c => c.text).join(" ");
+          
+          const parseResults = parser.parse(combinedText, deps.unitRegistry, {});
+          
+          if (parseResults.length > 0) {
+            const best = parseResults[0]!;
+            const windowIdxs = windowChunks.map(c => c.idx);
+            const startPos = windowChunks[0]!.start;
+            const endPos = windowChunks[windowChunks.length - 1]!.end;
+            
+            // Format resolvedTo nicely for dates
+            let resolvedTo = String(best.value);
+            if (best.value instanceof Date) {
+              resolvedTo = best.value.toDateString();
+            }
+            
+            matches.push({
+              text: combinedText,
+              resolvedTo,
+              score: best.score,
+              role: "value",
+              start: startPos,
+              end: endPos,
+            });
+            
+            // Fix parsedValue positions
+            const parsedValue: ParsedValue<unknown> = {
+              ...best,
+              rawText: combinedText,
+              start: startPos,
+              end: endPos,
+            };
+            
+            return { value: best.value, matches, parsedValue, usedIndexes: windowIdxs };
+          }
+        }
+      }
+    }
+
+    // Single chunk parsing (for non-date types or if multi-chunk failed)
     for (let i = 0; i < chunking.chunks.length; i++) {
       if (usedIndexes.has(i)) continue;
 
@@ -792,16 +885,32 @@ export function createCandidateEngine(
 
       if (parseResults.length > 0) {
         const best = parseResults[0]!;
+        
+        // Format resolvedTo nicely for dates
+        let resolvedTo = String(best.value);
+        if (best.value instanceof Date) {
+          resolvedTo = best.value.toDateString();
+        }
+        
         matches.push({
           text: chunk.text,
-          resolvedTo: String(best.value),
+          resolvedTo,
           score: best.score,
           role: "value",
           start: chunk.start,
           end: chunk.end,
         });
         usedIdxs.push(i);
-        return { value: best.value, matches, parsedValue: best, usedIndexes: usedIdxs };
+        
+        // Fix parsedValue positions
+        const parsedValue: ParsedValue<unknown> = {
+          ...best,
+          rawText: chunk.text,
+          start: chunk.start,
+          end: chunk.end,
+        };
+        
+        return { value: best.value, matches, parsedValue, usedIndexes: usedIdxs };
       }
     }
 

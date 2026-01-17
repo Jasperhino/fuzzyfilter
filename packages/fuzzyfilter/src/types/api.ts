@@ -141,6 +141,14 @@ export interface FuzzyFilterConfig {
   debug?: boolean;
 
   /**
+   * Enable autocomplete text edits in suggestions.
+   * When true, each suggestion includes an `autocomplete` field
+   * describing how to transform the query into a complete filter.
+   * @default false
+   */
+  enableAutocomplete?: boolean;
+
+  /**
    * Enable benchmark/telemetry mode.
    * When true, operations are instrumented with timing spans.
    * @default false

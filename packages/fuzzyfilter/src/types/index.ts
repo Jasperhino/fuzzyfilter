@@ -23,6 +23,7 @@ export type {
 
 // Result types
 export type {
+  TabCompletion,
   FilterSuggestion,
   SuggestionResponse,
   CompiledFilter,
