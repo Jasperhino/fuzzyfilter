@@ -25,7 +25,7 @@ const weightField: FieldSchema<number> = {
         {
           id: "weight:gt:number",
           i18nKey: "operators.gt",
-          argumentSchema: z.object({ value: z.number() }),
+          arguments: [{ name: 'value', argumentSchemaKey: 'number' }],
           predicate: (operand, args) => operand > args.value,
         },
       ],
@@ -36,7 +36,7 @@ const weightField: FieldSchema<number> = {
         {
           id: "weight:eq:number",
           i18nKey: "operators.eq",
-          argumentSchema: z.object({ value: z.number() }),
+          arguments: [{ name: 'value', argumentSchemaKey: 'number' }],
           predicate: (operand, args) => operand === args.value,
         },
       ],
@@ -54,7 +54,7 @@ const statusField: FieldSchema<string> = {
         {
           id: "status:eq:string",
           i18nKey: "operators.eq",
-          argumentSchema: z.object({ value: z.string() }),
+          arguments: [{ name: 'value', argumentSchemaKey: 'string' }],
           predicate: (operand, args) => operand === args.value,
         },
       ],

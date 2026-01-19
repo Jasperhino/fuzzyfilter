@@ -42,14 +42,6 @@ export {
 export type {
   FuzzyFilter,
   FilterSuggestion,
-  OperatorDefinition,
-} from "@jasperhino/fuzzyfilter";
-
-// Re-export default collections for extending
-export {
-  OPERATORS,
-  defaultFuzzyFilterOperators,
-  InstanceRegistry,
 } from "@jasperhino/fuzzyfilter";
 
 

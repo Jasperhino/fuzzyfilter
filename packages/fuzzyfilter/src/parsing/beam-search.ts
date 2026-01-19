@@ -173,6 +173,10 @@ export function createBeamSearchEngine(
       }
 
       const firstChunk = chunking.chunks[0];
+      if (!firstChunk) {
+        // No chunks available - skip this beam
+        continue;
+      }
 
       // Fuzzy search for matching fields
       const fieldMatches = deps.fieldTrie.fuzzySearch(firstChunk.text, 5);
@@ -239,6 +243,10 @@ export function createBeamSearchEngine(
       }
 
       const opChunk = chunking.chunks[beam.chunkIndex];
+      if (!opChunk) {
+        // No chunk at this index - skip this beam
+        continue;
+      }
 
       // Search for operators valid for this field
       const opMatches = deps.operatorTrie.fuzzySearch(opChunk.text, 5);

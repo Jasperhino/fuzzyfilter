@@ -160,8 +160,8 @@ export interface UseFuzzyFilterReturn {
  * deleteRow(5);
  * ```
  */
-export function useFuzzyFilter<TCustom extends Record<string, any> = Record<string, never>>(
-  filter: FuzzyFilter<TCustom>,
+export function useFuzzyFilter(
+  filter: FuzzyFilter,
   options: UseFuzzyFilterOptions = {}
 ): UseFuzzyFilterReturn {
   const { debounceMs = 150, initialQuery = "", onApply, filterContext } = options;
@@ -213,6 +213,16 @@ export function useFuzzyFilter<TCustom extends Record<string, any> = Record<stri
       // Pass filter context for stacked filter counts
       const context = filterContext?.value ?? undefined;
       const response = await filter.suggest(q, undefined, context);
+      
+      // Log the fuzzyfilter result with suggestions to console
+      console.log('[FuzzyFilter] Suggestion Response:', {
+        query: response.query,
+        cursorPosition: response.cursorPosition,
+        responseTimeMs: response.responseTimeMs,
+        suggestionsCount: response.suggestions.length,
+        suggestions: response.suggestions,
+      });
+      
       suggestions.value = response.suggestions;
       suggestionsQuery.value = q;
       selectedIndex.value = 0;
@@ -276,7 +286,16 @@ export function useFuzzyFilter<TCustom extends Record<string, any> = Record<stri
   function applySuggestion() {
     const selected = suggestions.value[selectedIndex.value];
     if (selected) {
-      query.value = selected.completionText;
+      // Use tabCompletion if available, otherwise use label
+      if (selected.tabCompletion) {
+        const completion = selected.tabCompletion;
+        const before = query.value.slice(0, completion.range.start);
+        const after = query.value.slice(completion.range.end);
+        query.value = before + completion.completion + after;
+      } else {
+        // Fallback: use label as completion text
+        query.value = selected.label;
+      }
       suggestions.value = [];
       onApply?.(selected);
     }
@@ -324,7 +343,7 @@ export function useFuzzyFilter<TCustom extends Record<string, any> = Record<stri
 
     try {
       await filter.indexDataAsync(data, {
-        onProgress: (progress) => {
+        onProgress: (progress: IndexProgress) => {
           indexProgress.value = progress;
         },
       });

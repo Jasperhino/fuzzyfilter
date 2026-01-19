@@ -1,11 +1,9 @@
 /**
- * Helper functions for working with OperatorDefinition
+ * Helper functions for working with operators
  * 
- * These derive properties that aren't directly on OperatorDefinition
+ * These derive properties that aren't directly on operator configs
  * but can be computed from patterns.
  */
-
-import type { OperatorDefinition } from "@jasperhino/fuzzyfilter";
 
 /**
  * Check if an operator is variadic (accepts multiple arguments).
@@ -13,10 +11,10 @@ import type { OperatorDefinition } from "@jasperhino/fuzzyfilter";
  * - A variadic placeholder ({...} or {name...})
  * - 2+ argument placeholders
  */
-export function isOperatorVariadic(op: OperatorDefinition | undefined): boolean {
+export function isOperatorVariadic(op: { patterns?: string[] } | undefined): boolean {
   if (!op || !op.patterns) return false;
   
-  return op.patterns.some(p => {
+  return op.patterns.some((p: string) => {
     // Check for variadic placeholder syntax: {...} or {name...}
     if (/\{\w*\.\.\.\}/.test(p)) return true;
     // Check for 2+ argument placeholders
@@ -28,17 +26,17 @@ export function isOperatorVariadic(op: OperatorDefinition | undefined): boolean 
  * Check if an operator requires an argument.
  * Derived from patterns - checks if any pattern has argument placeholders.
  */
-export function operatorRequiresArgument(op: OperatorDefinition | undefined): boolean {
+export function operatorRequiresArgument(op: { patterns?: string[] } | undefined): boolean {
   if (!op) return false;
-  return op.patterns?.some(p => /\{[^}]*\}/.test(p)) ?? false;
+  return op.patterns?.some((p: string) => /\{[^}]*\}/.test(p)) ?? false;
 }
 
 /**
  * Get minimum number of arguments for an operator.
  * Derived from the pattern with the fewest argument placeholders.
  */
-export function getMinArguments(op: OperatorDefinition | undefined): number {
+export function getMinArguments(op: { patterns?: string[] } | undefined): number {
   if (!op || !op.patterns) return 0;
-  const counts = op.patterns.map(p => (p.match(/\{[^}]+\}/g) || []).length);
+  const counts = op.patterns.map((p: string) => (p.match(/\{[^}]+\}/g) || []).length);
   return Math.min(...counts);
 }

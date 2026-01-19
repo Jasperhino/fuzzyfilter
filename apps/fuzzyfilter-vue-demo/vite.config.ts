@@ -51,7 +51,7 @@ export default defineConfig({
   },
   // Pre-bundle fuzzyfilter dependencies
   optimizeDeps: {
-    include: ["fuzzysort", "chrono-node"],
+    include: ["fuzzysort", "chrono-node", "roaring-wasm"],
     exclude: ["fuzzyfilter", "fuzzyfilter-vue", "@fuzzyfilter/sample-data", "@fuzzyfilter/i18n-locales", "@fuzzyfilter/axiom-exporter"],
   },
 })

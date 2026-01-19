@@ -142,6 +142,12 @@ export interface FilterSuggestion {
    */
   tabCompletion?: TabCompletion;
 
+  /**
+   * Resolved argument values by name.
+   * Directly usable for compilation or display.
+   */
+  args?: Record<string, any>;
+
   /** Additional metadata */
   metadata?: Record<string, unknown>;
 }

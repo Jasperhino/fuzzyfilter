@@ -17,6 +17,7 @@ import {
   type Amount,
   type Timeframe,
   type MaterialContainer,
+  type MaterialType,
 } from "./config/domain-models";
 import { DateParser, TimeframeParser, AmountParser, CountParser, PercentageParser, MaterialTypeParser, ProcessingTypeParser } from "./config/domain-parsers";
 import { loadSampleData } from "./config/load-sample-data";
@@ -196,11 +197,11 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'timeframe:overlaps:timeframe',
             i18nKey: 'operators.overlaps',
-            argumentSchema: z.object({ start: DateSchema, end: DateSchema }),
+            arguments: [{ name: 'timeframe', argumentSchemaKey: 'timeframe' }],
             // Two ranges [A, B] and [C, D] overlap if A <= D && C <= B
-            predicate: (operand: Timeframe, { start, end }) =>
-              operand.start.getTime() <= end.getTime() &&
-              start.getTime() <= operand.end.getTime(),
+            predicate: (operand: Timeframe, { timeframe }) =>
+              operand.start.getTime() <= timeframe.end.getTime() &&
+              timeframe.start.getTime() <= operand.end.getTime(),
           }],
         },
         {
@@ -208,11 +209,11 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'timeframe:within:timeframe',
             i18nKey: 'operators.within',
-            argumentSchema: z.object({ start: DateSchema, end: DateSchema }),
+            arguments: [{ name: 'timeframe', argumentSchemaKey: 'timeframe' }],
             // Operand is fully contained within the argument range
-            predicate: (operand: Timeframe, { start, end }) =>
-              operand.start.getTime() >= start.getTime() &&
-              operand.end.getTime() <= end.getTime(),
+            predicate: (operand: Timeframe, { timeframe }) =>
+              operand.start.getTime() >= timeframe.start.getTime() &&
+              operand.end.getTime() <= timeframe.end.getTime(),
           }],
         },
         {
@@ -220,11 +221,11 @@ const ff = new FuzzyFilter({
           overloads: [{
             id: 'timeframe:contains:timeframe',
             i18nKey: 'operators.timeframe.contains',
-            argumentSchema: z.object({ start: DateSchema, end: DateSchema }),
+            arguments: [{ name: 'timeframe', argumentSchemaKey: 'timeframe' }],
             // Operand fully contains the argument range
-            predicate: (operand: Timeframe, { start, end }) =>
-              operand.start.getTime() <= start.getTime() &&
-              operand.end.getTime() >= end.getTime(),
+            predicate: (operand: Timeframe, { timeframe }) =>
+              operand.start.getTime() <= timeframe.start.getTime() &&
+              operand.end.getTime() >= timeframe.end.getTime(),
           }],
         },
       ],
@@ -240,7 +241,7 @@ const ff = new FuzzyFilter({
             i18nKey: 'operators.contains',
             arguments: [{ name: 'materialTypes', argumentSchemaKey: 'materialType', isArray: true }],
             predicate: (containers: MaterialContainer[], { materialTypes }) =>
-              materialTypes.every((mt: z.infer<typeof MaterialTypeSchema>) =>
+              materialTypes.every((mt: MaterialType) =>
                 containers.some(c => c.materialName === mt)
               ),
           }],
@@ -274,6 +275,8 @@ const ff = new FuzzyFilter({
                 { name: 'materialTypes', argumentSchemaKey: 'materialType', isArray: true },
               ],
               predicate: (containers: MaterialContainer[], { percentage, materialTypes }) => {
+                console.log('percentage', percentage);
+                console.log('materialTypes', materialTypes);
                 const totalWeight = containers.reduce((sum, c) => sum + c.weightInKg, 0);
                 if (totalWeight === 0) return false;
                 const materialWeight = containers

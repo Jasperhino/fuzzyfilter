@@ -1,9 +1,9 @@
 /**
  * French locale translations for FuzzyFilter
  */
-import type { FuzzyFilterTranslations } from "../../fuzzyfilter/src/types/i18n.ts";
+import type { FieldCentricTranslations } from "../../fuzzyfilter/src/types/field-centric.ts";
 
-export const fr: FuzzyFilterTranslations = {
+export const fr = {
   operators: {
     eq: {
       label: "égal à",

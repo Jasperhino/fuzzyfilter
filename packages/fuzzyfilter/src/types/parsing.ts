@@ -3,9 +3,22 @@
  * Tokenization and classification of user input.
  */
 
-import type { ColumnId } from "./core.ts";
-import type { OperatorKey } from "../operators.ts";
-import type { AnyColumnDefinition } from "./schema.ts";
+import type { FieldSchema } from "./field-centric.ts";
+
+/**
+ * Unique identifier for a field/column (the field key)
+ */
+export type ColumnId = string;
+
+/**
+ * Unique identifier for an operator (the operatorId)
+ */
+export type OperatorKey = string;
+
+/**
+ * Any column/field definition
+ */
+export type AnyColumnDefinition = FieldSchema<unknown>;
 
 // ============================================================================
 // TOKENS

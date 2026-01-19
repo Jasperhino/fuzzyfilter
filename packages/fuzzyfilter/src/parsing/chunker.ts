@@ -135,6 +135,7 @@ function classTransitionChunking(input: string): Chunking {
     if (foundMultiOp) continue;
 
     const char = input[i];
+    if (char === undefined) continue;
     const charClass = classifyChar(char);
 
     // Skip whitespace
@@ -246,14 +247,16 @@ function applyPlausibilityHeuristics(chunking: Chunking): Chunking {
   }
 
   // Penalty: Starts with operator
-  if (chunks.length > 0 && chunks[0].type === "operator") {
+  if (chunks.length > 0 && chunks[0]?.type === "operator") {
     plausibility *= 0.8;
   }
 
   // Penalty: Consecutive operators
   let consecutiveOps = 0;
   for (let i = 1; i < chunks.length; i++) {
-    if (chunks[i].type === "operator" && chunks[i - 1].type === "operator") {
+    const current = chunks[i];
+    const previous = chunks[i - 1];
+    if (current?.type === "operator" && previous?.type === "operator") {
       consecutiveOps++;
     }
   }
@@ -264,15 +267,17 @@ function applyPlausibilityHeuristics(chunking: Chunking): Chunking {
   // Bonus: Looks like field-operator-args pattern
   if (
     chunks.length >= 3 &&
-    chunks[0].type === "word" &&
-    chunks[1].type === "operator"
+    chunks[0]?.type === "word" &&
+    chunks[1]?.type === "operator"
   ) {
     plausibility *= 1.05;
   }
 
   // Bonus: Has clear number-unit pair
   for (let i = 0; i < chunks.length - 1; i++) {
-    if (chunks[i].type === "number" && chunks[i + 1].type === "word") {
+    const current = chunks[i];
+    const next = chunks[i + 1];
+    if (current?.type === "number" && next?.type === "word") {
       plausibility *= 1.02;
       break;
     }
@@ -341,5 +346,10 @@ export function generateChunkings(input: string): Chunking[] {
  */
 export function chunkInput(input: string): Chunking {
   const chunkings = generateChunkings(input);
-  return chunkings[0];
+  const best = chunkings[0];
+  if (!best) {
+    // Fallback: return empty chunking if no chunkings were generated
+    return { chunks: [], plausibility: 0, strategy: "none" };
+  }
+  return best;
 }

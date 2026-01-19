@@ -16,7 +16,20 @@
  * Coverage: 3/3 = 100% │ Final Score: 1.0
  */
 import { computed } from "vue"
-import { tokenize, type QueryMatch, type FilterSuggestion, type TokenScoreInfo } from "@jasperhino/fuzzyfilter"
+import { tokenize, type FilterSuggestion } from "@jasperhino/fuzzyfilter"
+
+// Local type definitions for components not yet exported from fuzzyfilter
+interface QueryMatch {
+  inputRange: { start: number; end: number };
+  matchType: "column" | "operator" | "value" | null;
+  [key: string]: any;
+}
+
+interface TokenScoreInfo {
+  tokenIndex: number;
+  weightedContribution: number;
+  fuzzyQuality: number;
+}
 
 /**
  * Represents a token segment with its match and score information
@@ -72,18 +85,26 @@ function getLabelForMatch(
 }
 
 /**
+ * Formats a score as .333 (no leading zero, 3 digits)
+ */
+function formatScore(score: number): string {
+  const s = score.toFixed(3)
+  const formatted = s.startsWith("0") ? s.substring(1) : (s.startsWith("-0") ? "-" + s.substring(2) : s)
+  return formatted
+}
+
+/**
  * Formats a score contribution for display
- * @param contribution - The weighted contribution value
- * @param isUnmatched - Whether this is an unmatched token (shows penalty)
- * @returns Formatted string like "+0.40" or "-0.20"
  */
 function formatScoreContribution(contribution: number, isUnmatched: boolean): string {
+  const formatted = formatScore(contribution)
+  
   if (isUnmatched) {
     // Show coverage penalty
-    return contribution.toFixed(2)
+    return formatted
   }
   // Show positive contribution
-  return `+${contribution.toFixed(2)}`
+  return `+${formatted}`
 }
 
 /**
@@ -121,7 +142,11 @@ function getTokenizedSegments(
     if (a.inputRange.start !== b.inputRange.start) {
       return a.inputRange.start - b.inputRange.start
     }
-    return matchTypePriority[a.matchType] - matchTypePriority[b.matchType]
+    const getPriority = (matchType: "column" | "operator" | "value" | null): number => {
+      if (matchType === null) return 999
+      return matchTypePriority[matchType]
+    }
+    return getPriority(a.matchType) - getPriority(b.matchType)
   })
 
   // Create a map of position ranges to matches for quick lookup
@@ -278,10 +303,10 @@ const visibleSegments = computed(() => {
 })
 
 /**
- * Score explanation from suggestion
+ * Score breakdown from suggestion
  */
-const scoreExplanation = computed(() => {
-  return props.suggestion?.scoreExplanation
+const scoreBreakdown = computed(() => {
+  return props.suggestion?.scoreBreakdown
 })
 
 /**
@@ -302,9 +327,12 @@ function getColorClass(matchType: "column" | "operator" | "value" | null): strin
 /**
  * Get score info for a token by its index
  */
-function getTokenScoreInfo(tokenIndex: number | undefined): TokenScoreInfo | undefined {
-  if (tokenIndex === undefined || !scoreExplanation.value) return undefined
-  return scoreExplanation.value.tokenScores.find(ts => ts.tokenIndex === tokenIndex)
+function getTokenScoreInfo(tokenIndex: number | undefined): any {
+  // Note: TokenScoreInfo and scoreExplanation are not currently part of the FilterSuggestion API
+  // This is a placeholder for future implementation
+  if (tokenIndex === undefined || !scoreBreakdown.value) return undefined
+  // scoreBreakdown doesn't have tokenScores, so return undefined for now
+  return undefined
 }
 
 /**
@@ -384,7 +412,7 @@ function getScoreDisplay(segment: TokenSegment): { text: string; class: string; 
         </div>
 
         <!-- Score row -->
-        <template v-if="scoreExplanation">
+        <template v-if="scoreBreakdown">
           <div class="contents">
             <template v-for="(segment, index) in visibleSegments" :key="`score-${index}`">
               <!-- Empty space for separator alignment -->
@@ -411,19 +439,23 @@ function getScoreDisplay(segment: TokenSegment): { text: string; class: string; 
 
       <!-- Summary row -->
       <div 
-        v-if="scoreExplanation" 
+        v-if="scoreBreakdown" 
         class="flex items-center justify-start gap-2 text-xs text-muted-foreground/60 mt-1 pt-1 border-t border-border/30"
       >
         <span>
-          Coverage: {{ scoreExplanation.explainedTokens }}/{{ scoreExplanation.totalTokens }} = {{ (scoreExplanation.coverageRatio * 100).toFixed(0) }}%
+          Field: {{ formatScore(scoreBreakdown.field) }}
         </span>
         <span class="text-muted-foreground/30">│</span>
         <span>
-          Components: {{ scoreExplanation.componentSum.toFixed(2) }}
+          Operator: {{ formatScore(scoreBreakdown.operator) }}
+        </span>
+        <span class="text-muted-foreground/30">│</span>
+        <span>
+          Value: {{ formatScore(scoreBreakdown.valueParse) }}
         </span>
         <span class="text-muted-foreground/30">│</span>
         <span class="font-medium text-foreground/70">
-          Score: {{ scoreExplanation.finalScore.toFixed(2) }}
+          Final: {{ formatScore(scoreBreakdown.final) }}
         </span>
       </div>
     </template>

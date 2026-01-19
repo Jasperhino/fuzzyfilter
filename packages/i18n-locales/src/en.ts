@@ -5,9 +5,9 @@
  * These are referenced in operator definitions using `t(operators.eq)` syntax.
  * Each key can map to an array of alternative phrasings.
  */
-import type { FuzzyFilterTranslations } from "../../fuzzyfilter/src/types/i18n.ts";
+import type { FieldCentricTranslations } from "../../fuzzyfilter/src/types/field-centric.ts";
 
-export const en: FuzzyFilterTranslations = {
+export const en = {
   operators: {
     eq: {
       label: "equals",

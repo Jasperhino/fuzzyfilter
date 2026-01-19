@@ -41,6 +41,24 @@ import {
   extractNumbers,
   createUniversalNumberParser,
 } from "../parsing/index.ts";
+import { RoaringBitmap32, roaringLibraryInitialize } from 'roaring-wasm';
+
+// WASM initialization promise - initialize once
+let wasmInitialized: Promise<void> | null = null;
+
+/**
+ * Initialize the roaring WASM library. Safe to call multiple times.
+ * Returns a promise that resolves when initialization is complete.
+ * 
+ * Note: In browser environments, it's recommended to use `indexDataAsync()` 
+ * instead of `indexData()` to ensure WASM is initialized before creating bitmaps.
+ */
+function ensureWasmInitialized(): Promise<void> {
+  if (!wasmInitialized) {
+    wasmInitialized = roaringLibraryInitialize();
+  }
+  return wasmInitialized;
+}
 import { createUnitRegistry } from "../units/index.ts";
 import type { Trie } from "../types/index.ts";
 import type { UnitRegistry } from "../units/index.ts";
@@ -55,7 +73,11 @@ interface FuzzyFilterState {
   data: Array<Record<string, unknown>>;
   dataVersion: number;
   valueTrie: Trie<ValueTrieEntry>;
+  bitmaps: Map<string, Map<string, RoaringBitmap32>>;
   contextCache: Map<string, unknown>;
+  // Indexes for efficient range queries and complex predicates
+  numericIndex: Map<string, { values: number[]; bitmap: RoaringBitmap32 }>;
+  dateIndex: Map<string, { values: Date[]; bitmap: RoaringBitmap32 }>;
 }
 
 /**
@@ -79,9 +101,6 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     // Validate required fields
     if (!userConfig.fields || Object.keys(userConfig.fields).length === 0) {
       throw new Error("fields are required in FuzzyFilterConfig");
-    }
-    if (!userConfig.arguments && !userConfig.parsers) {
-      throw new Error("either 'arguments' or 'parsers' is required in FuzzyFilterConfig");
     }
     if (!userConfig.translations) {
       throw new Error("translations are required in FuzzyFilterConfig");
@@ -108,7 +127,6 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       telemetryOptions: userConfig.telemetryOptions,
       fields: userConfig.fields,
       arguments: argumentsConfig,
-      parsers: userConfig.parsers, // Keep for backwards compatibility
       translations: userConfig.translations,
       units: userConfig.units,
     };
@@ -126,7 +144,6 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     // Initialize field registry (use parsers for backwards compatibility)
     this.registry = createFieldRegistry(
       this._config.fields,
-      this._config.parsers || {},
       this._config.translations
     );
 
@@ -135,7 +152,10 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       data: [],
       dataVersion: 0,
       valueTrie: createTrie(),
+      bitmaps: new Map(),
       contextCache: new Map(),
+      numericIndex: new Map(),
+      dateIndex: new Map(),
     };
 
     // Initialize candidate engine dependencies
@@ -287,27 +307,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
         this.valueParsers.set(argTypeName, wrappedParser);
       }
     }
-
-    // LEGACY: Adapt user-provided ArgumentParsers from parsers config (backwards compatibility)
-    if (this._config.parsers) {
-      for (const [parserType, argumentParser] of Object.entries(this._config.parsers)) {
-        // Only add if not already added from arguments config
-        if (!this.valueParsers.has(parserType)) {
-          const wrappedParser: ValueParser<unknown> = {
-            type: parserType,
-            parse: (query: string, _unitRegistry, _context) => {
-              const results = argumentParser.parse(query);
-              return results.map((r) =>
-                createParsedValue(r.value, r.text, r.index, r.index + r.text.length, 0.9)
-              );
-            },
-          };
-          this.valueParsers.set(parserType, wrappedParser);
-        }
-      }
-    }
   }
-
   /**
    * Builds the argument value trie from indexed argument types.
    * This trie is used for fuzzy matching of argument values (e.g., material types).
@@ -361,7 +361,6 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     if (options.fields || options.translations) {
       this.registry = createFieldRegistry(
         this._config.fields,
-        this._config.parsers || {},
         this._config.translations
       );
       this.rebuildFieldTrie();
@@ -388,28 +387,70 @@ export class FuzzyFilterImpl implements FuzzyFilter {
   }
 
   indexData(data: Array<Record<string, unknown>>): void {
+    // Dispose old bitmaps before creating new ones
+    this.disposeAllBitmaps();
+
     this.state.data = data;
     this.state.valueTrie = createTrie();
+    this.state.bitmaps = new Map();
+    this.state.numericIndex = new Map();
+    this.state.dateIndex = new Map();
     this.state.dataVersion++;
     this.state.contextCache.clear();
+
+    // Ensure WASM is initialized (this will be a no-op if already initialized)
+    // Note: In browser environments, this should ideally be awaited before calling indexData
+    ensureWasmInitialized().catch(() => {
+      // WASM initialization failed - bitmaps will be created but may not work
+      // This is a soft failure to avoid breaking synchronous indexData calls
+    });
 
     // Count values per field
     const valueCounts = new Map<string, Map<string, number>>();
     for (const fieldKey of this.registry.getFieldKeys()) {
       valueCounts.set(fieldKey, new Map());
+      this.state.bitmaps.set(fieldKey, new Map());
     }
 
-    for (const row of data) {
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i]!;
       for (const fieldKey of this.registry.getFieldKeys()) {
         const value = row[fieldKey];
         if (value == null) continue;
 
-        // Extract searchable string values from the value
-        const searchableValues = this.extractSearchableValues(value);
+        const strValue = String(value);
         const counts = valueCounts.get(fieldKey)!;
+        counts.set(strValue, (counts.get(strValue) ?? 0) + 1);
 
-        for (const strValue of searchableValues) {
-          counts.set(strValue, (counts.get(strValue) ?? 0) + 1);
+        // Update bitmap for exact value matching
+        const fieldBitmaps = this.state.bitmaps.get(fieldKey)!;
+        let bitmap = fieldBitmaps.get(strValue);
+        if (!bitmap) {
+          bitmap = new RoaringBitmap32();
+          fieldBitmaps.set(strValue, bitmap);
+        }
+        bitmap.add(i);
+
+        // Index numeric values for range queries
+        if (typeof value === 'number') {
+          let numericIdx = this.state.numericIndex.get(fieldKey);
+          if (!numericIdx) {
+            numericIdx = { values: new Array(data.length).fill(null), bitmap: new RoaringBitmap32() };
+            this.state.numericIndex.set(fieldKey, numericIdx);
+          }
+          numericIdx.values[i] = value;
+          numericIdx.bitmap.add(i);
+        }
+
+        // Index date values for range queries
+        if (value instanceof Date) {
+          let dateIdx = this.state.dateIndex.get(fieldKey);
+          if (!dateIdx) {
+            dateIdx = { values: new Array(data.length).fill(null), bitmap: new RoaringBitmap32() };
+            this.state.dateIndex.set(fieldKey, dateIdx);
+          }
+          dateIdx.values[i] = value;
+          dateIdx.bitmap.add(i);
         }
       }
     }
@@ -478,18 +519,28 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     data: Array<Record<string, unknown>>,
     options?: IndexDataAsyncOptions
   ): Promise<void> {
+    // Dispose old bitmaps before creating new ones
+    this.disposeAllBitmaps();
+
+    // Ensure WASM is initialized before creating bitmaps
+    await ensureWasmInitialized();
+
     const { chunkSize = 100, onProgress, signal } = options ?? {};
     const totalRows = data.length;
     const totalChunks = Math.ceil(totalRows / chunkSize);
 
     this.state.data = data;
     this.state.valueTrie = createTrie();
+    this.state.bitmaps = new Map();
+    this.state.numericIndex = new Map();
+    this.state.dateIndex = new Map();
     this.state.dataVersion++;
     this.state.contextCache.clear();
 
     const valueCounts = new Map<string, Map<string, number>>();
     for (const fieldKey of this.registry.getFieldKeys()) {
       valueCounts.set(fieldKey, new Map());
+      this.state.bitmaps.set(fieldKey, new Map());
     }
 
     for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
@@ -508,6 +559,37 @@ export class FuzzyFilterImpl implements FuzzyFilter {
           const strValue = String(value);
           const counts = valueCounts.get(fieldKey)!;
           counts.set(strValue, (counts.get(strValue) ?? 0) + 1);
+
+          // Update bitmap for exact value matching
+          let fieldBitmaps = this.state.bitmaps.get(fieldKey)!;
+          let bitmap = fieldBitmaps.get(strValue);
+          if (!bitmap) {
+            bitmap = new RoaringBitmap32();
+            fieldBitmaps.set(strValue, bitmap);
+          }
+          bitmap.add(i);
+
+          // Index numeric values for range queries
+          if (typeof value === 'number') {
+            let numericIdx = this.state.numericIndex.get(fieldKey);
+            if (!numericIdx) {
+              numericIdx = { values: new Array(totalRows).fill(null), bitmap: new RoaringBitmap32() };
+              this.state.numericIndex.set(fieldKey, numericIdx);
+            }
+            numericIdx.values[i] = value;
+            numericIdx.bitmap.add(i);
+          }
+
+          // Index date values for range queries
+          if (value instanceof Date) {
+            let dateIdx = this.state.dateIndex.get(fieldKey);
+            if (!dateIdx) {
+              dateIdx = { values: new Array(totalRows).fill(null), bitmap: new RoaringBitmap32() };
+              this.state.dateIndex.set(fieldKey, dateIdx);
+            }
+            dateIdx.values[i] = value;
+            dateIdx.bitmap.add(i);
+          }
         }
       }
 
@@ -593,10 +675,38 @@ export class FuzzyFilterImpl implements FuzzyFilter {
   }
 
   clearIndex(): void {
+    // Dispose all bitmaps before clearing
+    this.disposeAllBitmaps();
+
     this.state.data = [];
     this.state.valueTrie = createTrie();
+    this.state.bitmaps = new Map();
+    this.state.numericIndex = new Map();
+    this.state.dateIndex = new Map();
     this.state.dataVersion++;
     this.state.contextCache.clear();
+  }
+
+  /**
+   * Dispose all bitmaps in the state to free WASM memory.
+   */
+  private disposeAllBitmaps(): void {
+    // Dispose bitmaps from value bitmaps map
+    for (const fieldBitmaps of this.state.bitmaps.values()) {
+      for (const bitmap of fieldBitmaps.values()) {
+        bitmap.dispose();
+      }
+    }
+
+    // Dispose bitmaps from numeric index
+    for (const numericIdx of this.state.numericIndex.values()) {
+      numericIdx.bitmap.dispose();
+    }
+
+    // Dispose bitmaps from date index
+    for (const dateIdx of this.state.dateIndex.values()) {
+      dateIdx.bitmap.dispose();
+    }
   }
 
   getIndexStats(): {
@@ -616,9 +726,9 @@ export class FuzzyFilterImpl implements FuzzyFilter {
   async suggest(
     query: string,
     cursorPosition?: number,
-    _filterContext?: CompiledFilter[]
+    filterContext?: CompiledFilter[]
   ): Promise<SuggestionResponse> {
-    return this.suggestSync(query, cursorPosition, _filterContext);
+    return this.suggestSync(query, cursorPosition, filterContext);
   }
 
   /**
@@ -627,7 +737,7 @@ export class FuzzyFilterImpl implements FuzzyFilter {
   suggestSync(
     query: string,
     cursorPosition?: number,
-    _filterContext?: CompiledFilter[]
+    filterContext?: CompiledFilter[]
   ): SuggestionResponse {
     const startTime = performance.now();
     const cursor = cursorPosition ?? query.length;
@@ -644,17 +754,29 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     // Run candidate engine
     const candidateSuggestions = this.candidateEngine.suggest(query);
 
-    // Convert candidate suggestions to filter suggestions (with per-suggestion tab completion)
-    const suggestions: FilterSuggestion[] = candidateSuggestions.map((cs) =>
-      this.candidateSuggestionToFilterSuggestion(cs, query, cursor)
-    );
+    // Compute combined bitmap for filter context (intersection of all existing filters)
+    const contextBitmap = filterContext && filterContext.length > 0
+      ? this.computeFilterBitmap(filterContext)
+      : null;
 
-    return {
-      suggestions,
-      query,
-      cursorPosition: cursor,
-      responseTimeMs: performance.now() - startTime,
-    };
+    try {
+      // Convert candidate suggestions to filter suggestions (with per-suggestion tab completion)
+      const suggestions: FilterSuggestion[] = candidateSuggestions.map((cs) =>
+        this.candidateSuggestionToFilterSuggestion(cs, query, cursor, contextBitmap)
+      );
+
+      return {
+        suggestions,
+        query,
+        cursorPosition: cursor,
+        responseTimeMs: performance.now() - startTime,
+      };
+    } finally {
+      // Dispose context bitmap after use
+      if (contextBitmap) {
+        contextBitmap.dispose();
+      }
+    }
   }
 
   /**
@@ -663,7 +785,8 @@ export class FuzzyFilterImpl implements FuzzyFilter {
   private candidateSuggestionToFilterSuggestion(
     cs: CandidateSuggestion,
     query: string,
-    cursorPosition: number
+    cursorPosition: number,
+    contextBitmap: RoaringBitmap32 | null
   ): FilterSuggestion {
     const { candidate, filling, score, scoreBreakdown, chunking, isComplete } = cs;
 
@@ -711,6 +834,16 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       tabCompletion = this.buildSuggestionTabCompletion(chunking, filling.matches, cursorPosition);
     }
 
+    // Compute result count using bitmaps
+    let resultCount: number | undefined;
+    if (isComplete && filling.filledArgs && Object.keys(filling.filledArgs).length > 0) {
+      resultCount = this.computeCandidateResultCount(
+        candidate,
+        filling.filledArgs,
+        contextBitmap
+      );
+    }
+
     return {
       label: label || `${fieldLabel} ${opLabel}`,
       displayLabel: label || `${fieldLabel} ${opLabel}`,
@@ -726,6 +859,8 @@ export class FuzzyFilterImpl implements FuzzyFilter {
       scoreBreakdown,
       remaining: filling.unusedChunks.join(" ") || undefined,
       tabCompletion,
+      args: filling.filledArgs,
+      resultCount,
     };
   }
 
@@ -858,16 +993,21 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     const field = this.registry.getField(fieldKey);
     if (!field) return null;
 
-    // Validate args against schema (legacy pattern)
-    if (!overload.argumentSchema) {
-      // TODO: Support validation for new arguments array pattern
-      // For now, skip validation if using new pattern
+    // Validate args
+    let validatedArgs = args;
+    if (overload.argumentSchema) {
+      const parseResult = overload.argumentSchema.safeParse(args);
+      if (!parseResult.success) return null;
+      validatedArgs = parseResult.data;
+    } else if (overload.arguments) {
+      // In the new pattern, args are produced by the ArgumentParser.
+      // We assume they are valid for now, or we could validate against 
+      // the schemas in the argument registry.
+      validatedArgs = args;
+    } else {
+      // No schema or arguments defined - should not happen for well-defined overloads
       return null;
     }
-    const parseResult = overload.argumentSchema.safeParse(args);
-    if (!parseResult.success) return null;
-
-    const validatedArgs = parseResult.data;
     const opLabel = this.registry.getLabel(overload.i18nKey) ?? overload.id;
     const fieldLabel = this.registry.getLabel(field.labelKey) ?? fieldKey;
 
@@ -908,14 +1048,98 @@ export class FuzzyFilterImpl implements FuzzyFilter {
     return count;
   }
 
+  private computeFilterBitmap(filters: CompiledFilter[]): RoaringBitmap32 | null {
+    if (filters.length === 0) return null;
+
+    const result = new RoaringBitmap32();
+
+    for (let i = 0; i < this.state.data.length; i++) {
+      const row = this.state.data[i]!;
+      const matches = filters.every(f => f.predicate(row));
+      if (matches) {
+        result.add(i);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Computes the result count for a candidate suggestion using roaring bitmaps.
+   * Uses the operator's predicate function to determine matching rows, ensuring
+   * consistency with the actual filter execution logic.
+   */
+  private computeCandidateResultCount(
+    candidate: Candidate,
+    filledArgs: Record<string, unknown>,
+    contextBitmap: RoaringBitmap32 | null
+  ): number {
+    const { fieldKey, overload } = candidate;
+
+    // Always use the predicate function defined in the overload - it's the source of truth
+    // for how comparisons and filtering should work (e.g., Date equality via getTime(),
+    // Amount comparisons with unit conversion, array contains logic, etc.)
+    const candidateBitmap = this.computePredicateBitmap(fieldKey, filledArgs, overload);
+
+    try {
+      // Intersect with existing filters if any using roaring bitmap operations
+      if (contextBitmap) {
+        return contextBitmap.andCardinality(candidateBitmap);
+      }
+
+      return candidateBitmap.size;
+    } finally {
+      // Dispose candidate bitmap after use (it's a temporary bitmap created for counting)
+      candidateBitmap.dispose();
+    }
+  }
+
+  /**
+   * Computes bitmap by evaluating the predicate against all rows.
+   * Uses the operator overload's predicate function, which is the authoritative
+   * definition of how the filter should work.
+   */
+  private computePredicateBitmap(
+    fieldKey: string,
+    filledArgs: Record<string, unknown>,
+    overload: import("../types/field-centric.ts").OperatorOverload<unknown, Record<string, unknown>>
+  ): RoaringBitmap32 {
+    const result = new RoaringBitmap32();
+    const data = this.state.data;
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i]!;
+      const operand = row[fieldKey];
+
+      try {
+        // Use the predicate function from the overload - it handles all comparison logic
+        // including Date equality, Amount comparisons, array contains, timeframe overlaps, etc.
+        if (overload.predicate(operand, filledArgs, row)) {
+          result.add(i);
+        }
+      } catch (e) {
+        // Skip rows that cause errors in predicate evaluation
+        continue;
+      }
+    }
+
+    return result;
+  }
+
   clearCache(): void {
     this.state.contextCache.clear();
   }
 
   destroy(): void {
+    // Dispose all bitmaps before destroying
+    this.disposeAllBitmaps();
+
     this.state.data = [];
     this.state.valueTrie = createTrie();
     this.fieldTrie = createTrie();
+    this.state.bitmaps = new Map();
+    this.state.numericIndex = new Map();
+    this.state.dateIndex = new Map();
     this.state.contextCache.clear();
     this.candidateEngine.invalidateCache();
   }

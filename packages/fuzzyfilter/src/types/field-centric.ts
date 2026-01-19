@@ -50,7 +50,7 @@ export type PredicateFn<TOperand, TArgs extends Record<string, unknown>> = (
  * const legacyOverload: OperatorOverload<Date, { value: Date }> = {
  *   id: 'date:eq:date',
  *   i18nKey: 'operators.eq',
- *   argumentSchema: z.object({ value: z.date() }),
+ *   arguments: [{ name: 'value', argumentSchemaKey: 'date' }],
  *   predicate: (operand, { value }) => operand.getTime() === value.getTime(),
  * };
  * ```
@@ -144,7 +144,7 @@ export interface FieldOperatorConfig<TOperand = unknown> {
  *       overloads: [{
  *         id: 'date:eq:date',
  *         i18nKey: 'operators.eq',
- *         argumentSchema: z.object({ value: z.date() }),
+ *         arguments: [{ name: 'value', argumentSchemaKey: 'date' }],
  *         predicate: (operand, { value }) => operand.getTime() === value.getTime(),
  *       }],
  *     },

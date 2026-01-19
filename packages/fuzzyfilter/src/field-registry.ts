@@ -9,7 +9,6 @@
 import type {
   FieldSchema,
   OperatorOverload,
-  FieldOperatorConfig,
   ParserRegistry,
   ArgumentParser,
   ArgumentParseResult,
@@ -28,11 +27,9 @@ export class FieldRegistry {
 
   constructor(
     fields: Record<string, FieldSchema<any>>,
-    parsers: ParserRegistry,
     translations: FieldCentricTranslations
   ) {
     this.fields = new Map(Object.entries(fields));
-    this.parsers = parsers;
     this.translations = translations;
     this.buildOverloadIndex();
   }
@@ -289,8 +286,7 @@ export class FieldRegistry {
  */
 export function createFieldRegistry(
   fields: Record<string, FieldSchema<any>>,
-  parsers: ParserRegistry,
   translations: FieldCentricTranslations
 ): FieldRegistry {
-  return new FieldRegistry(fields, parsers, translations);
+  return new FieldRegistry(fields, translations);
 }

@@ -188,13 +188,13 @@ export function extractUnitTextAfterNumber(
 ): { text: string; start: number; end: number } | null {
   // Skip optional whitespace
   let start = numberEnd;
-  while (start < query.length && /\s/.test(query[start])) {
+  while (start < query.length && /\s/.test(query[start]!)) {
     start++;
   }
 
   // Extract alphabetic text
   let end = start;
-  while (end < query.length && /[a-zA-Z]/.test(query[end])) {
+  while (end < query.length && /[a-zA-Z]/.test(query[end]!)) {
     end++;
   }
 

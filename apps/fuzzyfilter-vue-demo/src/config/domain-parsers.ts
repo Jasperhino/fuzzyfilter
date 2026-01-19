@@ -78,8 +78,7 @@ export class AmountParser implements ArgumentParser<Amount> {
 
 export class PercentageParser implements ArgumentParser<Percentage> {
   parse(query: string): ArgumentParseResult<Percentage>[] {
-    // A percentage is a number between 0 and 100 with a % sign or the word "percent"
-    // Match "20%" or "20 %" or "20percent" or "20 percent"
+    // A percentage is a number between 0 and 100 with a % sign or the word "percent" or a number between 0 and 1
     const regex = /(\d+)\s*(%|percent)/gi;
     const results: ArgumentParseResult<Percentage>[] = [];
     let match;

@@ -26,7 +26,7 @@ const contentsField: FieldSchema<string[]> = {
         {
           id: "contents:contains:string",
           i18nKey: "operators.contains",
-          argumentSchema: z.object({ value: z.string() }),
+          arguments: [{ name: 'value', argumentSchemaKey: 'string' }],
           predicate: (operand, args) =>
             operand.includes(args.value as string),
         },
@@ -38,7 +38,7 @@ const contentsField: FieldSchema<string[]> = {
         {
           id: "contents:gt:percentage",
           i18nKey: "operators.gt.percentage",
-          argumentSchema: z.object({ percentage: z.number() }),
+          arguments: [{ name: 'percentage', argumentSchemaKey: 'number' }],
           predicate: () => true,
         },
       ],
@@ -57,7 +57,7 @@ const amountField: FieldSchema<number> = {
         {
           id: "amount:gt:number",
           i18nKey: "operators.gt",
-          argumentSchema: z.object({ value: z.number() }),
+          arguments: [{ name: 'value', argumentSchemaKey: 'number' }],
           predicate: (operand, args) => operand > args.value,
         },
       ],
@@ -68,7 +68,7 @@ const amountField: FieldSchema<number> = {
         {
           id: "amount:eq:number",
           i18nKey: "operators.eq",
-          argumentSchema: z.object({ value: z.number() }),
+          arguments: [{ name: 'value', argumentSchemaKey: 'number' }],
           predicate: (operand, args) => operand === args.value,
         },
       ],

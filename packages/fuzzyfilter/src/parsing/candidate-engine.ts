@@ -608,7 +608,7 @@ export function createCandidateEngine(
     const combinedText = unusedChunkInfos.map(c => c.text).join(" ");
 
     // Try to parse with the timeframe parser
-    const parseResults = timeframeParser.parse(combinedText, deps.unitRegistry, {});
+    const parseResults = timeframeParser.parse(combinedText, deps.unitRegistry);
 
     if (parseResults.length > 0) {
       const best = parseResults[0]!;
@@ -839,7 +839,7 @@ export function createCandidateEngine(
           const windowChunks = unusedChunkInfos.slice(start, start + windowSize);
           const combinedText = windowChunks.map(c => c.text).join(" ");
           
-          const parseResults = parser.parse(combinedText, deps.unitRegistry, {});
+          const parseResults = parser.parse(combinedText, deps.unitRegistry);
           
           if (parseResults.length > 0) {
             const best = parseResults[0]!;
@@ -881,7 +881,7 @@ export function createCandidateEngine(
       if (usedIndexes.has(i)) continue;
 
       const chunk = chunking.chunks[i]!;
-      const parseResults = parser.parse(chunk.text, deps.unitRegistry, {});
+      const parseResults = parser.parse(chunk.text, deps.unitRegistry);
 
       if (parseResults.length > 0) {
         const best = parseResults[0]!;
@@ -967,12 +967,23 @@ export function createCandidateEngine(
     }
 
     // Strategy 2: Try parsers for numeric/typed arguments
-    for (const [_type, parser] of deps.valueParsers) {
+    // Prioritize parser that matches the argument name (e.g., "percentage" parser for "percentage" arg)
+    const parsersToTry = Array.from(deps.valueParsers.entries());
+    if (argName === "percentage" || argName === "amount" || argName === "value") {
+      // Sort to try matching parser type first
+      parsersToTry.sort(([typeA], [typeB]) => {
+        if (typeA === argName) return -1;
+        if (typeB === argName) return 1;
+        return 0;
+      });
+    }
+
+    for (const [parserType, parser] of parsersToTry) {
       for (let i = 0; i < chunking.chunks.length; i++) {
         if (usedIndexes.has(i)) continue;
 
         const chunk = chunking.chunks[i]!;
-        const parseResults = parser.parse(chunk.text, deps.unitRegistry, {});
+        const parseResults = parser.parse(chunk.text, deps.unitRegistry);
 
         if (parseResults.length > 0) {
           const best = parseResults[0]!;
@@ -981,22 +992,36 @@ export function createCandidateEngine(
           if (argName === "percentage" || argName === "value" || argName === "amount") {
             // Extract the numeric value
             let numValue: number | undefined;
+            let resolvedText: string | undefined;
+            
             if (typeof best.value === "number") {
               numValue = best.value;
+              // For percentage parser, preserve the original text (includes "%")
+              if (argName === "percentage" && parserType === "percentage") {
+                resolvedText = best.rawText; // Preserves "20%" instead of just "20"
+              } else {
+                resolvedText = String(numValue);
+              }
             } else if (typeof best.value === "object" && best.value !== null && "value" in best.value) {
               const obj = best.value as { value: number; dimension?: string };
               // For percentage args, prefer percentage-dimensioned values
               if (argName === "percentage" && obj.dimension === "percentage") {
                 numValue = obj.value;
+                resolvedText = best.rawText; // Preserves unit/dimension info
+              } else if (argName === "percentage" && parserType === "percentage") {
+                // Percentage parser returned a number directly, but we want to preserve "%"
+                numValue = typeof best.value === "number" ? best.value : obj.value;
+                resolvedText = best.rawText;
               } else if (argName !== "percentage") {
                 numValue = obj.value;
+                resolvedText = best.rawText;
               }
             }
 
             if (numValue !== undefined) {
               matches.push({
                 text: chunk.text,
-                resolvedTo: String(numValue),
+                resolvedTo: resolvedText ?? String(numValue),
                 score: best.score,
                 role: "value",
                 start: chunk.start,

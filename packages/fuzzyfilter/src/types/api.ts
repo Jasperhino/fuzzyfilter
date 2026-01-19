@@ -52,7 +52,7 @@ export interface ScoringWeights {
  *         overloads: [{
  *           id: 'date:gt:date',
  *           i18nKey: 'operators.date.after',
- *           argumentSchema: z.object({ value: z.date() }),
+ *           arguments: [{ name: 'value', argumentSchemaKey: 'date' }],
  *           predicate: (operand, { value }) => operand.getTime() > value.getTime(),
  *         }],
  *       }],
@@ -103,14 +103,6 @@ export interface FuzzyFilterConfig {
    * ```
    */
   arguments: ArgumentTypeRegistry;
-
-  /**
-   * LEGACY: Argument parsers (deprecated, use `arguments` instead).
-   * Kept for backwards compatibility during migration.
-   * 
-   * @deprecated Use `arguments` instead
-   */
-  parsers?: ParserRegistry;
 
   /**
    * Translations for fields and operators.

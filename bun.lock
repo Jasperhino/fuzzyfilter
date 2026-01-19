@@ -8,6 +8,8 @@
         "chrono-node": "^2.9.0",
         "mathjs": "^15.1.0",
         "mint": "^4.2.258",
+        "roaring": "^2.7.0",
+        "roaring-wasm": "^1.1.0",
         "zocker": "^3.0.0",
         "zod": "^4.3.5",
       },
@@ -2486,6 +2488,8 @@
     "reusify": ["reusify@1.1.0", "", {}, "sha512-g6QUff04oZpHs0eG5p83rFLhHeV00ug/Yf9nZM6fLeUrPguBTkTQOdpAWWspMh55TZfVQDPaN3NQJfbVRAxdIw=="],
 
     "roaring": ["roaring@2.7.0", "", { "dependencies": { "@mapbox/node-pre-gyp": "^2.0.3" }, "optionalDependencies": { "node-gyp": "^12.1.0" } }, "sha512-gNVeV5H+xb2DB/umdvlPbTrKuCn8zexy6ROkfPL4FcSWxOGWrxfQz0pZeZER+kQLrSoPcz3BolYPM6eFYm96XQ=="],
+
+    "roaring-wasm": ["roaring-wasm@1.1.0", "", {}, "sha512-mhNqA0BOqIW7k4ZYSYe3kCyvn5T3VWT+2661G7fZH0C6XcVkGoTDLAqne7b47xCNQE6LhuYviMKBnzbOiBXkdw=="],
 
     "rolldown": ["rolldown@1.0.0-beta.50", "", { "dependencies": { "@oxc-project/types": "=0.97.0", "@rolldown/pluginutils": "1.0.0-beta.50" }, "optionalDependencies": { "@rolldown/binding-android-arm64": "1.0.0-beta.50", "@rolldown/binding-darwin-arm64": "1.0.0-beta.50", "@rolldown/binding-darwin-x64": "1.0.0-beta.50", "@rolldown/binding-freebsd-x64": "1.0.0-beta.50", "@rolldown/binding-linux-arm-gnueabihf": "1.0.0-beta.50", "@rolldown/binding-linux-arm64-gnu": "1.0.0-beta.50", "@rolldown/binding-linux-arm64-musl": "1.0.0-beta.50", "@rolldown/binding-linux-x64-gnu": "1.0.0-beta.50", "@rolldown/binding-linux-x64-musl": "1.0.0-beta.50", "@rolldown/binding-openharmony-arm64": "1.0.0-beta.50", "@rolldown/binding-wasm32-wasi": "1.0.0-beta.50", "@rolldown/binding-win32-arm64-msvc": "1.0.0-beta.50", "@rolldown/binding-win32-ia32-msvc": "1.0.0-beta.50", "@rolldown/binding-win32-x64-msvc": "1.0.0-beta.50" }, "bin": { "rolldown": "bin/cli.mjs" } }, "sha512-JFULvCNl/anKn99eKjOSEubi0lLmNqQDAjyEMME2T4CwezUDL0i6t1O9xZsu2OMehPnV2caNefWpGF+8TnzB6A=="],
 

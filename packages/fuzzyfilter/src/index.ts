@@ -22,7 +22,7 @@
  *         overloads: [{
  *           id: 'status:eq:status',
  *           i18nKey: 'operators.eq',
- *           argumentSchema: z.object({ value: z.enum(['open', 'closed']) }),
+ *           arguments: [{ name: 'value', argumentSchemaKey: 'string' }],
  *           predicate: (operand, { value }) => operand === value,
  *         }],
  *       }],

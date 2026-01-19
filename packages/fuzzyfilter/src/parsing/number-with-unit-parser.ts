@@ -132,7 +132,7 @@ export function createNumberWithUnitParser(
           // Check for special characters like %
           const specialMatch = immediateAfter.match(/^([%$€£¥]|percent|pct)/i);
           if (specialMatch) {
-            const unitMatches = unitRegistry.search(specialMatch[1], dimension, 3);
+            const unitMatches = unitRegistry.search(specialMatch[1]!, dimension, 3);
             for (const um of unitMatches) {
               if (um.score >= minUnitScore) {
                 results.push({

@@ -6,7 +6,7 @@ import {
 } from "./candidate-engine";
 import { createTrie } from "../trie";
 import { createUnitRegistry } from "../units/registry";
-import type { FieldSchema} from "../types/field-centric";
+import type { FieldSchema } from "../types/field-centric";
 import type { ValueParser } from "./value-parser";
 import { createParsedValue, extractNumbers } from "./value-parser";
 import { createUniversalNumberParser } from "./number-with-unit-parser";
@@ -36,7 +36,7 @@ const contentsField: FieldSchema<unknown[]> = {
         {
           id: "contents:contains:materialTypes[]",
           i18nKey: "operators.contains",
-          argumentSchema: z.object({ materialTypes: z.array(MaterialTypeSchema).min(1) }),
+          arguments: [{ name: 'materialTypes', argumentSchemaKey: 'materialType', isArray: true }],
           predicate: () => true,
         },
       ],
@@ -47,20 +47,14 @@ const contentsField: FieldSchema<unknown[]> = {
         {
           id: "contents:gt:percentage+materialTypes[]",
           i18nKey: "operators.contents.gt.percentage",
-          argumentSchema: z.object({
-            percentage: z.number(),
-            materialTypes: z.array(MaterialTypeSchema).min(1),
-          }),
+          arguments: [{ name: 'percentage', argumentSchemaKey: 'number' }, { name: 'materialTypes', argumentSchemaKey: 'materialType', isArray: true }],
           predicate: () => true,
           priority: 10,
         },
         {
           id: "contents:gt:amount+materialTypes[]",
           i18nKey: "operators.contents.gt.amount",
-          argumentSchema: z.object({
-            amount: AmountSchema,
-            materialTypes: z.array(MaterialTypeSchema).min(1),
-          }),
+          arguments: [{ name: 'amount', argumentSchemaKey: 'amount' }, { name: 'materialTypes', argumentSchemaKey: 'materialType', isArray: true }],
           predicate: () => true,
           priority: 5,
         },
@@ -72,10 +66,7 @@ const contentsField: FieldSchema<unknown[]> = {
         {
           id: "contents:lt:percentage+materialTypes[]",
           i18nKey: "operators.contents.lt.percentage",
-          argumentSchema: z.object({
-            percentage: z.number(),
-            materialTypes: z.array(MaterialTypeSchema).min(1),
-          }),
+          arguments: [{ name: 'percentage', argumentSchemaKey: 'number' }, { name: 'materialTypes', argumentSchemaKey: 'materialType', isArray: true }],
           predicate: () => true,
           priority: 10,
         },
@@ -94,7 +85,7 @@ const countField: FieldSchema<number> = {
         {
           id: "count:eq:number",
           i18nKey: "operators.eq",
-          argumentSchema: z.object({ value: z.number() }),
+          arguments: [{ name: 'value', argumentSchemaKey: 'number' }],
           predicate: () => true,
         },
       ],
@@ -105,7 +96,7 @@ const countField: FieldSchema<number> = {
         {
           id: "count:gt:number",
           i18nKey: "operators.gt",
-          argumentSchema: z.object({ value: z.number() }),
+          arguments: [{ name: 'value', argumentSchemaKey: 'number' }],
           predicate: () => true,
         },
       ],
@@ -124,7 +115,7 @@ const amountField: FieldSchema<{ value: number; unit: string }> = {
         {
           id: "amount:gt:amount",
           i18nKey: "operators.amount.heavier",
-          argumentSchema: z.object({ value: AmountSchema }),
+          arguments: [{ name: 'value', argumentSchemaKey: 'amount' }],
           predicate: () => true,
         },
       ],
