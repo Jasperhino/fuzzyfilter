@@ -10,7 +10,14 @@
 import { ref, onMounted, computed, watch, nextTick } from "vue"
 import { useVirtualizer } from "@tanstack/vue-virtual"
 import { useFuzzyFilter } from "fuzzyfilter-vue"
-import { FuzzyFilter, type CompiledFilter, type FilterSuggestion, type HypothesisValueType, type QueryMatch } from "@jasperhino/fuzzyfilter"
+import { FuzzyFilter, type CompiledFilter, type FilterSuggestion } from "@jasperhino/fuzzyfilter"
+
+// Local type definitions for components not yet exported from fuzzyfilter
+interface QueryMatch {
+  inputRange: { start: number; end: number };
+  matchType: "column" | "operator" | "value" | null;
+  [key: string]: any;
+}
 import { useI18n } from "vue-i18n"
 import DataTypeIcon from "./DataTypeIcon.vue"
 import ColumnInfoPopover from "./ColumnInfoPopover.vue"
@@ -78,7 +85,7 @@ const filter = new FuzzyFilter({
 
 // Initialize data
 onMounted(() => {
-  filter.indexData(INITIAL_DATASET)
+  filter.indexData(INITIAL_DATASET as unknown as Record<string, unknown>[])
   
   // Trigger reactivity update so filteredData re-evaluates
   dataVersion.value++
@@ -150,7 +157,7 @@ function handleSort(columnId: keyof PlaygroundDataRow) {
 // Add a new random row
 function handleAddRow() {
   const newRow = generateSingleRow()
-  hookAddRow(newRow)
+  hookAddRow(newRow as unknown as Record<string, unknown>)
   dataVersion.value++
 }
 
@@ -158,7 +165,7 @@ function handleAddRow() {
 function handleDeleteRow() {
   if (selectedRowId.value === null) return
   
-  const originalData = getData() as PlaygroundDataRow[]
+  const originalData = getData() as unknown as PlaygroundDataRow[]
   const originalIndex = originalData.findIndex(row => row.id === selectedRowId.value)
   
   if (originalIndex !== -1) {
@@ -254,14 +261,14 @@ function formatScore(score: number): string {
 // Filtered and sorted data
 const filteredData = computed(() => {
   void dataVersion.value
-  const currentData = getData() as PlaygroundDataRow[]
+  const currentData = getData() as unknown as PlaygroundDataRow[]
   
   let result: PlaygroundDataRow[]
   if (appliedFilters.value.length === 0) {
     result = [...currentData]
   } else {
     result = currentData.filter((row) =>
-      compiledFiltersForContext.value.every((cf) => cf.predicate(row))
+      compiledFiltersForContext.value.every((cf) => cf.predicate(row as unknown as Record<string, unknown>))
     )
   }
 
@@ -296,7 +303,16 @@ function handleSelect(index: number) {
       isOpen.value = false
       hoveredIndex.value = null
     } else {
-      query.value = suggestion.completionText
+      // Use tabCompletion if available, otherwise use label
+      if (suggestion.tabCompletion) {
+        const completion = suggestion.tabCompletion;
+        const before = query.value.slice(0, completion.range.start);
+        const after = query.value.slice(completion.range.end);
+        query.value = before + completion.completion + after;
+      } else {
+        // Fallback: use label as completion text
+        query.value = suggestion.label;
+      }
     }
   }
 }
@@ -468,11 +484,16 @@ function getHighlightSegments(queryText: string, matches: QueryMatch[]): Highlig
 
   const matchTypePriority = { column: 0, operator: 1, value: 2 }
 
+  const getPriority = (matchType: "column" | "operator" | "value" | null): number => {
+    if (matchType === null) return 999
+    return matchTypePriority[matchType]
+  }
+
   const sorted = [...matches].sort((a, b) => {
     if (a.inputRange.start !== b.inputRange.start) {
       return a.inputRange.start - b.inputRange.start
     }
-    return matchTypePriority[a.matchType] - matchTypePriority[b.matchType]
+    return getPriority(a.matchType) - getPriority(b.matchType)
   })
 
   const segments: HighlightSegment[] = []
@@ -509,8 +530,19 @@ function getHighlightSegments(queryText: string, matches: QueryMatch[]): Highlig
 }
 
 // Query matches from the highlighted suggestion
+// Convert ParseMatch[] to QueryMatch[] format expected by QueryVisualization
 const inputQueryMatches = computed(() => {
-  return highlightedSuggestion.value?.matches ?? []
+  const matches = highlightedSuggestion.value?.matches ?? []
+  return matches.map((match) => ({
+    inputRange: {
+      start: match.start,
+      end: match.end,
+    },
+    matchType: match.role === "field" ? "column" as const
+      : match.role === "operator" ? "operator" as const
+      : match.role === "value" ? "value" as const
+      : null,
+  }))
 })
 
 // Get row by virtual index

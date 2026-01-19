@@ -14,37 +14,54 @@ import {
   TooltipProvider,
 } from "radix-vue"
 import DataTypeIcon from "./DataTypeIcon.vue"
-import {
-  getAllOperators,
-  DataType,
-  type OperatorDefinition,
-  type AnyColumnDefinition,
-} from "@jasperhino/fuzzyfilter"
+import type { FieldSchema, OperatorOverload } from "@jasperhino/fuzzyfilter"
 import { cn } from "@/lib/utils"
 
 const props = defineProps<{
   /** The column definition to display info for */
-  column: AnyColumnDefinition
+  column: FieldSchema<unknown>
+  /** The field key (for display) */
+  fieldKey?: string
 }>()
 
 /** Get operators for this column type */
-const operators = computed(() => getAllOperators())
+const operators = computed(() => {
+  // Extract all operators from the column's operator configs
+  const allOperators: Array<{ id: string; overloads: OperatorOverload<unknown, any>[] }> = []
+  for (const opConfig of props.column.operators || []) {
+    allOperators.push({
+      id: opConfig.operatorId,
+      overloads: opConfig.overloads,
+    })
+  }
+  return allOperators
+})
 
 /**
- * Get the number of arguments for an operator (matching API reference)
+ * Get the number of arguments for an operator overload
  */
-function getArgCount(operator: OperatorDefinition): number {
-  // Derive from patterns
-  const hasArgs = operator.patterns.some(p => /\{[^}]*\}/.test(p))
+function getArgCount(operator: { id: string; overloads: OperatorOverload<unknown, any>[] }): number {
+  // Check if any overload has arguments
+  const hasArgs = operator.overloads.some(overload => 
+    overload.arguments && overload.arguments.length > 0
+  )
   if (!hasArgs) return 0
   
-  // Check if variadic (has patterns with 2+ args)
-  const isVariadic = operator.patterns.some(p => (p.match(/\{[^}]*\}/g) || []).length >= 2)
-  if (isVariadic) {
+  // Get max argument count across all overloads
+  const maxArgs = Math.max(...operator.overloads.map(overload => 
+    overload.arguments?.length || 0
+  ))
+  
+  // Check if any overload has array arguments (variadic-like)
+  const hasArrayArg = operator.overloads.some(overload =>
+    overload.arguments?.some(arg => arg.isArray)
+  )
+  
+  if (hasArrayArg) {
     if (operator.id === "between") return 2
     return -1 // Unlimited (in, nin)
   }
-  return 1
+  return maxArgs
 }
 </script>
 
@@ -53,7 +70,7 @@ function getArgCount(operator: OperatorDefinition): number {
     <TooltipRoot>
       <TooltipTrigger
         class="cursor-help inline-flex items-center outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded-sm"
-        :aria-label="`Info about ${column.labelKey || column.id} column`"
+        :aria-label="`Info about ${column.labelKey || props.fieldKey || 'column'} column`"
       >
         <slot />
       </TooltipTrigger>
@@ -74,10 +91,10 @@ function getArgCount(operator: OperatorDefinition): number {
             <!-- Header with column name and type -->
             <div class="flex items-center justify-between">
               <h2 class="flex items-center gap-2 font-semibold text-sm">
-                <DataTypeIcon :type="column.type || 'string'" size="size-4" />
-                <span>{{ column.labelKey || column.id }}</span>
+                <DataTypeIcon type="string" size="size-4" />
+                <span>{{ column.labelKey }}</span>
               </h2>
-              <DataTypeIcon :type="column.type || 'string'" as-badge badge-size="sm" />
+              <DataTypeIcon type="string" as-badge badge-size="sm" />
             </div>
 
             <!-- Operators section -->
@@ -142,47 +159,12 @@ function getArgCount(operator: OperatorDefinition): number {
               </div>
             </div>
 
-            <!-- Enum values -->
+            <!-- Field description -->
             <div
-              v-if="column.type === 'enum' && 'values' in column"
-              class="space-y-1"
-            >
-              <h4 class="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                Allowed Values
-              </h4>
-              <div class="flex flex-wrap gap-1">
-                <code
-                  v-for="value in (column.values as string[]).slice(0, 6)"
-                  :key="value"
-                  class="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono"
-                >
-                  {{ value }}
-                </code>
-                <span
-                  v-if="(column.values as string[]).length > 6"
-                  class="text-[10px] text-muted-foreground"
-                >
-                  +{{ (column.values as string[]).length - 6 }} more
-                </span>
-              </div>
-            </div>
-
-            <!-- Number range -->
-            <div
-              v-if="column.type === 'number' && 'min' in column && 'max' in column"
+              v-if="column.description || column.descriptionKey"
               class="text-[10px] text-muted-foreground"
             >
-              Range: {{ column.min }} – {{ column.max }}
-              <template v-if="'isInteger' in column && column.isInteger"> (integers only)</template>
-            </div>
-
-            <!-- Boolean labels -->
-            <div
-              v-if="column.type === 'boolean'"
-              class="text-[10px] text-muted-foreground"
-            >
-              <template v-if="'trueLabel' in column">True: {{ column.trueLabel }}</template>
-              <template v-if="'falseLabel' in column"> · False: {{ column.falseLabel }}</template>
+              {{ column.description || column.descriptionKey }}
             </div>
           </div>
         </TooltipContent>

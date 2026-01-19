@@ -14,12 +14,10 @@ import {
   LayersIcon,
 } from "lucide-vue-next"
 import { cn } from "@/lib/utils"
-import type { DataType } from "@jasperhino/fuzzyfilter"
-
 const props = withDefaults(
   defineProps<{
     /** The data type to display */
-    type: string | DataType
+    type: string
     /** Size class for the icon */
     size?: string
     /** Whether to show as badge with label */
